@@ -158,6 +158,16 @@ def main(argv: list[str] | None = None) -> int:
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
+    bp = sub.add_parser("backtest-pair", help="backtest a strategy that trades several "
+                        "instruments together, e.g. STAT-PAIR-001 (SIMULATED)")
+    bp.add_argument("--strategy", default="STAT-PAIR-001")
+    bp.add_argument("--symbols", required=True, help="comma-separated, in leg order")
+    bp.add_argument("--timeframe", default="1d")
+    bp.add_argument("--source", required=True)
+    bp.add_argument("--start", required=True, type=_dt)
+    bp.add_argument("--end", required=True, type=_dt)
+    bp.add_argument("--param", action="append", default=[], help="key=value (JSON value)")
+    bp.add_argument("--cost-multiplier", type=float, default=1.0)
     sc = sub.add_parser("schedule", help="run data updates and paper accounts on a timer "
                         "(see docs/DEPLOYMENT.md)")
     sc.add_argument("--config", required=True, help="JSON job file")
@@ -314,6 +324,33 @@ def main(argv: list[str] | None = None) -> int:
                 verdict = "PASS" if e.passed else "fail"
                 print(f"{verdict:4} {e.score:6.3f} {e.strategy_key:14} {e.symbol:8} "
                       f"{e.timeframe:4} {'; '.join(e.reasons)[:110]}")
+        elif args.cmd == "backtest-pair":
+            import json
+
+            from apex.backtest.engine import BacktestConfig
+            from apex.backtest.experiments import run_pair_experiment
+            from apex.domain.market import Timeframe
+            from apex.strategies.multi import all_multi_strategies
+
+            multi = all_multi_strategies()
+            if args.strategy not in multi:
+                print(f"unknown multi-instrument strategy {args.strategy}; "
+                      f"available: {', '.join(sorted(multi))}", file=sys.stderr)
+                return 2
+            params = {}
+            for kv in args.param:
+                k, _, v = kv.partition("=")
+                params[k] = json.loads(v)
+            exp, res = run_pair_experiment(
+                s, multi[args.strategy](), symbols=[x.strip() for x in args.symbols.split(",")],
+                timeframe=Timeframe(args.timeframe), source=args.source, start=args.start,
+                end=args.end, params=params,
+                config=BacktestConfig(cost_multiplier=args.cost_multiplier))
+            s.commit()
+            print(f"experiment {exp.id} (SIMULATED) {exp.data_manifest['symbol']}")
+            for k, v in res.metrics.items():
+                if k != "note":
+                    print(f"  {k:24} {v}")
         elif args.cmd == "schedule":
             import json
 
@@ -416,11 +453,13 @@ def main(argv: list[str] | None = None) -> int:
                 with pd.option_context("display.width", 200, "display.max_columns", 20):
                     print(df[cols].to_string(index=False))
         elif args.cmd == "strategies":
+            from apex.strategies.multi import all_multi_strategies
             from apex.strategies.registry import all_strategies
 
-            for key, cls in sorted(all_strategies().items()):
+            for key, cls in sorted({**all_strategies(), **all_multi_strategies()}.items()):
                 m = cls.meta
-                print(f"{key:14} v{m.version:7} {m.category:22} {m.name}")
+                legs = f" [{cls.legs} instruments]" if hasattr(cls, "legs") else ""
+                print(f"{key:14} v{m.version:7} {m.category:22} {m.name}{legs}")
         elif args.cmd == "backtest":
             import json
 

@@ -95,9 +95,9 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
-| H38 | Cointegrated pairs | equity | 1d | spread z < -2 | z > 0 | z < -4 | multi | - |
+| H38 | Cointegrated pairs | equity | 1d | spread z < -2 | z > 0 | z < -4 | multi | STAT-PAIR-001 |
 | H39 | ES/NQ ratio reversion | futures | 15m | ratio z beyond 2 | z = 0 | z beyond 4 | multi | - |
-| H40 | BTC/ETH spread | crypto | 1h | spread z beyond 2 | z = 0 | z beyond 4 | multi | - |
+| H40 | BTC/ETH spread | crypto | 1h | spread z beyond 2 | z = 0 | z beyond 4 | multi | STAT-PAIR-001 |
 | H41 | ETF vs basket | equity | 5m | z beyond 2.5 | z = 0 | time 1 day | multi | - |
 
 ## Volatility Expansion (3)

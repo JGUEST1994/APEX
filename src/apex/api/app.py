@@ -129,6 +129,7 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/strategies")
     def strategies(s: Session = Depends(db)) -> list[dict]:
+        from apex.strategies.multi import all_multi_strategies
         from apex.strategies.registry import all_strategies
 
         status = {}
@@ -139,8 +140,9 @@ def create_app(settings: Settings | None = None,
                  "version": c.meta.version, "regimes": list(c.meta.regimes),
                  "timeframes": [t.value for t in c.meta.timeframes],
                  "description": c.meta.description,
-                 "status": status.get(k, {}).get("status", "experimental")}
-                for k, c in sorted(all_strategies().items())]
+                 "status": status.get(k, {}).get("status", "experimental"),
+                 "instruments": getattr(c, "legs", 1)}
+                for k, c in sorted({**all_strategies(), **all_multi_strategies()}.items())]
 
     @app.get("/datasets")
     def datasets(s: Session = Depends(db)) -> list[dict]:

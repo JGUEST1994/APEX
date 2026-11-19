@@ -101,7 +101,9 @@ def test_hypothesis_bank():
     ids = [h.id for h in HYPOTHESES]
     assert len(ids) >= 50 and len(set(ids)) == len(ids)
     assert {h.category for h in HYPOTHESES} == set(CATEGORIES)
-    registry = all_strategies()
+    from apex.strategies.multi import all_multi_strategies
+
+    registry = {**all_strategies(), **all_multi_strategies()}
     implemented = {h.implemented for h in HYPOTHESES if h.implemented}
     assert implemented <= set(registry)
     assert set(registry) <= implemented, "every registered strategy needs a hypothesis entry"

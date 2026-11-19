@@ -32,7 +32,9 @@ def test_dashboard_and_endpoints(db_url, session):
     assert ds == [{"symbol": "SPY", "timeframe": "1d", "source": "synthetic", "bars": ds[0]["bars"],
                    "first": ds[0]["first"], "last": ds[0]["last"]}] and ds[0]["bars"] > 30
     st = c.get("/strategies").json()
-    assert {s["key"] for s in st} == set(all_strategies())
+    from apex.strategies.multi import all_multi_strategies
+    assert {s["key"] for s in st} == set(all_strategies()) | set(all_multi_strategies())
+    assert {s["key"]: s["instruments"] for s in st}["STAT-PAIR-001"] == 2
     assert all(s["status"] == "experimental" for s in st)
     engine.dispose()
 
