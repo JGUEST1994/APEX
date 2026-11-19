@@ -7,9 +7,10 @@ Each calendar answers two questions used across the platform:
 Each calendar also maps an instant to its ``session_date`` (the trading day it belongs to),
 which daily resampling uses: an FX bar at Sunday 18:00 New York belongs to Monday.
 
-Known simplifications (tracked in docs/STATUS.md): NYSE early closes are treated as full
-days; CME and FX holidays are approximated by full closures on 25 Dec and 1 Jan (plus Good
-Friday for CME) and their early closes are ignored.
+Known simplifications (tracked in docs/STATUS.md): NYSE early closes (13:00 ET) follow the
+regular rules (3 July, the day after Thanksgiving, 24 December) but not one-off closures;
+CME and FX holidays are approximated by full closures on 25 Dec and 1 Jan (plus Good Friday
+for CME) and their early closes are ignored.
 """
 
 from __future__ import annotations
@@ -135,7 +136,8 @@ class UsEquityRth(TradingCalendar):
         local = ts.astimezone(NY)
         if not self.is_session_day(local.date()):
             return False
-        return time(9, 30) <= local.time() < time(16)
+        close = time(13) if local.date() in nyse_early_closes(local.year) else time(16)
+        return time(9, 30) <= local.time() < close
 
     def is_session_day(self, d: date) -> bool:
         return d.weekday() < 5 and d not in nyse_holidays(d.year)
@@ -199,6 +201,17 @@ def nyse_holidays(year: int) -> frozenset[date]:
     if year >= 2022:
         days.add(_observed(date(year, 6, 19)))  # Juneteenth
     return frozenset(days)
+
+
+@lru_cache(maxsize=64)
+def nyse_early_closes(year: int) -> frozenset[date]:
+    """Regular 13:00 ET closes: 3 July and 24 December when they fall Monday to Thursday
+    (on a Friday they are the observed holiday), and the day after Thanksgiving."""
+    days = {_nth_weekday(year, 11, 3, 4) + timedelta(days=1)}
+    for d in (date(year, 7, 3), date(year, 12, 24)):
+        if d.weekday() < 4:
+            days.add(d)
+    return frozenset(days - nyse_holidays(year))
 
 
 CALENDARS: dict[str, TradingCalendar] = {
