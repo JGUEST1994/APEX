@@ -23,6 +23,7 @@ from apex.db.models import Strategy as StrategyRow
 from apex.domain.market import Timeframe
 from apex.strategies.base import Strategy, StrategyStatus
 from apex.strategies.lifecycle import transition
+from apex.strategies.multi import MultiStrategy
 
 
 @dataclass(frozen=True)
@@ -121,12 +122,15 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
         from apex.regime.filtered import RegimeFiltered
 
         strategies = list(strategies) + [RegimeFiltered(s) for s in strategies
-                                         if "any" not in s.meta.regimes]
+                                         if "any" not in s.meta.regimes
+                                         and not isinstance(s, MultiStrategy)]
     for strat in strategies:
         base_key = strat.meta.key.removesuffix("+RF")
         grid = (grids or {}).get(base_key) or {k: [v] for k, v in
                                                       strat.meta.default_params.items()}
         for sym in symbols:
+            if isinstance(strat, MultiStrategy) != ("/" in sym):
+                continue  # pairs ("A/B") go to multi-instrument strategies only
             try:
                 exp = run_validation(session, strat, symbol=sym, timeframe=timeframe,
                                      source=source, start=start, end=end, grid=grid,
@@ -159,6 +163,13 @@ def _promote(session: Session, version_id: int, e: Entry) -> None:
                           f"(experiment {e.experiment_id}, score {e.score})")
 
 
+def _asset_class(by_symbol: dict, symbol: str | None) -> str | None:
+    if not symbol:
+        return None
+    classes = {by_symbol.get(s) for s in symbol.split("/")}
+    return classes.pop() if len(classes) == 1 else "mixed"
+
+
 def leaderboard(session: Session, *, asset_class: str | None = None,
                 symbol: str | None = None, timeframe: str | None = None,
                 category: str | None = None, gates: Gates | None = None) -> pd.DataFrame:
@@ -184,7 +195,7 @@ def leaderboard(session: Session, *, asset_class: str | None = None,
         out.append({
             "strategy": srow.key, "version": ver.version, "status": ver.status,
             "category": srow.category, "symbol": dm.get("symbol"),
-            "asset_class": asset_by_symbol.get(dm.get("symbol")),
+            "asset_class": _asset_class(asset_by_symbol, dm.get("symbol")),
             "timeframe": dm.get("timeframe"), "experiment_id": exp.id,
             "score": score(m) if ok else 0.0, "passed_gates": ok,
             "deflated_sharpe": m.get("deflated_sharpe_family"),
