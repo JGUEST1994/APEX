@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APEX dashboard</title>
+<style>
+  :root { --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#5b6470; --line:#dde1e6;
+          --accent:#2457c5; --good:#1a7f37; --bad:#c62828; --research:#5b6470; --paper:#9a6700; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#2a3039;
+            --accent:#6c9cff; --good:#4ac26b; --bad:#ff6b6b; --research:#9aa4b2; --paper:#e3b341; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  #banner { padding:8px 16px; color:#fff; font-weight:600; letter-spacing:.04em; }
+  #banner.research { background:var(--research); } #banner.paper { background:var(--paper); }
+  nav { display:flex; gap:4px; padding:8px 16px; border-bottom:1px solid var(--line);
+        background:var(--panel); flex-wrap:wrap; }
+  nav button { border:0; background:none; color:var(--muted); padding:6px 10px; border-radius:6px;
+               cursor:pointer; font:inherit; }
+  nav button.on { background:var(--bg); color:var(--ink); font-weight:600; }
+  main { padding:16px; max-width:1200px; margin:0 auto; }
+  section { display:none; } section.on { display:block; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px;
+          margin-bottom:12px; overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; }
+  .tag { font-size:11px; padding:1px 6px; border-radius:10px; border:1px solid var(--line);
+         color:var(--muted); }
+  .pass { color:var(--good); } .fail { color:var(--bad); }
+  input, select { font:inherit; padding:5px 8px; border:1px solid var(--line); border-radius:6px;
+                  background:var(--panel); color:var(--ink); }
+  .muted { color:var(--muted); } svg { width:100%; height:280px; display:block; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
+  .kpi b { display:block; font-size:20px; }
+</style>
+</head>
+<body>
+<div id="banner" class="research">RESEARCH MODE · SIMULATED RESULTS ONLY · NO LIVE TRADING</div>
+<nav id="tabs"></nav>
+<main>
+  <section id="overview">
+    <div class="card kpis" id="kpis"></div>
+    <div class="card"><h3>Recent ingestion runs</h3><table id="runs"></table></div>
+  </section>
+  <section id="markets">
+    <div class="card">
+      <select id="dataset"></select>
+      <span class="muted" id="dsinfo"></span>
+      <svg id="chart" role="img" aria-label="Close price chart"></svg>
+    </div>
+  </section>
+  <section id="strategies"><div class="card"><table id="strats"></table></div></section>
+  <section id="leaderboard">
+    <div class="card"><p class="muted">Latest walk-forward result per strategy and market.
+      Ranked by robustness, not raw return. All figures are SIMULATED.</p>
+      <table id="lb"></table></div>
+  </section>
+  <section id="experiments"><div class="card"><table id="exps"></table></div></section>
+  <section id="research">
+    <div class="card"><input id="q" placeholder="Search the research library" size="40">
+      <table id="hits"></table></div>
+  </section>
+</main>
+<script>
+"use strict";
+const TABS = [["overview","Overview"],["markets","Markets"],["strategies","Strategy lab"],
+  ["leaderboard","Tournament"],["experiments","Backtests"],["research","Research"]];
+const $ = (id) => document.getElementById(id);
+async function get(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(path + " " + r.status);
+  return r.json();
+}
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text !== undefined && text !== null) e.textContent = String(text);  // never innerHTML
+  if (cls) e.className = cls;
+  return e;
+}
+const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? "–"
+  : (typeof v === "number" ? v.toFixed(d) : String(v));
+const pct = (v) => (v === null || v === undefined) ? "–" : (100 * v).toFixed(1) + "%";
+function table(t, cols, rows) {
+  t.replaceChildren();
+  const h = t.insertRow();
+  cols.forEach(([label]) => h.appendChild(el("th", label)));
+  if (!rows.length) { const r = t.insertRow(); const c = r.insertCell();
+    c.colSpan = cols.length; c.textContent = "Nothing yet."; c.className = "muted"; }
+  rows.forEach((row) => { const r = t.insertRow();
+    cols.forEach(([, f]) => { const c = r.insertCell(); const v = f(row);
+      if (v instanceof Node) c.appendChild(v); else c.textContent = v; }); });
+}
+function tabs() {
+  TABS.forEach(([id, label]) => { const b = el("button", label); b.onclick = () => show(id);
+    b.dataset.id = id; $("tabs").appendChild(b); });
+}
+const loaded = {};
+function show(id) {
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.id === id));
+  document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === id));
+  if (!loaded[id]) { loaded[id] = true; LOAD[id]().catch((e) => console.error(e)); }
+  if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+}
+function chart(svg, xs, ys) {
+  svg.replaceChildren();
+  if (ys.length < 2) return;
+  const W = svg.clientWidth || 800, H = 280, P = 40;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
+  const X = (i) => P + (W - 2 * P) * i / (ys.length - 1);
+  const Y = (v) => H - P - (H - 2 * P) * (v - lo) / span;
+  const ns = "http://www.w3.org/2000/svg";
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", ys.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1)).join(""));
+  path.setAttribute("fill", "none"); path.setAttribute("stroke", "var(--accent)");
+  path.setAttribute("stroke-width", "1.5"); svg.appendChild(path);
+  [[lo, H - P], [hi, P]].forEach(([v, y]) => { const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", 4); t.setAttribute("y", y); t.setAttribute("fill", "var(--muted)");
+    t.setAttribute("font-size", "11"); t.textContent = v.toPrecision(6); svg.appendChild(t); });
+  [[0, P], [xs.length - 1, W - P - 80]].forEach(([i, x]) => { const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", x); t.setAttribute("y", H - 8); t.setAttribute("fill", "var(--muted)");
+    t.setAttribute("font-size", "11"); t.textContent = xs[i].slice(0, 16).replace("T", " ");
+    svg.appendChild(t); });
+}
+const LOAD = {
+  async overview() {
+    const [h, runs, ds, st] = await Promise.all([get("/health"), get("/ingestion-runs?limit=20"),
+      get("/datasets"), get("/strategies")]);
+    const kp = $("kpis"); kp.replaceChildren();
+    [["Status", h.status], ["Mode", h.trading_mode.toUpperCase()], ["Live trading", "not available"],
+     ["Datasets", ds.length], ["Strategies", st.length], ["External AI", h.external_ai_enabled ? "on" : "off"],
+     ["Version", h.version]].forEach(([k, v]) => { const d = el("div", k, "kpi muted");
+       d.appendChild(el("b", v)); kp.appendChild(d); });
+    table($("runs"), [["ID", (r) => r.id], ["Source", (r) => r.source], ["TF", (r) => r.timeframe],
+      ["Status", (r) => el("span", r.status, r.status === "failed" ? "fail" : "pass")],
+      ["Rows stored", (r) => r.rows_stored], ["Data hash", (r) => (r.content_sha256 || "").slice(0, 12)],
+      ["Started", (r) => r.started_at.slice(0, 19).replace("T", " ")]], runs);
+  },
+  async markets() {
+    const ds = await get("/datasets"); const sel = $("dataset"); sel.replaceChildren();
+    ds.forEach((d, i) => { const o = el("option", `${d.symbol} ${d.timeframe} · ${d.source} (${d.bars} bars)`);
+      o.value = i; sel.appendChild(o); });
+    const draw = async () => { const d = ds[sel.value]; if (!d) return;
+      $("dsinfo").textContent = ` last bar ${d.last ? d.last.slice(0, 19).replace("T", " ") : "–"} UTC · showing the latest ${Math.min(d.bars, 2000)} bars`;
+      const bars = await get(`/instruments/${encodeURIComponent(d.symbol)}/bars?timeframe=${d.timeframe}` +
+        `&source=${encodeURIComponent(d.source)}&limit=2000`);
+      chart($("chart"), bars.map((b) => b.ts), bars.map((b) => b.close)); };
+    sel.onchange = draw; await draw();
+  },
+  async strategies() {
+    const st = await get("/strategies");
+    table($("strats"), [["Key", (r) => r.key], ["Name", (r) => r.name], ["Category", (r) => r.category],
+      ["Version", (r) => r.version], ["Status", (r) => el("span", r.status, "tag")],
+      ["Regimes", (r) => r.regimes.join(", ")], ["Timeframes", (r) => r.timeframes.join(", ")]], st);
+  },
+  async leaderboard() {
+    const lb = await get("/leaderboard");
+    table($("lb"), [["#", (r) => lb.indexOf(r) + 1], ["Strategy", (r) => r.strategy], ["Symbol", (r) => r.symbol],
+      ["TF", (r) => r.timeframe], ["Gates", (r) => el("span", r.passed_gates ? "pass" : "fail", r.passed_gates ? "pass" : "fail")],
+      ["Score", (r) => fmt(r.score, 3)], ["DSR (family)", (r) => fmt(r.deflated_sharpe, 3)],
+      ["PBO", (r) => fmt(r.pbo, 2)], ["OOS return", (r) => pct(r.oos_return)],
+      ["Max DD", (r) => pct(r.oos_max_drawdown)], ["Status", (r) => el("span", r.status, "tag")],
+      ["Why not", (r) => r.fail_reasons || ""]], lb);
+  },
+  async experiments() {
+    const ex = await get("/experiments?limit=100");
+    table($("exps"), [["ID", (r) => r.id], ["Kind", (r) => r.kind],
+      ["Symbol", (r) => (r.data_manifest || {}).symbol], ["TF", (r) => (r.data_manifest || {}).timeframe],
+      ["Sharpe", (r) => fmt((r.metrics || {}).sharpe)], ["Return", (r) => pct((r.metrics || {}).total_return)],
+      ["Max DD", (r) => pct((r.metrics || {}).max_drawdown)], ["Trades", (r) => (r.metrics || {}).trades ?? "–"],
+      ["Code", (r) => (r.code_version || "").slice(0, 10)], ["", () => el("span", "SIMULATED", "tag")]], ex);
+  },
+  async research() {
+    const run = async () => { const q = $("q").value.trim(); if (!q) return;
+      const hits = await get("/research/search?q=" + encodeURIComponent(q));
+      table($("hits"), [["Score", (r) => fmt(r.score, 3)], ["Document", (r) => r.title || r.document_id],
+        ["Excerpt", (r) => (r.snippet || "").slice(0, 160)]], hits); };
+    $("q").onkeydown = (e) => { if (e.key === "Enter") run().catch(console.error); };
+  },
+};
+tabs();
+get("/health").then((h) => { const b = $("banner");
+  b.className = h.trading_mode === "paper" ? "paper" : "research";
+  b.textContent = (h.trading_mode === "paper" ? "PAPER MODE" : "RESEARCH MODE") +
+    " · SIMULATED RESULTS ONLY · NO LIVE TRADING"; }).catch(() => {});
+const fromHash = () => { const id = (location.hash || "#overview").slice(1);
+  show(TABS.some(([t]) => t === id) ? id : "overview"); };
+window.addEventListener("hashchange", fromHash);
+fromHash();
+</script>
+</body>
+</html>
