@@ -206,7 +206,7 @@ HYPOTHESES: list[Hypothesis] = [
       "z beyond 4", "z = 0", "any", data="multi", implemented="STAT-PAIR-001"),
     H("H41", "ETF vs basket", "statistical_arbitrage", "equity", "5m",
       "Sector ETF deviations from its top holdings revert.", "z beyond 2.5", "z = 0",
-      "time 1 day", "z = 0", "any", data="multi"),
+      "time 1 day", "z = 0", "any", data="multi", implemented="STAT-BASKET-001"),
     # --- volatility expansion
     H("H42", "Bollinger squeeze breakout", "volatility_expansion", "forex,crypto,futures,equity",
       "15m,1h,1d", "Volatility compression precedes expansion.",

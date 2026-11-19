@@ -63,6 +63,51 @@ def align(bars: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     return out
 
 
+def spread_reversion_weights(ly: np.ndarray, lx: np.ndarray, params: dict[str, Any]
+                             ) -> tuple[np.ndarray, np.ndarray]:
+    """Z-score reversion on the spread ly - beta*lx (beta from a rolling regression).
+
+    Returns weights for y and x. Causal: bar t uses log prices up to t only. Params:
+    lookback, entry_z, exit_z, stop_z, max_bars, gross.
+    """
+    n, lb = len(ly), int(params["lookback"])
+    sy, sx = pd.Series(ly), pd.Series(lx)
+    beta = (sy.rolling(lb).cov(sx) / sx.rolling(lb).var()).to_numpy()
+    spread = ly - beta * lx
+    # z of today's spread against the window's spreads, all with today's beta
+    z = np.full(n, np.nan)
+    for t in range(lb - 1, n):
+        if not np.isfinite(beta[t]):
+            continue
+        w = ly[t - lb + 1:t + 1] - beta[t] * lx[t - lb + 1:t + 1]
+        sd = w.std()
+        z[t] = (spread[t] - w.mean()) / sd if sd > 0 else np.nan
+    wy, wx = np.zeros(n), np.zeros(n)
+    side, held, cool, b0 = 0, 0, False, 0.0
+    ez, xz, sz, mb, g = (params["entry_z"], params["exit_z"], params["stop_z"],
+                         int(params["max_bars"]), params["gross"])
+    for t in range(n):
+        zt = z[t]
+        if not np.isfinite(zt):
+            side = 0
+        elif side:
+            held += 1
+            stop = abs(zt) >= sz
+            done = (side > 0 and zt >= -xz) or (side < 0 and zt <= xz)
+            if stop or done or (mb and held >= mb):
+                side, cool = 0, stop
+        elif cool:
+            cool = abs(zt) >= ez
+        elif zt <= -ez and abs(zt) < sz:
+            side, held, b0 = 1, 0, beta[t]  # spread cheap: buy y, sell x
+        elif zt >= ez and abs(zt) < sz:
+            side, held, b0 = -1, 0, beta[t]
+        if side:
+            k = g / (1 + abs(b0))
+            wy[t], wx[t] = side * k, -side * k * b0
+    return wy, wx
+
+
 @register_multi
 class PairsZScore(MultiStrategy):
     """Rolling-hedge-ratio spread reversion between two related instruments."""
@@ -90,42 +135,8 @@ class PairsZScore(MultiStrategy):
     def target_weights(self, bars: dict[str, pd.DataFrame], params: dict[str, Any]
                        ) -> pd.DataFrame:
         (ys, yb), (xs, xb) = list(bars.items())[:2]
-        n, lb = len(yb), int(params["lookback"])
-        ly, lx = np.log(yb["close"].to_numpy(float)), np.log(xb["close"].to_numpy(float))
-        sy, sx = pd.Series(ly), pd.Series(lx)
-        beta = (sy.rolling(lb).cov(sx) / sx.rolling(lb).var()).to_numpy()
-        spread = ly - beta * lx
-        # z of today's spread against the window's spreads, all with today's beta
-        z = np.full(n, np.nan)
-        for t in range(lb - 1, n):
-            if not np.isfinite(beta[t]):
-                continue
-            w = ly[t - lb + 1:t + 1] - beta[t] * lx[t - lb + 1:t + 1]
-            sd = w.std()
-            z[t] = (spread[t] - w.mean()) / sd if sd > 0 else np.nan
-        wy, wx = np.zeros(n), np.zeros(n)
-        side, held, cool, b0 = 0, 0, False, 0.0
-        ez, xz, sz, mb, g = (params["entry_z"], params["exit_z"], params["stop_z"],
-                             int(params["max_bars"]), params["gross"])
-        for t in range(n):
-            zt = z[t]
-            if not np.isfinite(zt):
-                side = 0
-            elif side:
-                held += 1
-                stop = abs(zt) >= sz
-                done = (side > 0 and zt >= -xz) or (side < 0 and zt <= xz)
-                if stop or done or (mb and held >= mb):
-                    side, cool = 0, stop
-            elif cool:
-                cool = abs(zt) >= ez
-            elif zt <= -ez and abs(zt) < sz:
-                side, held, b0 = 1, 0, beta[t]  # spread cheap: buy y, sell x
-            elif zt >= ez and abs(zt) < sz:
-                side, held, b0 = -1, 0, beta[t]
-            if side:
-                k = g / (1 + abs(b0))
-                wy[t], wx[t] = side * k, -side * k * b0
+        wy, wx = spread_reversion_weights(np.log(yb["close"].to_numpy(float)),
+                                          np.log(xb["close"].to_numpy(float)), params)
         return pd.DataFrame({ys: wy, xs: wx}, index=yb.index)
 
 
@@ -229,3 +240,43 @@ class CrossSectionalMomentum(MultiStrategy):
                         cur[order[-k:]] = -g / 2 / k
             w[t] = cur
         return pd.DataFrame(w, columns=syms, index=next(iter(bars.values())).index)
+
+
+@register_multi
+class EtfVsBasket(MultiStrategy):
+    """First leg is an ETF or index future, the rest its main holdings: trade the gap."""
+
+    legs = None
+    meta = StrategyMeta(
+        key="STAT-BASKET-001", version="1.0.0", name="ETF vs basket reversion",
+        category="statistical_arbitrage",
+        description="Builds an equal-weight basket from legs 2..n (log-price average), "
+                    "regresses the first leg on it over a rolling window and fades stretched "
+                    "gaps, expecting the ETF and its holdings to re-converge. Hypothesis H41.",
+        entry_rules="gap z-score beyond +/- entry_z: short the rich side, buy the cheap side",
+        exit_rules="z back through exit_z, or max_bars held (about a day of 5-minute bars)",
+        stop_loss="z beyond +/- stop_z; no re-entry until z is back inside entry_z",
+        take_profit="z crosses exit_z",
+        position_sizing="gross split 1 : |beta| between the ETF and the basket, the basket "
+                        "side split equally across its members; hedge ratio frozen at entry",
+        asset_classes=(AssetClass.EQUITY, AssetClass.FUTURES),
+        timeframes=(Timeframe.M5, Timeframe.M15, Timeframe.H1, Timeframe.D1),
+        default_params={"lookback": 120, "entry_z": 2.5, "exit_z": 0.0, "stop_z": 5.0,
+                        "max_bars": 78, "gross": 1.0},
+    )
+
+    @classmethod
+    def check_legs(cls, n: int) -> None:
+        if n < 3:
+            raise ValueError(f"{cls.meta.key} needs the ETF plus at least 2 holdings, got {n}")
+
+    def target_weights(self, bars: dict[str, pd.DataFrame], params: dict[str, Any]
+                       ) -> pd.DataFrame:
+        syms = list(bars)
+        logs = {s: np.log(bars[s]["close"].to_numpy(float)) for s in syms}
+        basket = np.mean([logs[s] for s in syms[1:]], axis=0)
+        wy, wx = spread_reversion_weights(logs[syms[0]], basket, params)
+        out = {syms[0]: wy}
+        for s in syms[1:]:
+            out[s] = wx / (len(syms) - 1)
+        return pd.DataFrame(out, index=bars[syms[0]].index)
