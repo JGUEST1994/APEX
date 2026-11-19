@@ -25,7 +25,8 @@ def test_migrations_create_schema(session):
     tables = set(inspect(session.get_bind()).get_table_names())
     assert {"instruments", "bars", "ingestion_runs", "data_quality_issues", "strategies",
             "strategy_versions", "experiments", "research_documents", "research_chunks",
-            "research_journal", "audit_log", "alembic_version"} <= tables
+            "research_journal", "audit_log", "alembic_version", "paper_accounts", "paper_orders",
+            "paper_fills", "paper_positions"} <= tables
 
 
 def test_instrument_roundtrip(session):

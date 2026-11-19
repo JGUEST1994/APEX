@@ -31,8 +31,9 @@ class Event:
 class PaperTrader:
     def __init__(self, strategy: Strategy, spec: InstrumentSpec, risk: RiskService,
                  initial_capital: float = 100_000.0, params: dict | None = None,
-                 stop_atr: float = 2.0, history: int = 600) -> None:
+                 stop_atr: float = 2.0, history: int = 600, account: str = "") -> None:
         self.strategy, self.spec, self.risk = strategy, spec, risk
+        self.account = account
         self.params = strategy.params(params)
         self.broker = PaperBroker({spec.symbol: spec})
         self.pf = Portfolio(cash=initial_capital)
@@ -88,7 +89,7 @@ class PaperTrader:
         if abs(qty) < self.spec.lot_size / 2:
             return fills
         stop = bar["close"] - math.copysign(stop_dist, want) if want else None
-        coid = client_order_id(self.strategy.meta.key, sym, ts)
+        coid = client_order_id(self.strategy.meta.key, sym, ts, self.account)
         intent = OrderIntent(coid, sym, qty, bar["close"], self.spec.contract_multiplier, stop)
         decision = self.risk.check(intent, acct, data_stale=data_stale, now=ts)
         if decision:

@@ -33,9 +33,11 @@ class IllegalOrderTransition(ValueError):
     pass
 
 
-def client_order_id(strategy_key: str, symbol: str, signal_ts: datetime) -> str:
-    """Same signal -> same id, so a restart can never submit it twice."""
-    raw = f"{strategy_key}|{symbol}|{signal_ts.isoformat()}"
+def client_order_id(strategy_key: str, symbol: str, signal_ts: datetime,
+                    account: str = "") -> str:
+    """Same signal in the same account -> same id, so a restart can never submit it twice;
+    different accounts never collide."""
+    raw = f"{account}|{strategy_key}|{symbol}|{signal_ts.isoformat()}"
     return "apx-" + hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
