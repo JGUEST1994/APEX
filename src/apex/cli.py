@@ -158,6 +158,10 @@ def main(argv: list[str] | None = None) -> int:
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
+    sc = sub.add_parser("schedule", help="run data updates and paper accounts on a timer "
+                        "(see docs/DEPLOYMENT.md)")
+    sc.add_argument("--config", required=True, help="JSON job file")
+    sc.add_argument("--once", action="store_true", help="run every job once and exit")
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
     sv = sub.add_parser("serve", help="run the API server")
@@ -310,6 +314,25 @@ def main(argv: list[str] | None = None) -> int:
                 verdict = "PASS" if e.passed else "fail"
                 print(f"{verdict:4} {e.score:6.3f} {e.strategy_key:14} {e.symbol:8} "
                       f"{e.timeframe:4} {'; '.join(e.reasons)[:110]}")
+        elif args.cmd == "schedule":
+            import json
+
+            from apex.db.session import make_engine, make_session_factory
+            from apex.scheduler import Scheduler
+
+            sched = Scheduler.from_file(args.config, settings,
+                                        make_session_factory(make_engine(settings.database_url)))
+            if args.once:
+                res = sched.run_cycle()
+                for r in res:
+                    print(json.dumps(r, default=str))
+                return 0 if all(r["status"] == "ok" for r in res) else 1
+            print(f"scheduler started with {len(sched.jobs)} jobs (Ctrl+C to stop)")
+            try:
+                sched.run_forever()
+            except KeyboardInterrupt:
+                print("scheduler stopped")
+            return 0
         elif args.cmd == "paper-compare":
             from apex.execution.consistency import compare
 
