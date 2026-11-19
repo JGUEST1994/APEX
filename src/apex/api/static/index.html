@@ -295,7 +295,7 @@ const LOAD = {
         ["Side", (r) => r.qty > 0 ? "buy" : "sell"], ["Units", (r) => fmt(Math.abs(r.qty), 4), "num"],
         ["Price", (r) => fmt(r.price, 4), "num"], ["Costs", (r) => fmt(r.cost), "num"]], a.fills); };
     table($("paccts"), [["Account", (r) => { const b = el("button", r.name, "linkbtn"); b.onclick = () => open(r.name).catch(console.error); return b; }],
-      ["Strategy", (r) => r.strategy], ["Market", (r) => `${r.symbol} ${r.timeframe}`],
+      ["Strategy", (r) => r.strategy], ["Markets", (r) => `${(r.symbols || [r.symbol]).join(", ")} ${r.timeframe}`],
       ["Status", (r) => el("span", r.status, r.status === "halted" ? "fail" : "pass")],
       ["Kill switch", (r) => el("span", r.kill_switch.engaged ? "ON: " + r.kill_switch.reason : "off",
         r.kill_switch.engaged ? "fail" : "pass")],

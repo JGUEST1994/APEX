@@ -232,7 +232,11 @@ class AuditEvent(Base):
 
 # --------------------------------------------------------------------------- paper trading
 class PaperAccount(Base):
-    """One simulated account running one strategy on one instrument (Phase 9)."""
+    """One simulated account running one strategy on one or more instruments (Phase 9)."""
+
+    @property
+    def all_symbols(self) -> list[str]:
+        return list(self.symbols) if self.symbols else [self.symbol]
 
     __tablename__ = "paper_accounts"
 
@@ -240,7 +244,8 @@ class PaperAccount(Base):
     name: Mapped[str] = mapped_column(String(64), unique=True)
     strategy_key: Mapped[str] = mapped_column(String(64))
     params: Mapped[dict] = mapped_column(JSON, default=dict)
-    symbol: Mapped[str] = mapped_column(String(32))
+    symbol: Mapped[str] = mapped_column(String(32))  # primary instrument
+    symbols: Mapped[list | None] = mapped_column(JSON, nullable=True)  # all, if several
     timeframe: Mapped[str] = mapped_column(String(8))
     source: Mapped[str] = mapped_column(String(64))
     limits: Mapped[dict] = mapped_column(JSON, default=dict)
