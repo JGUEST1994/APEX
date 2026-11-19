@@ -1,3 +1,5 @@
+<p><img src="docs/brand/apex-lockup.svg" alt="APEX" height="48"></p>
+
 # Project APEX
 
 Standalone quantitative research and (eventually) trading platform for FX, US stocks/ETFs, crypto and CME index futures. APEX runs entirely on its own code and database; external AI is optional and off by default.
