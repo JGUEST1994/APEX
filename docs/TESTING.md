@@ -15,7 +15,7 @@ The PostgreSQL test database is **wiped** (schema dropped) by each DB test, so p
 | Config & safety | live mode rejected; secrets hidden from repr; log redaction |
 | Calendars | NYSE holidays and observed rules, DST boundaries, FX/CME/crypto sessions, expected bar generation |
 | Market data | normalisation, synthetic determinism, CSV provider, Binance pagination and errors (mocked HTTP), validation of NaN / non-positive / OHLC / duplicates / conflicts / misalignment / gaps / spikes, staleness |
-| Data infrastructure | session dates, CME/FX holidays, resampling (incl. partial buckets, daily sessions), reconciliation, incremental updates, resampled provider through the pipeline, Alpaca pagination/normalisation/secret-safe errors (mocked), CLI update/resample/reconcile |
+| Data infrastructure | session dates, CME/FX holidays, resampling (incl. partial buckets, daily sessions), reconciliation, incremental updates, resampled provider through the pipeline, Alpaca, Polygon and Kraken pagination/normalisation/secret-safe errors (mocked), CLI update/resample/reconcile |
 | Database | migrations create schema, full downgrade/upgrade, instrument round-trip, idempotent ingestion with stable content hash, quality issues recorded, failures recorded, batching above SQLite parameter limits |
 | Strategies | lifecycle transitions, no look-ahead for every registered strategy, parameter validation |
 | Research | extraction (txt/md/html/pdf/csv/vtt/srt), concept/formula/rule extraction, embeddings, hybrid search, dedupe, licence note enforcement, API |
@@ -26,4 +26,4 @@ The PostgreSQL test database is **wiped** (schema dropped) by each DB test, so p
 | AI | disabled by default and fails safely |
 | API | health, instruments, bars, 404, ingestion runs |
 
-CI (`.github/workflows/ci.yml`) runs lint and the full suite against PostgreSQL 16 on every push and pull request.
+CI (`.github/workflows/ci.yml`) runs lint and the full suite against PostgreSQL 16 on every push and pull request, plus `pip-audit` over the runtime dependencies (run it locally with `pip-audit .`).

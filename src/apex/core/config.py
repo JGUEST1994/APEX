@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     alpaca_key_id: SecretStr | None = None
     alpaca_secret_key: SecretStr | None = None
     alpaca_feed: str = "iex"
+    polygon_api_key: SecretStr | None = None
 
     # Optional external AI; "none" means fully disabled. Core never depends on it.
     ai_provider: str = "none"

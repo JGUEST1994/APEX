@@ -27,3 +27,15 @@ jobs:
       - run: pip install -e ".[dev,postgres,server]"
       - run: ruff check src tests
       - run: pytest
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      # resolves the project's runtime dependencies in an isolated env and checks them
+      # against the PyPI/OSV advisory databases; fails the build on any known vulnerability
+      - run: pip-audit --progress-spinner off .
