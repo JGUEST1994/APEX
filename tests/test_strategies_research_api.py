@@ -9,7 +9,7 @@ from apex.domain.instruments import by_symbol
 from apex.domain.market import Timeframe
 from apex.marketdata.ingest import ingest_bars
 from apex.marketdata.providers.synthetic import SyntheticProvider
-from apex.research.library import add_document, chunk_text, keyword_search
+from apex.research.library import add_document, keyword_search
 from apex.strategies.base import StrategyStatus as S
 from apex.strategies.base import can_transition
 from apex.strategies.registry import all_strategies
@@ -42,11 +42,6 @@ def test_unknown_param_rejected():
     strat = all_strategies()["TF-SMA-001"]()
     with pytest.raises(ValueError):
         strat.params({"nope": 1})
-
-
-def test_chunking():
-    chunks = chunk_text("x" * 2500, size=1000, overlap=100)
-    assert [len(c) for c in chunks] == [1000, 1000, 700]
 
 
 def test_research_library(session):

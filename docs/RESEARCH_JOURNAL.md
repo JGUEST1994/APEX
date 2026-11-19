@@ -7,3 +7,8 @@ Human-readable log of research decisions. The application also keeps a `research
 - Decision: own event-driven backtester as the source of truth (Phase 5); Backtrader not used as the core.
 - Decision: strategies emit target positions in [-1, 1]; the backtester fills on the next bar's open.
 - Hypothesis bank not started yet; the only strategy is the reference SMA crossover used to test the interface. It is unvalidated and makes no claim of profitability.
+
+## 2026-11-19: Phase 2 research library
+- Decision: rule-based concept/formula/rule extraction (reproducible, offline) instead of LLM extraction. Optional LLM enrichment can be layered on later through `apex.ai`.
+- Decision: default embeddings are a dependency-free hashing embedder so search works on any install; sentence-transformers is an optional upgrade.
+- Policy: every import must carry a `licence_note`; APEX imports only files the operator supplies.
