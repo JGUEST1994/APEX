@@ -1,18 +1,29 @@
-"""FastAPI backend (read-only in Phase 1). The dashboard (Phase 10) will consume this."""
+"""FastAPI backend (read-only). Also serves the read-only dashboard at ``/ui/``."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from sqlalchemy import select, text
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from apex import __version__
 from apex.core.config import Settings, get_settings
 from apex.core.errors import UnknownInstrumentError
-from apex.db.models import Experiment, IngestionRun, Instrument, ResearchDocument
+from apex.db.models import (
+    Experiment,
+    IngestionRun,
+    Instrument,
+    PriceBar,
+    ResearchDocument,
+    StrategyVersion,
+)
+from apex.db.models import Strategy as StrategyRow
 from apex.db.session import make_engine, make_session_factory
 from apex.domain.market import Timeframe
 from apex.marketdata.repository import get_instrument, load_bars
@@ -111,5 +122,38 @@ def create_app(settings: Settings | None = None,
                 "source_type": d.source_type, "source_ref": d.source_ref,
                 "licence_note": d.licence_note, "extracted": d.extracted,
                 "chunks": len(d.chunks)}
+
+    @app.get("/strategies")
+    def strategies(s: Session = Depends(db)) -> list[dict]:
+        from apex.strategies.registry import all_strategies
+
+        status = {}
+        for row, ver in s.execute(select(StrategyRow, StrategyVersion).join(
+                StrategyVersion, StrategyVersion.strategy_id == StrategyRow.id)):
+            status[row.key] = {"version": ver.version, "status": ver.status}
+        return [{"key": k, "name": c.meta.name, "category": c.meta.category,
+                 "version": c.meta.version, "regimes": list(c.meta.regimes),
+                 "timeframes": [t.value for t in c.meta.timeframes],
+                 "description": c.meta.description,
+                 "status": status.get(k, {}).get("status", "experimental")}
+                for k, c in sorted(all_strategies().items())]
+
+    @app.get("/datasets")
+    def datasets(s: Session = Depends(db)) -> list[dict]:
+        q = (select(Instrument.symbol, PriceBar.timeframe, PriceBar.source,
+                    func.count(), func.min(PriceBar.ts), func.max(PriceBar.ts))
+             .join(Instrument, Instrument.id == PriceBar.instrument_id)
+             .group_by(Instrument.symbol, PriceBar.timeframe, PriceBar.source)
+             .order_by(Instrument.symbol, PriceBar.timeframe, PriceBar.source))
+        return [{"symbol": sym, "timeframe": tf, "source": src, "bars": n,
+                 "first": lo.isoformat() if lo else None, "last": hi.isoformat() if hi else None}
+                for sym, tf, src, n, lo, hi in s.execute(q)]
+
+    static = Path(__file__).parent / "static"
+    app.mount("/ui", StaticFiles(directory=static, html=True), name="ui")
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse("/ui/")
 
     return app
