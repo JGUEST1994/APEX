@@ -28,6 +28,7 @@ def get(key: str) -> type[Strategy]:
 
 
 def all_strategies() -> dict[str, type[Strategy]]:
+    from apex.ml import strategy as _ml  # noqa: F401  (registers the ML strategy)
     from apex.strategies import builtin, builtin2, reference  # noqa: F401  (registers built-ins)
 
     return dict(_REGISTRY)

@@ -23,6 +23,7 @@ The PostgreSQL test database is **wiped** (schema dropped) by each DB test, so p
 | Validation | PSR/DSR properties, expected max Sharpe, PBO on noise vs real edge, Monte Carlo reproducibility, walk-forward fold structure and determinism, sensitivity, hold-out, CLI |
 | Tournament | promotion stops at validation, noise fails strict gates, family trial counting, family-wide DSR re-deflation, robustness score ignores raw return, human-only approval, audit trail, leaderboard filters, CLI + API |
 | Regimes | HMM recovers known volatility regimes out of sample, filtered probabilities causal, rule regimes causal, stability metrics, regime-filtered strategy wrapper, CLI |
+| ML | triple-barrier labels, purged/embargoed folds, logistic fit + JSON round trip, causal features, walk-forward trains only on finished labels, chance-level on noise, recovers a planted signal |
 | Architecture | core packages never import `apex.ai` |
 | AI | disabled by default and fails safely |
 | API | health, instruments, bars, 404, ingestion runs |

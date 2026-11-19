@@ -246,6 +246,12 @@ HYPOTHESES: list[Hypothesis] = [
       "A secondary model sizes primary signals by predicted hit probability (Lopez de Prado).",
       "primary signal; size by meta-model probability", "primary exit", "primary stop",
       "primary", "any"),
+    H("H53", "Walk-forward logistic triple-barrier", "machine_learning",
+      "forex,equity,crypto,futures", "1h,1d",
+      "Causal price/vol/volume features carry weak, regularisable information about which "
+      "volatility barrier is hit first.",
+      "walk-forward P(up) > 0.55 (long) / < 0.45 (short)", "probability back inside band",
+      "triple-barrier width", "triple-barrier width", "any", implemented="ML-LOGIT-001"),
     # --- scalping
     H("H51", "Micro pullback scalp", "scalping", "futures,crypto", "1m",
       "In strong 1m trends, the first 2-3 bar pullback continues.",
