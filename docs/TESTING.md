@@ -20,6 +20,7 @@ The PostgreSQL test database is **wiped** (schema dropped) by each DB test, so p
 | Strategies | lifecycle transitions, no look-ahead for every registered strategy, parameter validation |
 | Research | extraction (txt/md/html/pdf/csv/vtt/srt), concept/formula/rule extraction, embeddings, hybrid search, dedupe, licence note enforcement, API |
 | Backtesting | hand-calculated fills and P&L, short/flip with costs, latency, futures multiplier and lot rounding, cost stress, determinism, metric helpers, experiment recording and reproducibility, CLI + API |
+| Validation | PSR/DSR properties, expected max Sharpe, PBO on noise vs real edge, Monte Carlo reproducibility, walk-forward fold structure and determinism, sensitivity, hold-out, CLI |
 | Architecture | core packages never import `apex.ai` |
 | AI | disabled by default and fails safely |
 | API | health, instruments, bars, 404, ingestion runs |

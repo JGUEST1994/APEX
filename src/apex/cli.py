@@ -93,6 +93,18 @@ def main(argv: list[str] | None = None) -> int:
     bt.add_argument("--param", action="append", default=[], help="name=value (repeatable)")
     bt.add_argument("--capital", type=float, default=100_000.0)
     bt.add_argument("--cost-multiplier", type=float, default=1.0)
+    va = sub.add_parser("validate", help="walk-forward + PBO + Monte Carlo validation")
+    va.add_argument("--strategy", required=True)
+    va.add_argument("--symbol", required=True)
+    va.add_argument("--timeframe", default="1d")
+    va.add_argument("--source", required=True)
+    va.add_argument("--start", required=True, type=_dt)
+    va.add_argument("--end", required=True, type=_dt)
+    va.add_argument("--grid", action="append", default=[],
+                    help="name=v1,v2,... (repeatable); values parsed as JSON")
+    va.add_argument("--train-bars", type=int, required=True)
+    va.add_argument("--test-bars", type=int, required=True)
+    va.add_argument("--anchored", action="store_true")
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
     sv = sub.add_parser("serve", help="run the API server")
@@ -195,6 +207,30 @@ def main(argv: list[str] | None = None) -> int:
             if not rep.mismatches.empty:
                 print(rep.mismatches.head(20).to_string(index=False))
             return 0 if rep.ok else 1
+        elif args.cmd == "validate":
+            import json
+
+            from apex.backtest.experiments import run_validation
+            from apex.domain.market import Timeframe
+            from apex.strategies.registry import all_strategies
+
+            strategies = all_strategies()
+            if args.strategy not in strategies:
+                print(f"unknown strategy {args.strategy}", file=sys.stderr)
+                return 2
+            grid = {}
+            for g in args.grid:
+                k, _, vs = g.partition("=")
+                grid[k] = [json.loads(v) for v in vs.split(",")]
+            exp = run_validation(s, strategies[args.strategy](), symbol=args.symbol,
+                                 timeframe=Timeframe(args.timeframe), source=args.source,
+                                 start=args.start, end=args.end, grid=grid,
+                                 train_bars=args.train_bars, test_bars=args.test_bars,
+                                 anchored=args.anchored)
+            print(f"experiment {exp.id} walk-forward (SIMULATED, out-of-sample only)")
+            for k, v in exp.metrics.items():
+                if k not in ("folds_detail",):
+                    print(f"  {k:26} {v}")
         elif args.cmd == "strategies":
             from apex.strategies.registry import all_strategies
 
