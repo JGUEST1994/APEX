@@ -67,4 +67,16 @@ def test_paper_endpoints_are_read_only(db_url, session):
     for path in ("/paper/accounts", "/paper/accounts/demo"):
         assert c.post(path).status_code == 405 and c.delete(path).status_code == 405
     assert not [r for r in c.app.routes if "reset" in getattr(r, "path", "")]
+
+
+def test_dashboard_brand_assets_and_banner(db_url):
+    engine = make_engine(db_url)
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                              make_session_factory(engine)))
+    page = c.get("/ui/").text
+    # the safety banner stays the first thing in the body
+    assert page.index('id="banner"') < page.index('class="frame"')
+    for path in ("apex.css", "brand/favicon.svg", "brand/favicon.ico", "brand/apple-touch-icon.png"):
+        assert path in page
+        assert c.get("/ui/" + path).status_code == 200, path
     engine.dispose()

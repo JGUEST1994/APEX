@@ -3,77 +3,67 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>APEX dashboard</title>
-<style>
-  :root { --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --muted:#5b6470; --line:#dde1e6;
-          --accent:#2457c5; --good:#1a7f37; --bad:#c62828; --research:#5b6470; --paper:#9a6700; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#2a3039;
-            --accent:#6c9cff; --good:#4ac26b; --bad:#ff6b6b; --research:#9aa4b2; --paper:#e3b341; }
-  }
-  * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
-  #banner { padding:8px 16px; color:#fff; font-weight:600; letter-spacing:.04em; }
-  #banner.research { background:var(--research); } #banner.paper { background:var(--paper); }
-  nav { display:flex; gap:4px; padding:8px 16px; border-bottom:1px solid var(--line);
-        background:var(--panel); flex-wrap:wrap; }
-  nav button { border:0; background:none; color:var(--muted); padding:6px 10px; border-radius:6px;
-               cursor:pointer; font:inherit; }
-  nav button.on { background:var(--bg); color:var(--ink); font-weight:600; }
-  main { padding:16px; max-width:1200px; margin:0 auto; }
-  section { display:none; } section.on { display:block; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px;
-          margin-bottom:12px; overflow-x:auto; }
-  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
-  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
-  th { color:var(--muted); font-weight:500; }
-  .tag { font-size:11px; padding:1px 6px; border-radius:10px; border:1px solid var(--line);
-         color:var(--muted); }
-  .pass { color:var(--good); } .fail { color:var(--bad); }
-  input, select { font:inherit; padding:5px 8px; border:1px solid var(--line); border-radius:6px;
-                  background:var(--panel); color:var(--ink); }
-  .muted { color:var(--muted); } svg { width:100%; height:280px; display:block; }
-  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
-  .kpi b { display:block; font-size:20px; }
-</style>
+<title>APEX</title>
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#142430">
+<link rel="stylesheet" href="apex.css">
 </head>
 <body>
 <div id="banner" class="research">RESEARCH MODE · SIMULATED RESULTS ONLY · NO LIVE TRADING</div>
-<nav id="tabs"></nav>
+<div class="frame">
+<aside class="rail">
+  <a class="brand" href="#overview" aria-label="APEX home">
+    <svg viewBox="0 0 905.77 256" role="img" aria-hidden="true"><path fill="var(--brand)" d="M128 24 L171.88 100 L84.12 100 Z"/><path fill="currentColor" d="M74.88 116 L181.12 116 L245.78 228 L161.49 228 L128 170 L94.51 228 L10.22 228 Z"/><path fill="currentColor" d="M392.38 48 L484.75 208 L454.73 208 L392.38 100 L330.02 208 L300 208 Z M506.75 48 H566.75 A48 48 0 0 1 566.75 144 H532.75 V208 H506.75 Z M532.75 74 V118 H566.75 A22 22 0 0 0 566.75 74 Z M636.75 48 H740.75 V74 H662.75 V115 H730.75 V141 H662.75 V182 H740.75 V208 H636.75 Z M762.75 48 H796.56 L895.77 208 H861.96 Z M861.96 48 H895.77 L796.56 208 H762.75 Z "/></svg>
+  </a>
+  <nav id="tabs" aria-label="Sections"></nav>
+  <div class="rail-foot"><b id="footmode">Research</b><br>Practice data only.<br>Real-money trading is switched off.</div>
+</aside>
 <main>
+  <header class="page-head"><h1 id="ptitle">Overview</h1><p id="pdesc"></p></header>
   <section id="overview">
     <div class="card kpis" id="kpis"></div>
-    <div class="card"><h3>Recent ingestion runs</h3><table id="runs"></table></div>
+    <div class="card"><h3>Recent data downloads</h3><table id="runs"></table></div>
   </section>
   <section id="markets">
     <div class="card">
-      <select id="dataset"></select>
-      <span class="muted" id="dsinfo"></span>
-      <svg id="chart" role="img" aria-label="Close price chart"></svg>
+      <div class="toolbar"><select id="dataset" aria-label="Dataset"></select>
+        <span class="muted" id="dsinfo"></span></div>
+      <div class="quote" id="quote"></div>
+      <div class="chart-wrap"><svg id="chart" role="img" aria-label="Close price chart"></svg>
+        <div class="tip" id="tip"></div></div>
     </div>
   </section>
   <section id="strategies"><div class="card"><table id="strats"></table></div></section>
   <section id="leaderboard">
-    <div class="card"><p class="muted">Latest walk-forward result per strategy and market.
-      Ranked by robustness, not raw return. All figures are SIMULATED.</p>
-      <table id="lb"></table></div>
+    <div class="card"><table id="lb"></table></div>
   </section>
   <section id="experiments"><div class="card"><table id="exps"></table></div></section>
   <section id="paper">
-    <div class="card"><p class="muted">Practice (paper) accounts trade on simulated fills only.
-      The kill switch can only be reset from the command line by a named person.</p>
-      <table id="paccts"></table></div>
+    <div class="card"><table id="paccts"></table></div>
     <div class="card"><h3 id="pname">Select an account</h3><table id="pfills"></table></div>
   </section>
   <section id="research">
-    <div class="card"><input id="q" placeholder="Search the research library" size="40">
+    <div class="card"><div class="toolbar"><input id="q" class="search" type="search"
+      placeholder="Search the research library and press Enter"></div>
       <table id="hits"></table></div>
   </section>
 </main>
+</div>
 <script>
 "use strict";
 const TABS = [["overview","Overview"],["markets","Markets"],["strategies","Strategy lab"],
   ["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["research","Research"]];
+const DESC = {
+  overview: "Is everything running, and what has APEX collected so far.",
+  markets: "Price history for each stored market. Hover the chart to read any bar.",
+  strategies: "Every trading idea APEX can test, and how far through testing it has got.",
+  leaderboard: "Latest walk-forward result per strategy and market, ranked by robustness, not raw return. All figures are simulated.",
+  experiments: "Every historical test APEX has run, recorded so it can be repeated exactly. All figures are simulated.",
+  paper: "Practice (paper) accounts trade on simulated fills only. The kill switch can only be reset from the command line by a named person.",
+  research: "Search the notes, papers and transcripts you have imported.",
+};
 const $ = (id) => document.getElementById(id);
 async function get(path) {
   const r = await fetch(path);
@@ -92,11 +82,11 @@ const pct = (v) => (v === null || v === undefined) ? "–" : (100 * v).toFixed(1
 function table(t, cols, rows) {
   t.replaceChildren();
   const h = t.insertRow();
-  cols.forEach(([label]) => h.appendChild(el("th", label)));
+  cols.forEach(([label, , cls]) => h.appendChild(el("th", label, cls)));
   if (!rows.length) { const r = t.insertRow(); const c = r.insertCell();
     c.colSpan = cols.length; c.textContent = "Nothing yet."; c.className = "muted"; }
   rows.forEach((row) => { const r = t.insertRow();
-    cols.forEach(([, f]) => { const c = r.insertCell(); const v = f(row);
+    cols.forEach(([, f, cls]) => { const c = r.insertCell(); const v = f(row); if (cls) c.className = cls;
       if (v instanceof Node) c.appendChild(v); else c.textContent = v; }); });
 }
 function tabs() {
@@ -107,29 +97,81 @@ const loaded = {};
 function show(id) {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.id === id));
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === id));
+  const t = TABS.find(([k]) => k === id); $("ptitle").textContent = t ? t[1] : id;
+  $("pdesc").textContent = DESC[id] || ""; document.title = (t ? t[1] + " · " : "") + "APEX";
   if (!loaded[id]) { loaded[id] = true; LOAD[id]().catch((e) => console.error(e)); }
   if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
 }
+const NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v));
+  if (text !== undefined) e.textContent = String(text);
+  return e;
+}
+function niceTicks(lo, hi, n) {
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) || raw;
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+const priceFmt = (v, span) => v.toFixed(span < 2 ? 4 : span < 50 ? 2 : span < 5000 ? 1 : 0);
 function chart(svg, xs, ys) {
-  svg.replaceChildren();
+  svg.replaceChildren(); const tip = $("tip"); tip.style.display = "none";
   if (ys.length < 2) return;
-  const W = svg.clientWidth || 800, H = 280, P = 40;
+  const W = svg.clientWidth || 800, H = svg.clientHeight || 340;
+  const L = 8, R = 64, T = 12, B = 26;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1;
-  const X = (i) => P + (W - 2 * P) * i / (ys.length - 1);
-  const Y = (v) => H - P - (H - 2 * P) * (v - lo) / span;
-  const ns = "http://www.w3.org/2000/svg";
-  const path = document.createElementNS(ns, "path");
-  path.setAttribute("d", ys.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1)).join(""));
-  path.setAttribute("fill", "none"); path.setAttribute("stroke", "var(--accent)");
-  path.setAttribute("stroke-width", "1.5"); svg.appendChild(path);
-  [[lo, H - P], [hi, P]].forEach(([v, y]) => { const t = document.createElementNS(ns, "text");
-    t.setAttribute("x", 4); t.setAttribute("y", y); t.setAttribute("fill", "var(--muted)");
-    t.setAttribute("font-size", "11"); t.textContent = v.toPrecision(6); svg.appendChild(t); });
-  [[0, P], [xs.length - 1, W - P - 80]].forEach(([i, x]) => { const t = document.createElementNS(ns, "text");
-    t.setAttribute("x", x); t.setAttribute("y", H - 8); t.setAttribute("fill", "var(--muted)");
-    t.setAttribute("font-size", "11"); t.textContent = xs[i].slice(0, 16).replace("T", " ");
-    svg.appendChild(t); });
+  let lo = Math.min(...ys), hi = Math.max(...ys); const pad = (hi - lo || 1) * 0.06; lo -= pad; hi += pad;
+  const span = hi - lo;
+  const X = (i) => L + (W - L - R) * i / (ys.length - 1);
+  const Y = (v) => T + (H - T - B) * (1 - (v - lo) / span);
+  const defs = svgEl("defs"); const g = svgEl("linearGradient", { id: "areaFill", x1: 0, y1: 0, x2: 0, y2: 1 });
+  g.appendChild(svgEl("stop", { offset: "0", "stop-color": "var(--brand)", "stop-opacity": ".18" }));
+  g.appendChild(svgEl("stop", { offset: "1", "stop-color": "var(--brand)", "stop-opacity": "0" }));
+  defs.appendChild(g); svg.appendChild(defs);
+  niceTicks(lo, hi, 5).forEach((v) => {
+    svg.appendChild(svgEl("line", { class: "grid", x1: L, x2: W - R, y1: Y(v), y2: Y(v) }));
+    svg.appendChild(svgEl("text", { class: "axis", x: W - R + 8, y: Y(v) + 4 }, priceFmt(v, span)));
+  });
+  const nx = Math.max(2, Math.min(6, Math.floor((W - L - R) / 140)));
+  for (let k = 0; k <= nx; k++) {
+    const i = Math.round(k * (xs.length - 1) / nx);
+    const anchor = k === 0 ? "start" : k === nx ? "end" : "middle";
+    svg.appendChild(svgEl("text", { class: "axis", x: X(i), y: H - 8, "text-anchor": anchor }, xs[i].slice(0, 10)));
+  }
+  const pts = ys.map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1));
+  svg.appendChild(svgEl("path", { class: "area", d: "M" + pts.join("L") + `L${X(ys.length - 1)},${H - B}L${L},${H - B}Z` }));
+  svg.appendChild(svgEl("path", { class: "line", d: "M" + pts.join("L") }));
+  const last = ys[ys.length - 1], ly = Y(last);
+  svg.appendChild(svgEl("line", { class: "lastline", x1: L, x2: W - R, y1: ly, y2: ly }));
+  svg.appendChild(svgEl("rect", { class: "lasttag", x: W - R + 2, y: ly - 9, width: R - 4, height: 18, rx: 3 }));
+  svg.appendChild(svgEl("text", { class: "lasttxt", x: W - R + 8, y: ly + 4 }, last.toPrecision(6)));
+  const xh = svgEl("line", { class: "xhair", y1: T, y2: H - B, visibility: "hidden" });
+  const dot = svgEl("circle", { class: "dot", r: 4.5, visibility: "hidden" });
+  svg.appendChild(xh); svg.appendChild(dot);
+  const move = (ev) => {
+    const box = svg.getBoundingClientRect(); const px = (ev.clientX - box.left) * W / box.width;
+    const i = Math.max(0, Math.min(ys.length - 1, Math.round((px - L) / (W - L - R) * (ys.length - 1))));
+    const x = X(i), y = Y(ys[i]);
+    xh.setAttribute("x1", x); xh.setAttribute("x2", x); dot.setAttribute("cx", x); dot.setAttribute("cy", y);
+    xh.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible");
+    tip.replaceChildren(el("b", ys[i].toPrecision(6)), document.createElement("br"),
+      el("span", xs[i].slice(0, 16).replace("T", " ") + " UTC"));
+    tip.style.left = (x * box.width / W) + "px"; tip.style.top = (y * box.height / H) + "px";
+    tip.style.display = "block";
+  };
+  svg.onpointermove = move; svg.onpointerdown = move;
+  svg.onpointerleave = () => { xh.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
+    tip.style.display = "none"; };
+}
+function quote(d, ys) {
+  const q = $("quote"); q.replaceChildren(); if (!ys.length) return;
+  const last = ys[ys.length - 1], first = ys[0], ch = first ? (last / first - 1) : 0;
+  q.appendChild(el("span", d.symbol, "sym"));
+  q.appendChild(el("span", last.toPrecision(6), "last"));
+  q.appendChild(el("span", (ch >= 0 ? "+" : "") + (100 * ch).toFixed(2) + "% over window", "chg " + (ch >= 0 ? "up" : "down")));
+  q.appendChild(el("span", "source: " + d.source, "tag sim"));
 }
 const LOAD = {
   async overview() {
@@ -142,7 +184,7 @@ const LOAD = {
        d.appendChild(el("b", v)); kp.appendChild(d); });
     table($("runs"), [["ID", (r) => r.id], ["Source", (r) => r.source], ["TF", (r) => r.timeframe],
       ["Status", (r) => el("span", r.status, r.status === "failed" ? "fail" : "pass")],
-      ["Rows stored", (r) => r.rows_stored], ["Data hash", (r) => (r.content_sha256 || "").slice(0, 12)],
+      ["Rows stored", (r) => r.rows_stored, "num"], ["Data hash", (r) => (r.content_sha256 || "").slice(0, 12)],
       ["Started", (r) => r.started_at.slice(0, 19).replace("T", " ")]], runs);
   },
   async markets() {
@@ -153,8 +195,10 @@ const LOAD = {
       $("dsinfo").textContent = ` last bar ${d.last ? d.last.slice(0, 19).replace("T", " ") : "–"} UTC · showing the latest ${Math.min(d.bars, 2000)} bars`;
       const bars = await get(`/instruments/${encodeURIComponent(d.symbol)}/bars?timeframe=${d.timeframe}` +
         `&source=${encodeURIComponent(d.source)}&limit=2000`);
-      chart($("chart"), bars.map((b) => b.ts), bars.map((b) => b.close)); };
+      const ys = bars.map((b) => b.close); quote(d, ys);
+      chart($("chart"), bars.map((b) => b.ts), ys); };
     sel.onchange = draw; await draw();
+    let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 200); });
   },
   async strategies() {
     const st = await get("/strategies");
@@ -166,41 +210,41 @@ const LOAD = {
     const lb = await get("/leaderboard");
     table($("lb"), [["#", (r) => lb.indexOf(r) + 1], ["Strategy", (r) => r.strategy], ["Symbol", (r) => r.symbol],
       ["TF", (r) => r.timeframe], ["Gates", (r) => el("span", r.passed_gates ? "pass" : "fail", r.passed_gates ? "pass" : "fail")],
-      ["Score", (r) => fmt(r.score, 3)], ["DSR (family)", (r) => fmt(r.deflated_sharpe, 3)],
-      ["PBO", (r) => fmt(r.pbo, 2)], ["OOS return", (r) => pct(r.oos_return)],
-      ["Max DD", (r) => pct(r.oos_max_drawdown)], ["Status", (r) => el("span", r.status, "tag")],
-      ["Why not", (r) => r.fail_reasons || ""]], lb);
+      ["Score", (r) => fmt(r.score, 3), "num"], ["DSR (family)", (r) => fmt(r.deflated_sharpe, 3), "num"],
+      ["PBO", (r) => fmt(r.pbo, 2), "num"], ["OOS return", (r) => pct(r.oos_return), "num"],
+      ["Max DD", (r) => pct(r.oos_max_drawdown), "num"], ["Status", (r) => el("span", r.status, "tag")],
+      ["Why not", (r) => r.fail_reasons || "", "wrap"]], lb);
   },
   async experiments() {
     const ex = await get("/experiments?limit=100");
     table($("exps"), [["ID", (r) => r.id], ["Kind", (r) => r.kind],
       ["Symbol", (r) => (r.data_manifest || {}).symbol], ["TF", (r) => (r.data_manifest || {}).timeframe],
-      ["Sharpe", (r) => fmt((r.metrics || {}).sharpe)], ["Return", (r) => pct((r.metrics || {}).total_return)],
-      ["Max DD", (r) => pct((r.metrics || {}).max_drawdown)], ["Trades", (r) => (r.metrics || {}).trades ?? "–"],
-      ["Code", (r) => (r.code_version || "").slice(0, 10)], ["", () => el("span", "SIMULATED", "tag")]], ex);
+      ["Sharpe", (r) => fmt((r.metrics || {}).sharpe), "num"], ["Return", (r) => pct((r.metrics || {}).total_return), "num"],
+      ["Max DD", (r) => pct((r.metrics || {}).max_drawdown), "num"], ["Trades", (r) => (r.metrics || {}).trades ?? "–", "num"],
+      ["Code", (r) => (r.code_version || "").slice(0, 10)], ["", () => el("span", "SIMULATED", "tag sim")]], ex);
   },
   async paper() {
     const accts = await get("/paper/accounts");
     const open = async (name) => { const a = await get("/paper/accounts/" + encodeURIComponent(name));
-      $("pname").textContent = `${a.name} · recent simulated fills`;
+      $("pname").textContent = `${a.name}: recent simulated fills`;
       table($("pfills"), [["Time (UTC)", (r) => r.ts.slice(0, 19).replace("T", " ")], ["Symbol", (r) => r.symbol],
-        ["Side", (r) => r.qty > 0 ? "buy" : "sell"], ["Units", (r) => fmt(Math.abs(r.qty), 4)],
-        ["Price", (r) => fmt(r.price, 4)], ["Costs", (r) => fmt(r.cost)]], a.fills); };
-    table($("paccts"), [["Account", (r) => { const b = el("button", r.name); b.onclick = () => open(r.name).catch(console.error); return b; }],
+        ["Side", (r) => r.qty > 0 ? "buy" : "sell"], ["Units", (r) => fmt(Math.abs(r.qty), 4), "num"],
+        ["Price", (r) => fmt(r.price, 4), "num"], ["Costs", (r) => fmt(r.cost), "num"]], a.fills); };
+    table($("paccts"), [["Account", (r) => { const b = el("button", r.name, "linkbtn"); b.onclick = () => open(r.name).catch(console.error); return b; }],
       ["Strategy", (r) => r.strategy], ["Market", (r) => `${r.symbol} ${r.timeframe}`],
       ["Status", (r) => el("span", r.status, r.status === "halted" ? "fail" : "pass")],
       ["Kill switch", (r) => el("span", r.kill_switch.engaged ? "ON: " + r.kill_switch.reason : "off",
         r.kill_switch.engaged ? "fail" : "pass")],
-      ["Cash", (r) => fmt(r.cash)], ["Realised P&L", (r) => fmt(r.realised)],
+      ["Cash", (r) => fmt(r.cash), "num"], ["Realised P&L", (r) => fmt(r.realised), "num"],
       ["Holding", (r) => Object.entries(r.units).filter(([, u]) => u).map(([k, u]) => `${k} ${fmt(u, 4)}`).join(", ") || "flat"],
       ["Last bar", (r) => r.last_bar_ts ? r.last_bar_ts.slice(0, 10) : "–"],
-      ["", () => el("span", "SIMULATED", "tag")]], accts);
+      ["", () => el("span", "SIMULATED", "tag sim")]], accts);
     if (accts.length) await open(accts[0].name);
   },
   async research() {
     const run = async () => { const q = $("q").value.trim(); if (!q) return;
       const hits = await get("/research/search?q=" + encodeURIComponent(q));
-      table($("hits"), [["Score", (r) => fmt(r.score, 3)], ["Document", (r) => r.title || r.document_id],
+      table($("hits"), [["Score", (r) => fmt(r.score, 3), "num"], ["Document", (r) => r.title || r.document_id],
         ["Excerpt", (r) => (r.snippet || "").slice(0, 160)]], hits); };
     $("q").onkeydown = (e) => { if (e.key === "Enter") run().catch(console.error); };
   },
@@ -209,7 +253,8 @@ tabs();
 get("/health").then((h) => { const b = $("banner");
   b.className = h.trading_mode === "paper" ? "paper" : "research";
   b.textContent = (h.trading_mode === "paper" ? "PAPER MODE" : "RESEARCH MODE") +
-    " · SIMULATED RESULTS ONLY · NO LIVE TRADING"; }).catch(() => {});
+    " · SIMULATED RESULTS ONLY · NO LIVE TRADING";
+  $("footmode").textContent = h.trading_mode === "paper" ? "Paper mode" : "Research mode"; }).catch(() => {});
 const fromHash = () => { const id = (location.hash || "#overview").slice(1);
   show(TABS.some(([t]) => t === id) ? id : "overview"); };
 window.addEventListener("hashchange", fromHash);
