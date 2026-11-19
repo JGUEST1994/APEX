@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import math
 import subprocess
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -87,3 +88,50 @@ def run_experiment(session: Session, strategy: Strategy, *, symbol: str, timefra
     session.add(exp)
     session.flush()
     return exp, result
+
+
+def run_validation(session: Session, strategy: Strategy, *, symbol: str, timeframe: Timeframe,
+                   source: str, start: datetime, end: datetime, grid: dict[str, list],
+                   train_bars: int, test_bars: int, anchored: bool = False,
+                   config: BacktestConfig | None = None, mc_runs: int = 2000, seed: int = 7,
+                   venue: str | None = None) -> Experiment:
+    """Walk-forward + PBO + Monte Carlo, recorded as one reproducible experiment."""
+    from apex.backtest.validation import (
+        monte_carlo_trades,
+        probability_of_backtest_overfitting,
+        returns_matrix,
+        walk_forward,
+    )
+
+    inst = get_instrument(session, symbol, venue)
+    spec = to_spec(inst)
+    bars = load_bars(session, inst.id, timeframe, source, start, end)
+    cfg = config or BacktestConfig()
+    wf = walk_forward(bars, strategy, spec, grid, train_bars=train_bars,
+                      test_bars=test_bars, anchored=anchored, config=cfg)
+    metrics: dict[str, Any] = dict(wf.summary)
+    matrix = returns_matrix(bars, strategy, spec, grid, cfg)
+    if matrix.shape[1] >= 2:
+        metrics["pbo"] = probability_of_backtest_overfitting(matrix)["pbo"]
+    oos_eq = cfg.initial_capital * (1 + wf.oos_returns).cumprod()
+    pnl = oos_eq.diff().dropna()
+    metrics["monte_carlo_bar_bootstrap"] = monte_carlo_trades(
+        pnl[pnl != 0].tolist(), cfg.initial_capital, n=mc_runs, seed=seed)
+    metrics["folds_detail"] = [
+        {"test_start": f.test_start.isoformat(), "test_end": f.test_end.isoformat(),
+         "params": f.params, "is_score": f.is_score if math.isfinite(f.is_score) else None,
+         "oos": f.oos_metrics} for f in wf.folds]
+    ver = ensure_strategy_version(session, strategy)
+    exp = Experiment(
+        strategy_version_id=ver.id, kind="walk_forward",
+        params={"grid": grid, "train_bars": train_bars, "test_bars": test_bars,
+                "anchored": anchored},
+        data_manifest={"symbol": symbol, "venue": inst.venue, "timeframe": timeframe.value,
+                       "source": source, "start": start.isoformat(), "end": end.isoformat(),
+                       "bars": len(bars), "data_sha256": frame_sha256(bars),
+                       "config": asdict(cfg)},
+        code_version=code_version(), random_seed=seed, status="done", metrics=metrics,
+        finished_at=datetime.now(UTC))
+    session.add(exp)
+    session.flush()
+    return exp
