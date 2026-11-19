@@ -245,7 +245,7 @@ HYPOTHESES: list[Hypothesis] = [
     H("H50", "Meta-labelling", "machine_learning", "forex,crypto,futures,equity", "1h",
       "A secondary model sizes primary signals by predicted hit probability (Lopez de Prado).",
       "primary signal; size by meta-model probability", "primary exit", "primary stop",
-      "primary", "any"),
+      "primary", "any", implemented="ML-META-001"),
     H("H53", "Walk-forward logistic triple-barrier", "machine_learning",
       "forex,equity,crypto,futures", "1h,1d",
       "Causal price/vol/volume features carry weak, regularisable information about which "
