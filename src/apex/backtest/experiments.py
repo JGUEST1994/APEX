@@ -19,6 +19,7 @@ from apex.db.models import Strategy as StrategyRow
 from apex.domain.market import Timeframe
 from apex.marketdata.repository import frame_sha256, get_instrument, load_bars, to_spec
 from apex.strategies.base import Strategy, StrategyStatus
+from apex.strategies.multi import MultiStrategy
 
 
 def code_version() -> str:
@@ -82,6 +83,41 @@ def run_experiment(session: Session, strategy: Strategy, *, symbol: str, timefra
                        "bars": len(bars), "first_ts": bars["ts"].iloc[0].isoformat(),
                        "last_ts": bars["ts"].iloc[-1].isoformat(),
                        "data_sha256": frame_sha256(bars), "config": asdict(cfg)},
+        code_version=code_version(), random_seed=None, status="done",
+        metrics=result.metrics, finished_at=datetime.now(UTC))
+    session.add(exp)
+    session.flush()
+    return exp, result
+
+
+def run_pair_experiment(session: Session, strategy: MultiStrategy, *, symbols: list[str],
+                        timeframe: Timeframe, source: str, start: datetime, end: datetime,
+                        params: dict[str, Any] | None = None,
+                        config: BacktestConfig | None = None
+                        ) -> tuple[Experiment, BacktestResult]:
+    """Backtest a multi-instrument strategy and record it like any other experiment."""
+    from apex.backtest.portfolio import run_portfolio_backtest
+
+    bars, specs, hashes = {}, {}, {}
+    for sym in symbols:
+        inst = get_instrument(session, sym)
+        b = load_bars(session, inst.id, timeframe, source, start, end)
+        if len(b) < 2:
+            raise ValueError(f"not enough {source} {timeframe.value} bars for {sym} in range")
+        bars[sym], specs[sym], hashes[sym] = b, to_spec(inst), frame_sha256(b)
+    ver = ensure_strategy_version(session, strategy)
+    cfg = config or BacktestConfig()
+    full_params = strategy.params(params)
+    result = run_portfolio_backtest(bars, strategy, specs, full_params, cfg)
+    exp = Experiment(
+        strategy_version_id=ver.id, kind="backtest", params=full_params,
+        data_manifest={"symbol": "/".join(symbols), "symbols": symbols,
+                       "timeframe": timeframe.value, "source": source,
+                       "start": start.isoformat(), "end": end.isoformat(),
+                       "bars": int(len(result.equity)),
+                       "data_sha256": hashlib.sha256("|".join(
+                           hashes[s] for s in symbols).encode()).hexdigest(),
+                       "data_sha256_by_symbol": hashes, "config": asdict(cfg)},
         code_version=code_version(), random_seed=None, status="done",
         metrics=result.metrics, finished_at=datetime.now(UTC))
     session.add(exp)
