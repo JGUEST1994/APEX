@@ -174,3 +174,58 @@ class CrossAssetTrend(MultiStrategy):
                 cur = sig * inv / tot * params["gross"] if tot > 0 else np.zeros(len(syms))
             w[t] = cur
         return pd.DataFrame(w, columns=syms, index=next(iter(bars.values())).index)
+
+
+@register_multi
+class CrossSectionalMomentum(MultiStrategy):
+    """Rank a basket by past return (skipping the latest bars); hold winners, short losers."""
+
+    legs = None
+    meta = StrategyMeta(
+        key="MOM-XSEC-001", version="1.0.0", name="Cross-sectional momentum",
+        category="momentum",
+        description="At each rebalance ranks every instrument by its return from lookback "
+                    "bars ago to skip bars ago (the classic 12-1 month idea) and buys the "
+                    "top fraction, shorting the bottom fraction unless long_only. Equal "
+                    "weight within each side. Hypothesis H07.",
+        entry_rules="at a rebalance: in the top `top` fraction by ranked return -> long; in "
+                    "the bottom fraction -> short (unless long_only)",
+        exit_rules="drops out of its group at a later rebalance",
+        stop_loss="none at instrument level (portfolio drawdown limits live in the risk layer)",
+        take_profit="none",
+        position_sizing="gross split equally between the two sides, equal weight within a "
+                        "side (all of gross on the long side when long_only)",
+        asset_classes=(AssetClass.EQUITY, AssetClass.CRYPTO, AssetClass.FUTURES,
+                       AssetClass.FOREX),
+        timeframes=(Timeframe.D1,),
+        default_params={"lookback": 120, "skip": 5, "rebalance": 21, "top": 0.34,
+                        "gross": 1.0, "long_only": False},
+    )
+
+    def target_weights(self, bars: dict[str, pd.DataFrame], params: dict[str, Any]
+                       ) -> pd.DataFrame:
+        syms = list(bars)
+        close = pd.DataFrame({s: bars[s]["close"].to_numpy(float) for s in syms})
+        lb, sk, rb = int(params["lookback"]), int(params["skip"]), max(int(params["rebalance"]), 1)
+        if not 0 <= sk < lb:
+            raise ValueError("need 0 <= skip < lookback")
+        ret = (close.shift(sk) / close.shift(lb) - 1).to_numpy()
+        n, m = ret.shape
+        k = max(1, int(round(params["top"] * m)))
+        if not params["long_only"]:
+            k = min(k, m // 2)  # a name can't be both a winner and a loser
+        g, lo = params["gross"], params["long_only"]
+        w, cur = np.zeros((n, m)), np.zeros(m)
+        for t in range(n):
+            if t % rb == 0:
+                cur = np.zeros(m)
+                r = ret[t]
+                if np.isfinite(r).all() and k > 0:
+                    order = np.argsort(-r, kind="stable")  # ties broken by leg order
+                    if lo:
+                        cur[order[:k]] = g / k
+                    else:
+                        cur[order[:k]] = g / 2 / k
+                        cur[order[-k:]] = -g / 2 / k
+            w[t] = cur
+        return pd.DataFrame(w, columns=syms, index=next(iter(bars.values())).index)

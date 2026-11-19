@@ -14,7 +14,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H06 | Time-series momentum | futures,forex,crypto | 1d | sign of 60-bar return | sign flip | vol targeting | ohlcv | MOM-TSMOM-001 |
-| H07 | Cross-sectional momentum | equity,crypto | 1d | long top decile of 12-1 month return | monthly rebalance | portfolio-level DD stop | multi | - |
+| H07 | Cross-sectional momentum | equity,crypto | 1d | long top decile of 12-1 month return | monthly rebalance | portfolio-level DD stop | multi | MOM-XSEC-001 |
 | H08 | Intraday momentum (first half hour) | equity,futures | 30m | sign of first-30m return at 15:30 ET | close | none | ohlcv | - |
 | H09 | 52-week high proximity | equity | 1d | close within 2% of 52w high | close 10% below entry high | 10% trail | multi | - |
 | H10 | Crypto weekend momentum | crypto | 1h | Friday 20:00 UTC 24h return sign | Monday 00:00 UTC | 2 ATR | ohlcv | - |
