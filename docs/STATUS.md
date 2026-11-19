@@ -1,6 +1,6 @@
 # APEX project status
 
-Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6 complete; 3 and 4 first batches done; milestone 1 reached → next: Phase 4 next batch of strategies.**
+Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6 complete; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → next: Phase 3 remaining data adapters.**
 Update this file at the end of every working session so work can continue from any tool.
 
 ## Milestone 1 target (spec Section 21)
@@ -16,7 +16,7 @@ Update this file at the end of every working session so work can continue from a
 
 ## Implemented and tested
 
-Tests last run: 2026-11-19, `ruff check` clean, **178 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
+Tests last run: 2026-11-19, `ruff check` clean, **233 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
 
 - `apex.core`: env config, live trading impossible to enable, secret redaction in logs, injectable clock.
 - `apex.domain`: Bar, Timeframe, InstrumentSpec, CostModel; 22-instrument default universe (FX majors, US ETFs/stocks, BTC/ETH, ES/MES/NQ/MNQ).
@@ -28,7 +28,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **178 passed**, with database te
 - Phase 5 validation (`backtest/validation.py`): rolling or anchored walk-forward optimisation (grid search in-sample, evaluation on the next unseen window, stitched out-of-sample returns, walk-forward efficiency, parameter stability), Probabilistic and Deflated Sharpe Ratio (trial count = grid size x folds), Probability of Backtest Overfitting via CSCV, Monte Carlo bootstrap of outcomes, parameter sensitivity, hold-out split. `run_validation` records a `walk_forward` experiment with all of it; CLI `apex validate`.
 - Phase 6 tournament (`backtest/tournament.py`, `strategies/lifecycle.py`): runs walk-forward validation for each strategy x symbol, re-deflates the Sharpe ratio with the family-wide trial count (every walk-forward trial ever recorded for that strategy key), checks promotion gates (min OOS trades 100, family DSR >= 0.95, >= 60% profitable folds, max drawdown <= 25%, PBO <= 0.5), and scores on robustness (DSR, fold consistency, drawdown, PBO, parameter stability; raw return has no weight). Auto-promotion goes experimental -> backtesting -> validation only; `approved` needs a human actor. Every status change writes `strategy_status_changes` and an audit event. CLI `apex tournament`, `apex leaderboard`; API `/leaderboard` (flagged simulated).
 - Architecture test: core packages may not import `apex.ai` (AST scan in `tests/test_architecture.py`).
-- Phase 4: `strategies/hypotheses.py` holds 52 documented hypotheses (all 14 categories in spec Section 6) rendered to `docs/STRATEGY_HYPOTHESES.md` (`apex hypotheses`; a test keeps them in sync). `strategies/indicators.py` (causal SMA/EMA/RSI/ATR/Bollinger/Donchian/session VWAP). `strategies/builtin.py` implements 10 more: BO-DONCH-001, MOM-TSMOM-001, MR-RSI2-001, MR-BB-001, VWAP-MR-001, BO-ORB-001, VOL-SQZ-001, LIQ-SWEEP-001, MS-BOS-001, MTF-PB-001. Every registered strategy is tested for look-ahead on daily, 15m and 5m data and must trade on at least one dataset. Hypotheses needing tick, order-book or multi-instrument data are specs only.
+- Phase 4: `strategies/hypotheses.py` holds 52 documented hypotheses (all 14 categories in spec Section 6) rendered to `docs/STRATEGY_HYPOTHESES.md` (`apex hypotheses`; a test keeps them in sync). `strategies/indicators.py` (causal SMA/EMA/RSI/ATR/Bollinger/Donchian/session VWAP). `strategies/builtin.py` implements 10 more: BO-DONCH-001, MOM-TSMOM-001, MR-RSI2-001, MR-BB-001, VWAP-MR-001, BO-ORB-001, VOL-SQZ-001, LIQ-SWEEP-001, MS-BOS-001, MTF-PB-001. Batch 2 (`strategies/builtin2.py`, shared `_trade` state machine with frozen stop/target/time exits) adds 12: TF-EMA-RIB-001, TF-CHAND-001, MR-IBS-001, MR-DOWN-001, BO-INSIDE-001, BO-NR7-001, BO-LDN-001, VWAP-PB-001, VWAP-BAND-001, LIQ-PDHL-001, MS-FVG-001, VOL-ATRX-001 (23 registered in total), with hand-built rule tests in `tests/test_strategies_batch2.py`. Every registered strategy is tested for look-ahead on daily, 15m and 5m data and must trade on at least one dataset. Hypotheses needing tick, order-book or multi-instrument data are specs only.
 - `apex.strategies`: interface, 7-state lifecycle with transition rules, entry-point plugin registry, generic no-look-ahead test.
 - `apex.ai`: optional provider interface, disabled by default.
 - `apex.api`: read-only FastAPI (health, instruments, bars, ingestion runs, research search, research documents).
@@ -50,13 +50,14 @@ Tests last run: 2026-11-19, `ruff check` clean, **178 passed**, with database te
 - No authentication on the API yet: keep it on localhost.
 - Backtester does not yet model: margin calls, partial fills, intrabar stop/limit orders, market impact beyond bps slippage, futures roll. Positions open at the end are marked at the last close and counted as a trade (`closed_at_end`).
 - Plain `apex backtest` Sharpe is raw; use `apex validate` for out-of-sample, trial-adjusted figures. The tournament uses family-wide trial counts; `apex validate` alone counts only its own grid.
+- Session-flat intraday strategies (VWAP-MR, ORB, VWAP-PB, VWAP-BAND, LIQ-PDHL) reset at the first bar of the next session, so with next-bar fills a position can be held from the last bar of a session to the second bar of the next. Exiting before the close needs calendar-aware session-end detection (to do).
 - Daily bars use 00:00 UTC of the session date as `ts`; providers with other conventions must be mapped.
 
 ## Next steps (in order)
 
-1. Phase 4 next batch: more OHLCV hypotheses (H03, H04, H13, H14, H17-H19, H22, H24, H33, H37, H43); multi-instrument support for stat-arb.
-2. Phase 3 remainder: Databento (futures), Polygon/Massive, Dukascopy (FX), Kraken adapters; in-process scheduler.
-3. pip-audit in CI.
+1. Phase 3 remainder: Databento (futures), Polygon/Massive, Dukascopy (FX), Kraken adapters; in-process scheduler.
+2. pip-audit in CI.
+3. Multi-instrument strategy support (stat-arb H38-H40, cross-asset H05).
 4. Phase 8 regime detection, Phase 7 ML (with leakage-safe labels), Phase 9 paper trading + independent risk engine (Jake reviews before merge).
 
 ## Decisions needed from Jake

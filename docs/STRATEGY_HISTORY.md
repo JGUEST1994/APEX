@@ -13,3 +13,15 @@
 | LIQ-SWEEP-001 | 0.1.0 | 2026-11-19 | experimental | Liquidity sweep reversal: first implementation. Not validated. |
 | MS-BOS-001 | 0.1.0 | 2026-11-19 | experimental | Market structure break: first implementation. Not validated. |
 | MTF-PB-001 | 0.1.0 | 2026-11-19 | experimental | HTF trend, LTF pullback: first implementation. Not validated. |
+| TF-EMA-RIB-001 | 0.1.0 | 2026-11-19 | experimental | EMA ribbon alignment: first implementation. Not validated. |
+| TF-CHAND-001 | 0.1.0 | 2026-11-19 | experimental | ATR chandelier trend: first implementation. Not validated. |
+| MR-IBS-001 | 0.1.0 | 2026-11-19 | experimental | Internal bar strength reversion: first implementation. Not validated. |
+| MR-DOWN-001 | 0.1.0 | 2026-11-19 | experimental | Consecutive down closes in uptrend: first implementation. Not validated. |
+| BO-INSIDE-001 | 0.1.0 | 2026-11-19 | experimental | Inside-bar breakout: first implementation. Not validated. |
+| BO-NR7-001 | 0.1.0 | 2026-11-19 | experimental | NR7 breakout: first implementation. Not validated. |
+| BO-LDN-001 | 0.1.0 | 2026-11-19 | experimental | London breakout: first implementation. Not validated. |
+| VWAP-PB-001 | 0.1.0 | 2026-11-19 | experimental | VWAP trend-day pullback: first implementation. Not validated. |
+| VWAP-BAND-001 | 0.1.0 | 2026-11-19 | experimental | VWAP band breakout: first implementation. Not validated. |
+| LIQ-PDHL-001 | 0.1.0 | 2026-11-19 | experimental | Prior-session high/low sweep: first implementation. Not validated. |
+| MS-FVG-001 | 0.1.0 | 2026-11-19 | experimental | Fair value gap retest: first implementation. Not validated. |
+| VOL-ATRX-001 | 0.1.0 | 2026-11-19 | experimental | ATR expansion follow-through: first implementation. Not validated. |
