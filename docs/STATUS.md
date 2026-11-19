@@ -1,6 +1,6 @@
 # APEX project status
 
-Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6, 7 (first model), 8 complete, Phase 10 read-only dashboard; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → Phase 9 slices 1-2 (risk, paper broker, persistence) done; Phase 9 correlation cap, paper dashboard page and paper-vs-backtest report done; multi-instrument paper accounts done; in-process scheduler and multi-instrument strategies (pairs) and meta-labelling done; walk-forward/tournament for pairs done; H05 cross-asset trend portfolio and H07 cross-sectional momentum done; next: Phase 3 remainder (Dukascopy), paper trading for multi-instrument strategies.**
+Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6, 7 (first model), 8 complete, Phase 10 read-only dashboard; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → Phase 9 slices 1-2 (risk, paper broker, persistence) done; Phase 9 correlation cap, paper dashboard page and paper-vs-backtest report done; multi-instrument paper accounts done; in-process scheduler and multi-instrument strategies (pairs) and meta-labelling done; walk-forward/tournament for pairs done; H05 cross-asset trend portfolio and H07 cross-sectional momentum done; dashboard shows which strategy each backtest used and how many markets a strategy trades; next: Phase 3 remainder (Dukascopy), paper trading for multi-instrument strategies.**
 Update this file at the end of every working session so work can continue from any tool.
 
 ## Milestone 1 target (spec Section 21)

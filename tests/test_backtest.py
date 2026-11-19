@@ -172,5 +172,6 @@ def test_cli_and_api_backtest(db_url, monkeypatch, capsys):
                                    make_session_factory(engine)))
     exps = client.get("/experiments").json()
     assert exps[0]["simulated"] is True and exps[0]["params"]["fast"] == 5
+    assert exps[0]["strategy"] == "TF-SMA-001" and exps[0]["strategy_version"]
     engine.dispose()
     assert Experiment  # imported for clarity

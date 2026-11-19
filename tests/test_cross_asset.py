@@ -95,6 +95,20 @@ def test_cli_backtests_three_legs(db_url, monkeypatch, capsys):
         get_settings.cache_clear()
     out = capsys.readouterr().out
     assert "(SIMULATED) SPY/BTCUSDT/ETHUSDT" in out
+    from fastapi.testclient import TestClient
+
+    from apex.api.app import create_app
+    from apex.core.config import Settings
+    from apex.db.session import make_engine, make_session_factory
+
+    engine = make_engine(db_url)
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                              make_session_factory(engine)))
+    exp = c.get("/experiments").json()[0]
+    assert exp["strategy"] == "TF-XASSET-001" and exp["data_manifest"]["symbols"] == list(LEGS)
+    st = {r["key"]: r["instruments"] for r in c.get("/strategies").json()}
+    assert st["TF-XASSET-001"] == "2+" and st["STAT-PAIR-001"] == 2 and st["TF-SMA-001"] == 1
+    engine.dispose()
     assert "TF-XASSET-001" in out and "[2+ instruments]" in out
 
 
