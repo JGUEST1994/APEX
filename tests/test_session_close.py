@@ -34,6 +34,11 @@ def test_bars_left_follows_the_calendar_across_dst_and_weekends():
     l2 = ind.bars_left_in_session(es, "cme_globex")
     at = es["ts"].dt.tz_convert("America/New_York").dt.strftime("%H:%M")
     assert set(at[l2 == 0]) == {"16:45"}
+    # early close (day after Thanksgiving 2025): the last bar is 12:55 ET
+    ff = _ts("2025-11-28 14:30", 60)
+    l3 = ind.bars_left_in_session(ff, "us_equity_rth")
+    assert ff["ts"][l3 == 0].dt.tz_convert("America/New_York").dt.strftime("%H:%M").tolist() \
+        == ["12:55"]
     # daily bars never get flattened
     d = _ts("2025-01-01", 30, "1D")
     assert (ind.bars_left_in_session(d, "us_equity_rth") == 10_000).all()

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -54,3 +54,20 @@ def test_expected_daily_bars_skip_weekend():
 def test_unknown_calendar():
     with pytest.raises(KeyError):
         get_calendar("nope")
+
+
+def test_nyse_early_closes():
+    from apex.marketdata.calendars import nyse_early_closes
+
+    # published NYSE 13:00 closes
+    assert nyse_early_closes(2024) == {date(2024, 7, 3), date(2024, 11, 29), date(2024, 12, 24)}
+    assert nyse_early_closes(2025) == {date(2025, 7, 3), date(2025, 11, 28), date(2025, 12, 24)}
+    # 3 July 2026 and 24 December 2021 are Fridays: observed holidays, not early closes
+    assert nyse_early_closes(2026) == {date(2026, 11, 27), date(2026, 12, 24)}
+    assert nyse_early_closes(2021) == {date(2021, 11, 26)}
+    cal = get_calendar("us_equity_rth")
+    assert cal.is_open(datetime(2025, 11, 28, 17, 55, tzinfo=UTC))  # 12:55 ET
+    assert not cal.is_open(datetime(2025, 11, 28, 18, 0, tzinfo=UTC))  # 13:00 ET
+    bars = list(cal.expected_bars(datetime(2025, 12, 24, tzinfo=UTC),
+                                  datetime(2025, 12, 25, tzinfo=UTC), Timeframe.M30))
+    assert len(bars) == 7  # 09:30 to 13:00
