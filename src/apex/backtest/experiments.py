@@ -98,13 +98,7 @@ def run_pair_experiment(session: Session, strategy: MultiStrategy, *, symbols: l
     """Backtest a multi-instrument strategy and record it like any other experiment."""
     from apex.backtest.portfolio import run_portfolio_backtest
 
-    bars, specs, hashes = {}, {}, {}
-    for sym in symbols:
-        inst = get_instrument(session, sym)
-        b = load_bars(session, inst.id, timeframe, source, start, end)
-        if len(b) < 2:
-            raise ValueError(f"not enough {source} {timeframe.value} bars for {sym} in range")
-        bars[sym], specs[sym], hashes[sym] = b, to_spec(inst), frame_sha256(b)
+    bars, specs, hashes = _load_legs(session, symbols, timeframe, source, start, end)
     ver = ensure_strategy_version(session, strategy)
     cfg = config or BacktestConfig()
     full_params = strategy.params(params)
@@ -115,14 +109,29 @@ def run_pair_experiment(session: Session, strategy: MultiStrategy, *, symbols: l
                        "timeframe": timeframe.value, "source": source,
                        "start": start.isoformat(), "end": end.isoformat(),
                        "bars": int(len(result.equity)),
-                       "data_sha256": hashlib.sha256("|".join(
-                           hashes[s] for s in symbols).encode()).hexdigest(),
+                       "data_sha256": _combined_sha(hashes, symbols),
                        "data_sha256_by_symbol": hashes, "config": asdict(cfg)},
         code_version=code_version(), random_seed=None, status="done",
         metrics=result.metrics, finished_at=datetime.now(UTC))
     session.add(exp)
     session.flush()
     return exp, result
+
+
+def _load_legs(session: Session, symbols: list[str], timeframe: Timeframe, source: str,
+               start: datetime, end: datetime) -> tuple[dict, dict, dict]:
+    bars, specs, hashes = {}, {}, {}
+    for sym in symbols:
+        inst = get_instrument(session, sym)
+        b = load_bars(session, inst.id, timeframe, source, start, end)
+        if len(b) < 2:
+            raise ValueError(f"not enough {source} {timeframe.value} bars for {sym} in range")
+        bars[sym], specs[sym], hashes[sym] = b, to_spec(inst), frame_sha256(b)
+    return bars, specs, hashes
+
+
+def _combined_sha(hashes: dict[str, str], symbols: list[str]) -> str:
+    return hashlib.sha256("|".join(hashes[s] for s in symbols).encode()).hexdigest()
 
 
 def run_validation(session: Session, strategy: Strategy, *, symbol: str, timeframe: Timeframe,
@@ -138,9 +147,19 @@ def run_validation(session: Session, strategy: Strategy, *, symbol: str, timefra
         walk_forward,
     )
 
-    inst = get_instrument(session, symbol, venue)
-    spec = to_spec(inst)
-    bars = load_bars(session, inst.id, timeframe, source, start, end)
+    if isinstance(strategy, MultiStrategy):  # symbol is "A,B" or "A/B" in leg order
+        symbols = [x.strip() for x in symbol.replace("/", ",").split(",") if x.strip()]
+        bars, spec, hashes = _load_legs(session, symbols, timeframe, source, start, end)
+        manifest = {"symbol": "/".join(symbols), "symbols": symbols, "venue": None,
+                    "data_sha256": _combined_sha(hashes, symbols),
+                    "data_sha256_by_symbol": hashes,
+                    "bars": min(len(b) for b in bars.values())}
+    else:
+        inst = get_instrument(session, symbol, venue)
+        spec = to_spec(inst)
+        bars = load_bars(session, inst.id, timeframe, source, start, end)
+        manifest = {"symbol": symbol, "venue": inst.venue, "bars": len(bars),
+                    "data_sha256": frame_sha256(bars)}
     cfg = config or BacktestConfig()
     wf = walk_forward(bars, strategy, spec, grid, train_bars=train_bars,
                       test_bars=test_bars, anchored=anchored, config=cfg)
@@ -161,9 +180,8 @@ def run_validation(session: Session, strategy: Strategy, *, symbol: str, timefra
         strategy_version_id=ver.id, kind="walk_forward",
         params={"grid": grid, "train_bars": train_bars, "test_bars": test_bars,
                 "anchored": anchored},
-        data_manifest={"symbol": symbol, "venue": inst.venue, "timeframe": timeframe.value,
-                       "source": source, "start": start.isoformat(), "end": end.isoformat(),
-                       "bars": len(bars), "data_sha256": frame_sha256(bars),
+        data_manifest={**manifest, "timeframe": timeframe.value, "source": source,
+                       "start": start.isoformat(), "end": end.isoformat(),
                        "config": asdict(cfg)},
         code_version=code_version(), random_seed=seed, status="done", metrics=metrics,
         finished_at=datetime.now(UTC))

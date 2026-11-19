@@ -107,7 +107,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="trade only in the regimes the strategy declares")
     va = sub.add_parser("validate", help="walk-forward + PBO + Monte Carlo validation")
     va.add_argument("--strategy", required=True)
-    va.add_argument("--symbol", required=True)
+    va.add_argument("--symbol", required=True,
+                    help="instrument, or legs as A/B for a multi-instrument strategy")
     va.add_argument("--timeframe", default="1d")
     va.add_argument("--source", required=True)
     va.add_argument("--start", required=True, type=_dt)
@@ -120,7 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     va.add_argument("--regime-filter", action="store_true")
     tn = sub.add_parser("tournament", help="validate many strategies and rank them")
     tn.add_argument("--strategies", default="all", help="comma-separated keys or 'all'")
-    tn.add_argument("--symbols", required=True)
+    tn.add_argument("--symbols", required=True,
+                    help="comma-separated; pairs as A/B go to multi-instrument strategies")
     tn.add_argument("--timeframe", default="1d")
     tn.add_argument("--source", required=True)
     tn.add_argument("--start", required=True, type=_dt)
@@ -279,9 +281,10 @@ def main(argv: list[str] | None = None) -> int:
 
             from apex.backtest.experiments import run_validation
             from apex.domain.market import Timeframe
+            from apex.strategies.multi import all_multi_strategies
             from apex.strategies.registry import all_strategies
 
-            strategies = all_strategies()
+            strategies = {**all_strategies(), **all_multi_strategies()}
             if args.strategy not in strategies:
                 print(f"unknown strategy {args.strategy}", file=sys.stderr)
                 return 2
@@ -292,7 +295,12 @@ def main(argv: list[str] | None = None) -> int:
             strat = strategies[args.strategy]()
             if args.regime_filter:
                 from apex.regime.filtered import RegimeFiltered
+                from apex.strategies.multi import MultiStrategy
 
+                if isinstance(strat, MultiStrategy):
+                    print("--regime-filter is for single-instrument strategies",
+                          file=sys.stderr)
+                    return 2
                 strat = RegimeFiltered(strat)
             exp = run_validation(s, strat, symbol=args.symbol,
                                  timeframe=Timeframe(args.timeframe), source=args.source,
@@ -306,9 +314,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "tournament":
             from apex.backtest.tournament import run_tournament
             from apex.domain.market import Timeframe
+            from apex.strategies.multi import all_multi_strategies
             from apex.strategies.registry import all_strategies
 
-            reg = all_strategies()
+            reg = {**all_strategies(), **all_multi_strategies()}
             keys = sorted(reg) if args.strategies == "all" else args.strategies.split(",")
             missing = [k for k in keys if k not in reg]
             if missing:

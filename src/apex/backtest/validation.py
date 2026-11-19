@@ -25,6 +25,42 @@ import pandas as pd
 from apex.backtest.engine import BacktestConfig, BacktestResult, run_backtest
 from apex.domain.market import InstrumentSpec
 from apex.strategies.base import Strategy
+from apex.strategies.multi import MultiStrategy, align
+
+# Walk-forward, PBO and sensitivity work for single- and multi-instrument strategies.
+# For a MultiStrategy, ``bars`` is {symbol: frame} and ``spec`` is {symbol: spec}; the legs
+# are aligned on common timestamps once, then sliced together by row position.
+Bars = pd.DataFrame | dict[str, pd.DataFrame]
+Spec = InstrumentSpec | dict[str, InstrumentSpec]
+
+
+def _run(bars: Bars, strategy: Strategy, spec: Spec, params: dict,
+         cfg: BacktestConfig | None) -> BacktestResult:
+    if isinstance(strategy, MultiStrategy):
+        from apex.backtest.portfolio import run_portfolio_backtest
+
+        return run_portfolio_backtest(bars, strategy, spec, params, cfg)
+    return run_backtest(bars, strategy, spec, params, cfg)
+
+
+def _prepare(bars: Bars, strategy: Strategy) -> Bars:
+    if isinstance(strategy, MultiStrategy):
+        return align(bars)
+    return bars.reset_index(drop=True)
+
+
+def _nrows(bars: Bars) -> int:
+    return len(next(iter(bars.values()))) if isinstance(bars, dict) else len(bars)
+
+
+def _ts(bars: Bars) -> pd.Series:
+    return next(iter(bars.values()))["ts"] if isinstance(bars, dict) else bars["ts"]
+
+
+def _slice(bars: Bars, lo: int, hi: int) -> Bars:
+    if isinstance(bars, dict):
+        return {k: v.iloc[lo:hi].reset_index(drop=True) for k, v in bars.items()}
+    return bars.iloc[lo:hi].reset_index(drop=True)
 
 _N = NormalDist()
 EULER_GAMMA = 0.5772156649015329
@@ -156,35 +192,48 @@ def _score(res: BacktestResult, objective: str) -> float:
 
 
 def _segment(bars, strategy, spec, params, cfg, start_i, end_i, warmup):
-    """Backtest bars[start_i:end_i] using `warmup` earlier bars for indicators only."""
+    """Backtest rows [start_i:end_i] using `warmup` earlier rows for indicators only."""
     lo = max(0, start_i - warmup)
-    seg = bars.iloc[lo:end_i].reset_index(drop=True)
+    seg = _slice(bars, lo, end_i)
     # strategy flat during warm-up so no position is carried into the window
     offset = start_i - lo
 
-    class _Masked(Strategy):
-        meta = strategy.meta
+    if isinstance(strategy, MultiStrategy):
+        class _MaskedMulti(MultiStrategy):
+            meta, legs = strategy.meta, strategy.legs
 
-        def target_position(self, b, p):
-            pos = strategy.target_position(b, p).copy()
-            pos.iloc[:offset] = 0.0
-            return pos
+            def target_weights(self, b, p):
+                w = strategy.target_weights(b, p).copy()
+                w.iloc[:offset] = 0.0
+                return w
 
-    res = run_backtest(seg, _Masked(), spec, params, cfg)
+        masked = _MaskedMulti()
+    else:
+        class _Masked(Strategy):
+            meta = strategy.meta
+
+            def target_position(self, b, p):
+                pos = strategy.target_position(b, p).copy()
+                pos.iloc[:offset] = 0.0
+                return pos
+
+        masked = _Masked()
+    res = _run(seg, masked, spec, params, cfg)
     eq = res.equity.iloc[offset:]
     return res, eq
 
 
-def walk_forward(bars: pd.DataFrame, strategy: Strategy, spec: InstrumentSpec,
+def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
                  grid: dict[str, list], *, train_bars: int, test_bars: int,
                  warmup: int = 0, anchored: bool = False, objective: str = "sharpe",
                  config: BacktestConfig | None = None) -> WalkForwardResult:
     cfg = config or BacktestConfig()
     combos = [strategy.params(c) for c in param_grid(grid)]
-    bars = bars.reset_index(drop=True)
+    bars = _prepare(bars, strategy)
+    n, ts = _nrows(bars), _ts(bars)
     folds, oos_parts, trial_sharpes = [], [], []
     start = train_bars
-    while start + test_bars <= len(bars):
+    while start + test_bars <= n:
         tr_lo = 0 if anchored else start - train_bars
         scored = []
         for c in combos:
@@ -201,8 +250,8 @@ def walk_forward(bars: pd.DataFrame, strategy: Strategy, spec: InstrumentSpec,
         res, eq = _segment(bars, strategy, spec, best, cfg, start, start + test_bars,
                            max(warmup, start))  # full history before test is legitimate
         oos_parts.append(eq.pct_change().fillna(0.0))
-        folds.append(Fold(bars["ts"].iloc[tr_lo], bars["ts"].iloc[start],
-                          bars["ts"].iloc[start + test_bars - 1], best, scored[best_i],
+        folds.append(Fold(ts.iloc[tr_lo], ts.iloc[start],
+                          ts.iloc[start + test_bars - 1], best, scored[best_i],
                           {k: res.metrics.get(k) for k in
                            ("total_return", "sharpe", "max_drawdown", "trades", "win_rate")}))
         start += test_bars
@@ -259,14 +308,14 @@ def _param_stability(params: list[dict]) -> float:
 
 
 # ----------------------------------------------------------------------- sensitivity
-def sensitivity(bars: pd.DataFrame, strategy: Strategy, spec: InstrumentSpec,
+def sensitivity(bars: Bars, strategy: Strategy, spec: Spec,
                 base: dict, param: str, values: list, objective: str = "sharpe",
                 config: BacktestConfig | None = None) -> pd.DataFrame:
     rows = []
     for v in values:
         p = strategy.params({**base, param: v})
         try:
-            m = run_backtest(bars, strategy, spec, p, config).metrics
+            m = _run(bars, strategy, spec, p, config).metrics
             rows.append({param: v, objective: m.get(objective), "trades": m.get("trades"),
                          "total_return": m.get("total_return")})
         except ValueError as exc:
@@ -274,13 +323,13 @@ def sensitivity(bars: pd.DataFrame, strategy: Strategy, spec: InstrumentSpec,
     return pd.DataFrame(rows)
 
 
-def returns_matrix(bars: pd.DataFrame, strategy: Strategy, spec: InstrumentSpec,
+def returns_matrix(bars: Bars, strategy: Strategy, spec: Spec,
                    grid: dict[str, list], config: BacktestConfig | None = None) -> pd.DataFrame:
     """Per-bar returns of every configuration in ``grid`` (input for PBO)."""
     cols = {}
     for c in param_grid(grid):
         try:
-            res = run_backtest(bars, strategy, spec, strategy.params(c), config)
+            res = _run(bars, strategy, spec, strategy.params(c), config)
         except ValueError:
             continue
         cols[str(c)] = res.equity.pct_change().fillna(0.0).to_numpy()
