@@ -26,6 +26,22 @@ The API is published on `127.0.0.1` only. Expose it remotely through a TLS rever
 
 On Windows use Task Scheduler with the same command.
 
+### Built-in scheduler (no cron needed)
+
+`apex schedule --config jobs.json` keeps running and does the same work on a timer: data updates first, then paper accounts, so accounts always see the newest bars. A failing job is logged and written to the audit log and never stops the others. Use `--once` to run every job once (handy from cron or for a quick check).
+
+```json
+{"jobs": [
+  {"name": "crypto-1h", "type": "update", "provider": "kraken", "symbols": ["BTCUSDT", "ETHUSDT"],
+   "timeframe": "1h", "backfill_start": "2024-01-01", "every_minutes": 60},
+  {"name": "stocks-1d", "type": "update", "provider": "alpaca", "symbols": ["SPY", "QQQ"],
+   "timeframe": "1d", "backfill_start": "2020-01-01", "every_minutes": 1440},
+  {"name": "practice", "type": "paper", "accounts": ["mix"], "every_minutes": 60}
+]}
+```
+
+Paper jobs only run with `APEX_TRADING_MODE=paper`; a halted account stays halted until a named person runs `apex paper-reset-kill`. Every step is incremental and idempotent, so stopping and restarting the scheduler (or running it next to cron) cannot duplicate bars or orders.
+
 ### Paper trading (simulated only)
 
 Paper commands refuse to run unless `APEX_TRADING_MODE=paper`. There is no live mode.

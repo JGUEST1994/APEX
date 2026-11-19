@@ -1,0 +1,100 @@
+"""Phase 3: in-process scheduler for data updates and paper accounts."""
+
+import json
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from sqlalchemy import func, select
+
+from apex.cli import main as cli
+from apex.core.config import Settings
+from apex.db.models import AuditEvent, PaperAccount, PriceBar
+from apex.db.session import make_engine, make_session_factory
+from apex.execution import store
+from apex.marketdata.providers.synthetic import SyntheticProvider
+from apex.scheduler import Scheduler, parse_jobs
+
+T0 = datetime(2023, 1, 1, tzinfo=UTC)
+JOBS = {"jobs": [
+    {"name": "paper", "type": "paper", "accounts": ["acct", "missing"], "every_minutes": 1440},
+    {"name": "data", "type": "update", "provider": "synthetic", "symbols": ["SPY", "NOPE"],
+     "timeframe": "1d", "backfill_start": "2021-01-01", "every_minutes": 1440},
+]}
+
+
+def _sched(db_url, mode="paper"):
+    engine = make_engine(db_url)
+    settings = Settings(_env_file=None, database_url=db_url, trading_mode=mode)
+    return Scheduler(parse_jobs(JOBS), settings, make_session_factory(engine),
+                     provider_factory=lambda name: SyntheticProvider(annual_vol=0.4)), engine
+
+
+def test_parse_jobs_validates():
+    with pytest.raises(ValueError):
+        parse_jobs({"jobs": []})
+    with pytest.raises(ValueError):
+        parse_jobs({"jobs": [{"type": "trade"}]})
+    with pytest.raises(ValueError):
+        parse_jobs({"jobs": [{"type": "update", "provider": "synthetic"}]})
+    with pytest.raises(ValueError):
+        parse_jobs({"jobs": [{"type": "paper", "accounts": ["a"], "every_minutes": 0}]})
+
+
+def test_cycle_updates_data_then_runs_paper_and_is_idempotent(db_url, session):
+    sched, engine = _sched(db_url)
+    first = sched.run_cycle(T0 - timedelta(days=400))  # data first, nothing to trade yet
+    assert [r["job"] for r in first] == ["data", "paper"]
+    assert first[0]["status"] == "partial" and "NOPE: unknown symbol" in first[0]["errors"]
+    store.create_account(session, "acct", strategy_key="TF-SMA-001", symbol="SPY",
+                         timeframe="1d", source="synthetic", params={"fast": 10, "slow": 40})
+    session.commit()
+    assert sched.run_cycle(T0 - timedelta(days=399, hours=12)) == []  # nothing due yet
+    res = sched.run_cycle(T0)
+    data, paper = res
+    assert data["stored"]["SPY"] > 200
+    assert paper["accounts"]["acct"]["bars"] > 300 and "missing: no such" in paper["errors"][0]
+    n_bars = session.scalar(select(func.count()).select_from(PriceBar))
+    again = sched.run_cycle(T0 + timedelta(days=1, seconds=1))  # restart-safe: no dupes
+    assert again[0]["stored"]["SPY"] <= 1 and again[1]["accounts"]["acct"]["bars"] <= 1
+    assert session.scalar(select(func.count()).select_from(PriceBar)) <= n_bars + 1
+    acts = session.scalars(select(AuditEvent.action).where(AuditEvent.actor == "scheduler"))
+    assert {"schedule.update", "schedule.paper"} <= set(acts)
+    engine.dispose()
+
+
+def test_paper_jobs_refuse_research_mode_and_failures_do_not_stop_others(db_url, session):
+    sched, engine = _sched(db_url, mode="research")
+    res = {r["job"]: r for r in sched.run_cycle(T0)}
+    assert res["paper"]["status"] == "failed" and "APEX_TRADING_MODE" in res["paper"]["error"]
+    assert res["data"]["stored"]["SPY"] > 0  # the data job still ran
+    assert session.scalar(select(func.count()).select_from(PaperAccount)) == 0
+    engine.dispose()
+
+
+def test_run_forever_sleeps_until_next_job(db_url):
+    sched, engine = _sched(db_url, mode="research")
+    t = [T0]
+    slept = []
+
+    def sleep(sec):
+        slept.append(sec)
+        t[0] += timedelta(seconds=sec)
+
+    sched.run_forever(max_cycles=2, sleep=sleep, clock=lambda: t[0])
+    assert slept == [86400.0] and len(sched.history) == 4
+    engine.dispose()
+
+
+def test_cli_schedule_once(db_url, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("APEX_DATABASE_URL", db_url)
+    from apex.core.config import get_settings
+    get_settings.cache_clear()
+    cfg = tmp_path / "jobs.json"
+    cfg.write_text(json.dumps({"jobs": [{"type": "update", "provider": "synthetic",
+                                         "symbols": ["SPY"], "timeframe": "1d",
+                                         "backfill_start": "2024-01-01"}]}))
+    try:
+        assert cli(["schedule", "--config", str(cfg), "--once"]) == 0
+    finally:
+        get_settings.cache_clear()
+    assert '"status": "ok"' in capsys.readouterr().out
