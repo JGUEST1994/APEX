@@ -3,9 +3,16 @@ import pandas as pd
 import pytest
 
 from apex.backtest.validation import (
-    deflated_sharpe, expected_max_sharpe, monte_carlo_trades, param_grid,
-    probabilistic_sharpe, probability_of_backtest_overfitting, returns_matrix, sensitivity,
-    split_holdout, walk_forward,
+    deflated_sharpe,
+    expected_max_sharpe,
+    monte_carlo_trades,
+    param_grid,
+    probabilistic_sharpe,
+    probability_of_backtest_overfitting,
+    returns_matrix,
+    sensitivity,
+    split_holdout,
+    walk_forward,
 )
 from apex.domain.instruments import by_symbol
 from apex.domain.market import Timeframe
