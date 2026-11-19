@@ -4,8 +4,12 @@ Each calendar answers two questions used across the platform:
   * ``is_open(ts)`` – is the market trading at this instant?
   * ``is_session_day(d)`` – is this calendar date a trading day (for daily bars)?
 
+Each calendar also maps an instant to its ``session_date`` (the trading day it belongs to),
+which daily resampling uses: an FX bar at Sunday 18:00 New York belongs to Monday.
+
 Known simplifications (tracked in docs/STATUS.md): NYSE early closes are treated as full
-days; CME and FX holiday closures are not modelled yet.
+days; CME and FX holidays are approximated by full closures on 25 Dec and 1 Jan (plus Good
+Friday for CME) and their early closes are ignored.
 """
 
 from __future__ import annotations
@@ -28,6 +32,9 @@ class TradingCalendar:
 
     def is_session_day(self, d: date) -> bool:  # pragma: no cover - abstract
         raise NotImplementedError
+
+    def session_date(self, ts: datetime) -> date:
+        return ts.astimezone(UTC).date()
 
     def expected_bars(self, start: datetime, end: datetime, tf: Timeframe) -> Iterator[datetime]:
         """Yield expected bar open times in [start, end) (UTC)."""
@@ -69,7 +76,12 @@ class Fx24x5(TradingCalendar):
 
     name = "fx_24x5"
 
+    def session_date(self, ts: datetime) -> date:
+        return (ts.astimezone(NY) + timedelta(hours=7)).date()
+
     def is_open(self, ts: datetime) -> bool:
+        if self.session_date(ts) in _fixed_closures(ts.year):
+            return False
         local = ts.astimezone(NY)
         wd, t = local.weekday(), local.time()
         if wd == 5:
@@ -81,7 +93,7 @@ class Fx24x5(TradingCalendar):
         return True
 
     def is_session_day(self, d: date) -> bool:
-        return d.weekday() < 5
+        return d.weekday() < 5 and d not in _fixed_closures(d.year)
 
 
 class CmeGlobex(TradingCalendar):
@@ -89,7 +101,12 @@ class CmeGlobex(TradingCalendar):
 
     name = "cme_globex"
 
+    def session_date(self, ts: datetime) -> date:
+        return (ts.astimezone(NY) + timedelta(hours=6)).date()
+
     def is_open(self, ts: datetime) -> bool:
+        if not self.is_session_day(self.session_date(ts)):
+            return False
         local = ts.astimezone(NY)
         wd, t = local.weekday(), local.time()
         if wd == 5:
@@ -101,13 +118,18 @@ class CmeGlobex(TradingCalendar):
         return not (time(17) <= t < time(18))
 
     def is_session_day(self, d: date) -> bool:
-        return d.weekday() < 5
+        if d.weekday() >= 5 or d in _fixed_closures(d.year):
+            return False
+        return d != _easter(d.year) - timedelta(days=2)  # Good Friday
 
 
 class UsEquityRth(TradingCalendar):
     """NYSE/Nasdaq regular trading hours 09:30-16:00 ET with full-day holidays."""
 
     name = "us_equity_rth"
+
+    def session_date(self, ts: datetime) -> date:
+        return ts.astimezone(NY).date()
 
     def is_open(self, ts: datetime) -> bool:
         local = ts.astimezone(NY)
@@ -143,6 +165,12 @@ def _easter(year: int) -> date:
     month = (h + m - 7 * n + 114) // 31
     day = (h + m - 7 * n + 114) % 31 + 1
     return date(year, month, day)
+
+
+def _fixed_closures(year: int) -> frozenset[date]:
+    """Approximate full-day closures shared by FX and CME (and the neighbouring years'
+    dates, since a session can straddle New Year)."""
+    return frozenset({date(year, 12, 25), date(year, 1, 1), date(year + 1, 1, 1)})
 
 
 def _observed(d: date) -> date:

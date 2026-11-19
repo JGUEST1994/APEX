@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     log_json: bool = False
     stale_data_seconds: int = Field(default=180, ge=1)
 
+    # Market data credentials (optional; only needed for the matching provider)
+    alpaca_key_id: SecretStr | None = None
+    alpaca_secret_key: SecretStr | None = None
+    alpaca_feed: str = "iex"
+
     # Optional external AI; "none" means fully disabled. Core never depends on it.
     ai_provider: str = "none"
     ai_api_key: SecretStr | None = None
