@@ -10,6 +10,9 @@ Run `apex serve` and open `http://127.0.0.1:8000/docs` for the live OpenAPI refe
 | GET | `/ingestion-runs` | `limit` ≤ 500 | recent ingestion runs with `content_sha256` data versions |
 | GET | `/experiments` | `limit` ≤ 500 | backtest experiments with params, data manifest (incl. data SHA-256), code version, metrics; all `simulated: true` |
 | GET | `/leaderboard` | `asset_class`, `symbol`, `timeframe`, `category` | latest walk-forward result per strategy/market ranked by robustness score, with gate pass/fail reasons and status; all `simulated: true` |
+| GET | `/strategies` | | registered strategies with metadata and current lifecycle status |
+| GET | `/datasets` | | stored bar datasets (symbol, timeframe, source) with counts and first/last bar |
+| GET | `/ui/` | | read-only dashboard (`/` redirects here) |
 | GET | `/research/search` | `q`, `limit` ≤ 100 | hybrid hits `{document_id, title, chunk_ordinal, score, keyword_score, vector_score, snippet}` |
 | GET | `/research/documents` | `limit` ≤ 1000 | documents `{id, title, authors, source_type, published, subjects, imported_at}` |
 | GET | `/research/documents/{id}` | | document with `extracted` concepts, risk techniques, formulas, rules; 404 if missing |

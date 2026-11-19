@@ -1,6 +1,6 @@
 # 05. Frontend architecture
 
-Not started. Planned for Phase 10; a thin read-only view may come earlier to inspect data and backtests.
+A thin read-only dashboard exists (Phase 10 slice 1): a single dependency-free page served by the API at `/ui/` (`src/apex/api/static/index.html`) with Overview, Markets, Strategy lab, Tournament, Backtests and Research tabs, and the persistent RESEARCH/PAPER banner. It renders text only via `textContent`, loads no third-party scripts, and talks only to the API. The full Next.js app below remains the target once paper trading and risk pages need interaction.
 
 ## Stack
 
