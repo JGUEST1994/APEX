@@ -16,7 +16,7 @@ Update this file at the end of every working session so work can continue from a
 
 ## Implemented and tested
 
-Tests last run: 2026-11-19, `ruff check` clean, **62 passed** (31 on SQLite + DB tests repeated on PostgreSQL 16) with `APEX_TEST_POSTGRES_URL` set.
+Tests last run: 2026-11-19, `ruff check` clean, **62 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
 
 - `apex.core`: env config, live trading impossible to enable, secret redaction in logs, injectable clock.
 - `apex.domain`: Bar, Timeframe, InstrumentSpec, CostModel; 22-instrument default universe (FX majors, US ETFs/stocks, BTC/ETH, ES/MES/NQ/MNQ).
