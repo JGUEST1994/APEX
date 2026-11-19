@@ -141,7 +141,7 @@ def create_app(settings: Settings | None = None,
                  "timeframes": [t.value for t in c.meta.timeframes],
                  "description": c.meta.description,
                  "status": status.get(k, {}).get("status", "experimental"),
-                 "instruments": getattr(c, "legs", 1)}
+                 "instruments": getattr(c, "legs", 1) or "2+"}
                 for k, c in sorted({**all_strategies(), **all_multi_strategies()}.items())]
 
     @app.get("/datasets")

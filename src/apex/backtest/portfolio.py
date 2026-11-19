@@ -26,8 +26,7 @@ def run_portfolio_backtest(bars: dict[str, pd.DataFrame], strategy: MultiStrateg
                            config: BacktestConfig | None = None) -> BacktestResult:
     cfg = config or BacktestConfig()
     p = strategy.params(params)
-    if len(bars) != strategy.legs:
-        raise ValueError(f"{strategy.meta.key} needs {strategy.legs} instruments")
+    strategy.check_legs(len(bars))
     frames = align(bars)
     syms = list(frames)
     n = len(frames[syms[0]])

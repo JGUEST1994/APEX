@@ -60,7 +60,7 @@ HYPOTHESES: list[Hypothesis] = [
     H("H05", "Cross-asset trend portfolio", "trend_following", "futures,forex", "1d",
       "Diversified trend following across uncorrelated markets improves risk-adjusted returns.",
       "12-month return > 0 per market", "monthly rebalance", "volatility-scaled sizing", "none",
-      "any", data="multi"),
+      "any", data="multi", implemented="TF-XASSET-001"),
     # --- momentum
     H("H06", "Time-series momentum", "momentum", "futures,forex,crypto", "1d",
       "Past 1-12 month returns predict next-month returns in the same asset.",
