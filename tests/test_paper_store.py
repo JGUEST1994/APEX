@@ -96,6 +96,36 @@ def test_kill_switch_state_survives_restart(seeded):
     assert out["kill_switch"] and out["units"].get("SPY", 0) == 0
 
 
+def test_paper_matches_backtest(seeded):
+    from apex.execution.consistency import compare
+
+    s = seeded
+    _create(s, "cmp")
+    assert compare(s, "cmp")["consistent"] is None  # not run yet
+    store.run_account(s, "cmp", now=NOW, max_bars=200)
+    store.run_account(s, "cmp", now=NOW)  # restart in the middle changes nothing
+    rep = compare(s, "cmp")
+    assert rep["consistent"] and rep["direction_agreement"] == 1.0, rep
+    assert rep["backtest_changes"] == rep["paper_changes"] > 2
+    assert rep["max_fill_price_gap_bps"] == 0.0 and rep["simulated"] is True
+    with pytest.raises(KeyError):
+        compare(s, "nope")
+
+
+def test_compare_flags_and_explains_divergence(seeded):
+    from apex.execution.consistency import compare
+
+    s = seeded
+    store.create_account(s, "streak", strategy_key="TF-SMA-001", symbol="SPY",
+                         timeframe="1d", source="synthetic", params={"fast": 10, "slow": 40},
+                         limits=store.RiskLimits(max_consecutive_losses=1))
+    s.commit()
+    store.run_account(s, "streak", now=NOW)
+    rep = compare(s, "streak")
+    assert rep["consistent"] is False and rep["missed_changes"] > 0
+    assert any("losing trades in a row" in n for n in rep["notes"])
+
+
 def test_unknown_strategy_or_params_rejected(seeded):
     with pytest.raises(KeyError):
         store.create_account(seeded, "x", strategy_key="NOPE", symbol="SPY", timeframe="1d",
@@ -120,7 +150,9 @@ def test_cli_paper_requires_paper_mode(db_url, monkeypatch, capsys):
         assert cli(args) == 0
         assert cli(["paper-run", "--name", "p1"]) == 0
         assert cli(["paper-reset-kill", "--name", "p1", "--actor", "jake"]) == 0
+        assert cli(["paper-compare", "--name", "p1"]) in (0, 4)
     finally:
         get_settings.cache_clear()
     out = capsys.readouterr().out
     assert "PAPER (SIMULATED)" in out and "simulated=True" in out
+    assert "direction_agreement" in out

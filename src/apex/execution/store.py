@@ -19,6 +19,7 @@ from apex.core.config import TradingMode
 from apex.db.models import AuditEvent, PaperAccount, PaperFill, PaperOrder, PaperPosition
 from apex.domain.market import Timeframe
 from apex.execution.orders import TERMINAL, Order, OrderStatus
+from apex.execution.paper import Fill, Portfolio
 from apex.execution.trader import PaperTrader
 from apex.marketdata.repository import get_instrument, load_bars, to_spec
 from apex.risk.limits import RiskLimits  # noqa: F401  (re-exported for callers)
@@ -101,9 +102,15 @@ def load_trader(session: Session, acc: PaperAccount, now: datetime) -> PaperTrad
     for p in session.scalars(select(PaperPosition).where(PaperPosition.account_id == acc.id)):
         if p.units:
             t.pf.units[p.symbol], t.pf.avg_cost[p.symbol] = p.units, p.avg_cost
+    replay = Portfolio(cash=acc.initial_capital)  # open round-trip P&L for the loss streak
+    for f in session.scalars(select(PaperFill).where(PaperFill.account_id == acc.id)
+                             .order_by(PaperFill.id)):
+        replay.apply(Fill(f.client_order_id, f.symbol, f.qty, f.price, f.cost), spec)
+    t.pf.trade_pnl = replay.trade_pnl
     t.peak, t.day_start = acc.peak_equity, acc.day_start_equity
     t.day = date.fromisoformat(acc.day) if acc.day else None
-    for o in session.scalars(select(PaperOrder).where(PaperOrder.account_id == acc.id)):
+    for o in session.scalars(select(PaperOrder).where(PaperOrder.account_id == acc.id)
+                             .order_by(PaperOrder.id)):  # closes before re-entries
         risk.seen.add(o.client_order_id)
         if OrderStatus(o.status) not in TERMINAL:
             order = Order(o.client_order_id, o.symbol, o.qty, o.stop_price,

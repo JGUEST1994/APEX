@@ -182,3 +182,30 @@ def test_risk_package_is_independent():
             if isinstance(node, ast.ImportFrom) and node.module:
                 assert not node.module.startswith(("apex.strategies", "apex.ml", "apex.ai",
                                                    "apex.execution", "apex.backtest")), f
+
+
+def test_loss_streak_counts_round_trips_not_trims():
+    pf = Portfolio(cash=10_000.0)
+    pf.apply(Fill("1", "SPY", 10, 100.0, 0.0), SPY)
+    pf.apply(Fill("2", "SPY", -2, 99.0, 0.0), SPY)  # trim at a small loss: trade still open
+    pf.apply(Fill("3", "SPY", -2, 98.0, 0.0), SPY)
+    assert pf.consecutive_losses == 0
+    pf.apply(Fill("4", "SPY", -6, 105.0, 0.0), SPY)  # closes the round trip at a net profit
+    assert pf.consecutive_losses == 0 and "SPY" not in pf.trade_pnl
+    pf.apply(Fill("5", "SPY", 5, 100.0, 0.0), SPY)
+    pf.apply(Fill("6", "SPY", -5, 99.0, 0.0), SPY)
+    assert pf.consecutive_losses == 1
+
+
+def test_reversal_closes_old_position_even_if_new_entry_is_refused():
+    bars = _bars()
+    strat = all_strategies()["TF-SMA-001"]()  # long/short: flips straight from +1 to -1
+    target = strat.target_position(bars, strat.params()).to_numpy()
+    t = PaperTrader(strat, SPY, _risk(), history=400)
+    for i, row in enumerate(bars.to_dict("records")):
+        t.on_bar(row, data_stale=i >= 250)  # stale data: new risk refused, exits allowed
+        held = t.pf.units.get("SPY", 0)
+        if i >= 252:  # holding reflects the order placed on the previous bar
+            assert held == 0 or held * target[i - 1] > 0, row["ts"]
+    assert any(e.kind == "refused" for e in t.events)
+    assert t.pf.units.get("SPY", 0) == 0
