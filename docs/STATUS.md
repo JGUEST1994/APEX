@@ -33,7 +33,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **233 passed**, with database te
 - `apex.ai`: optional provider interface, disabled by default.
 - `apex.api`: read-only FastAPI (health, instruments, bars, ingestion runs, research search, research documents).
 - `apex` CLI: db-upgrade, seed-instruments, ingest, research-import (file or folder), research-search, serve (CLI smoke-tested end to end on SQLite).
-- CI workflow for GitHub Actions (lint + tests on PostgreSQL).
+- CI workflow for GitHub Actions: lint + tests on PostgreSQL, and a `pip-audit` job that fails on known vulnerabilities in runtime dependencies.
 
 ## Written but not verified
 
@@ -56,9 +56,8 @@ Tests last run: 2026-11-19, `ruff check` clean, **233 passed**, with database te
 ## Next steps (in order)
 
 1. Phase 3 remainder: Databento (futures), Polygon/Massive, Dukascopy (FX), Kraken adapters; in-process scheduler.
-2. pip-audit in CI.
-3. Multi-instrument strategy support (stat-arb H38-H40, cross-asset H05).
-4. Phase 8 regime detection, Phase 7 ML (with leakage-safe labels), Phase 9 paper trading + independent risk engine (Jake reviews before merge).
+2. Multi-instrument strategy support (stat-arb H38-H40, cross-asset H05).
+3. Phase 8 regime detection, Phase 7 ML (with leakage-safe labels), Phase 9 paper trading + independent risk engine (Jake reviews before merge).
 
 ## Decisions needed from Jake
 
