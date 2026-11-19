@@ -9,8 +9,9 @@ import pandas as pd
 from apex.ml.cv import walk_forward_proba
 from apex.ml.features import make_features
 from apex.ml.labels import triple_barrier
+from apex.ml.meta import MetaLabeled
 from apex.strategies.base import Strategy
-from apex.strategies.builtin import SWING, _meta
+from apex.strategies.builtin import SWING, DonchianBreakout, _meta
 from apex.strategies.registry import register
 
 
@@ -33,3 +34,13 @@ class MlLogisticTripleBarrier(Strategy):
         long_ = proba > p["enter"]
         short = (proba < 1 - p["enter"]) & p["allow_short"]
         return pd.Series(np.where(long_, 1.0, np.where(short, -1.0, 0.0)), index=bars.index)
+
+
+@register
+class MetaLabeledDonchian(MetaLabeled):
+    """H50 reference: Donchian breakout (primary side) + walk-forward meta-model."""
+
+    meta = MetaLabeled.make_meta(DonchianBreakout.meta, "ML-META-001")
+
+    def __init__(self) -> None:
+        super().__init__(DonchianBreakout(), key="ML-META-001")
