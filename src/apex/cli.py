@@ -35,6 +35,17 @@ def main(argv: list[str] | None = None) -> int:
     ra.add_argument("--licence-note", required=True, help="why APEX may lawfully use it")
     rs = sub.add_parser("research-search")
     rs.add_argument("query")
+    bt = sub.add_parser("backtest", help="backtest a registered strategy on stored bars")
+    bt.add_argument("--strategy", required=True, help="strategy key, e.g. TF-SMA-001")
+    bt.add_argument("--symbol", required=True)
+    bt.add_argument("--timeframe", default="1d")
+    bt.add_argument("--source", required=True, help="bar source, e.g. synthetic, csv, binance")
+    bt.add_argument("--start", required=True, type=_dt)
+    bt.add_argument("--end", required=True, type=_dt)
+    bt.add_argument("--param", action="append", default=[], help="name=value (repeatable)")
+    bt.add_argument("--capital", type=float, default=100_000.0)
+    bt.add_argument("--cost-multiplier", type=float, default=1.0)
+    sub.add_parser("strategies", help="list registered strategies")
     sv = sub.add_parser("serve", help="run the API server")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
@@ -93,6 +104,39 @@ def main(argv: list[str] | None = None) -> int:
             print(f"run {r.run_id}: {r.status} received={r.received} stored={r.stored}"
                   + (f" issues={len(r.report.issues)}" if r.report else f" error={r.error}"))
             return 0 if r.status != "failed" else 1
+        elif args.cmd == "strategies":
+            from apex.strategies.registry import all_strategies
+
+            for key, cls in sorted(all_strategies().items()):
+                m = cls.meta
+                print(f"{key:14} v{m.version:7} {m.category:22} {m.name}")
+        elif args.cmd == "backtest":
+            import json
+
+            from apex.backtest.engine import BacktestConfig
+            from apex.backtest.experiments import run_experiment
+            from apex.domain.market import Timeframe
+            from apex.strategies.registry import all_strategies
+
+            strategies = all_strategies()
+            if args.strategy not in strategies:
+                print(f"unknown strategy {args.strategy}; see `apex strategies`", file=sys.stderr)
+                return 2
+            strat = strategies[args.strategy]()
+            params = {}
+            for kv in args.param:
+                k, _, v = kv.partition("=")
+                params[k] = json.loads(v) if v not in ("",) else v
+            exp, res = run_experiment(
+                s, strat, symbol=args.symbol, timeframe=Timeframe(args.timeframe),
+                source=args.source, start=args.start, end=args.end, params=params,
+                config=BacktestConfig(initial_capital=args.capital,
+                                      cost_multiplier=args.cost_multiplier))
+            print(f"experiment {exp.id} (SIMULATED) data_sha256="
+                  f"{exp.data_manifest['data_sha256'][:12]} code={exp.code_version[:12]}")
+            for k, v in res.metrics.items():
+                if k != "note":
+                    print(f"  {k:24} {v}")
         elif args.cmd == "research-import":
             from apex.research.extract import SUPPORTED
             from apex.research.library import import_file
