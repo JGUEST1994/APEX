@@ -30,59 +30,72 @@ def _changes(direction: pd.Series) -> set:
     return {direction.index[i] for i in idx}
 
 
+def _one(session: Session, acc: PaperAccount, sym: str, fills: list[PaperFill]) -> dict:
+    inst = get_instrument(session, sym)
+    bars = load_bars(session, inst.id, Timeframe(acc.timeframe), acc.source, None, None)
+    bars = bars[bars["ts"] <= acc.last_bar_ts].reset_index(drop=True)
+    bt = run_backtest(bars, all_strategies()[acc.strategy_key](), to_spec(inst), acc.params)
+    ts = pd.DatetimeIndex(bars["ts"])
+    per_bar = pd.Series(0.0, index=ts)
+    opens = pd.Series(bars["open"].to_numpy(), index=ts)
+    gaps = []
+    for f in fills:
+        per_bar[pd.Timestamp(f.ts)] += f.qty
+        o = opens.get(pd.Timestamp(f.ts))
+        if o:
+            gaps.append(abs(f.price / o - 1) * 1e4)
+    paper_dir = np.sign(per_bar.cumsum().round(9))
+    bt_dir = np.sign(pd.Series(bt.position.to_numpy(), index=ts).round(9))
+    p_chg, b_chg = _changes(paper_dir), _changes(bt_dir)
+    missed, extra = sorted(b_chg - p_chg), sorted(p_chg - b_chg)
+    return {
+        "bars": len(bars), "direction_agreement": round(float((paper_dir == bt_dir).mean()), 4),
+        "backtest_changes": len(b_chg), "paper_changes": len(p_chg),
+        "missed_changes": len(missed), "extra_changes": len(extra),
+        "missed_examples": [t.isoformat() for t in missed[:20]],
+        "extra_examples": [t.isoformat() for t in extra[:20]],
+        "max_fill_price_gap_bps": round(float(max(gaps)) if gaps else 0.0, 4),
+        "backtest_return": float(bt.equity.iloc[-1] / bt.equity.iloc[0] - 1),
+    }
+
+
 def compare(session: Session, name: str) -> dict:
     acc = session.scalar(select(PaperAccount).where(PaperAccount.name == name))
     if acc is None:
         raise KeyError(name)
+    syms = acc.all_symbols
     out: dict = {"account": name, "strategy": acc.strategy_key, "symbol": acc.symbol,
-                 "simulated": True}
+                 "symbols": syms, "simulated": True}
     if acc.last_bar_ts is None:
         return out | {"bars": 0, "consistent": None, "notes": ["account has not run yet"]}
-    inst = get_instrument(session, acc.symbol)
-    spec = to_spec(inst)
-    bars = load_bars(session, inst.id, Timeframe(acc.timeframe), acc.source, None, None)
-    bars = bars[bars["ts"] <= acc.last_bar_ts].reset_index(drop=True)
-    strat = all_strategies()[acc.strategy_key]()
-    bt = run_backtest(bars, strat, spec, acc.params)
-
     fills = session.scalars(select(PaperFill).where(PaperFill.account_id == acc.id)
                             .order_by(PaperFill.id)).all()
-    ts = pd.DatetimeIndex(bars["ts"])
-    per_bar = pd.Series(0.0, index=ts)
-    for f in fills:
-        per_bar[pd.Timestamp(f.ts)] += f.qty
-    paper_dir = np.sign(per_bar.cumsum().round(9))
-    bt_dir = np.sign(pd.Series(bt.position.to_numpy(), index=ts).round(9))
+    per = {s: _one(session, acc, s, [f for f in fills if f.symbol == s]) for s in syms}
+    n = sum(p["bars"] for p in per.values())
+    agree = sum(p["direction_agreement"] * p["bars"] for p in per.values()) / max(n, 1)
+    gap = max(p["max_fill_price_gap_bps"] for p in per.values())
+    total = {k: sum(p[k] for p in per.values()) for k in
+             ("backtest_changes", "paper_changes", "missed_changes", "extra_changes")}
 
-    agree = float((paper_dir == bt_dir).mean())
-    p_chg, b_chg = _changes(paper_dir), _changes(bt_dir)
-    missed = sorted(b_chg - p_chg)
-    extra = sorted(p_chg - b_chg)
-
-    gaps = []
-    opens = pd.Series(bars["open"].to_numpy(), index=ts)
-    for f in fills:
-        o = opens.get(pd.Timestamp(f.ts))
-        if o:
-            gaps.append(abs(f.price / o - 1) * 1e4)
-    gap = float(max(gaps)) if gaps else 0.0
-
-    kill_note = []
+    notes = []
     if acc.kill_engaged or "reset" in (acc.kill_reason or ""):
-        kill_note = [f"the kill switch has been engaged on this account ({acc.kill_reason}); "
-                     "paper was flat while the backtest kept trading, which lowers agreement"]
+        notes.append(f"the kill switch has been engaged on this account ({acc.kill_reason}); "
+                     "paper was flat while the backtest kept trading, which lowers agreement")
+    if len(syms) > 1:
+        notes.append("each instrument is backtested on its own; account-wide limits "
+                     "(gross, net and correlated exposure) can refuse entries a standalone "
+                     "backtest takes")
     consistent = bool(agree >= MIN_AGREEMENT and gap <= MAX_PRICE_GAP_BPS)
-    notes = kill_note + ([] if consistent else
-                         [f"direction agreement {agree:.1%} below {MIN_AGREEMENT:.0%}"
-                          if agree < MIN_AGREEMENT else
-                          f"fill price gap {gap:.2f} bps above {MAX_PRICE_GAP_BPS} bps"])
-    iso = [t.isoformat() for t in missed[:20]], [t.isoformat() for t in extra[:20]]
-    return out | {
-        "bars": len(bars), "direction_agreement": round(agree, 4),
-        "backtest_changes": len(b_chg), "paper_changes": len(p_chg),
-        "missed_changes": len(missed), "extra_changes": len(extra),
-        "missed_examples": iso[0], "extra_examples": iso[1],
-        "max_fill_price_gap_bps": round(float(gap), 4),
-        "backtest_return": float(bt.equity.iloc[-1] / bt.equity.iloc[0] - 1),
-        "consistent": consistent, "notes": notes,
+    if agree < MIN_AGREEMENT:
+        notes.append(f"direction agreement {agree:.1%} below {MIN_AGREEMENT:.0%}")
+    elif gap > MAX_PRICE_GAP_BPS:
+        notes.append(f"fill price gap {gap:.2f} bps above {MAX_PRICE_GAP_BPS} bps")
+    one = per[syms[0]] if len(syms) == 1 else {}
+    return out | total | {
+        "bars": n, "direction_agreement": round(agree, 4),
+        "missed_examples": one.get("missed_examples", []),
+        "extra_examples": one.get("extra_examples", []),
+        "max_fill_price_gap_bps": gap,
+        "backtest_return": one.get("backtest_return"),
+        "per_symbol": per, "consistent": consistent, "notes": notes,
     }

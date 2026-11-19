@@ -143,7 +143,8 @@ def main(argv: list[str] | None = None) -> int:
     pc = sub.add_parser("paper-create", help="create a simulated paper account")
     pc.add_argument("--name", required=True)
     pc.add_argument("--strategy", required=True)
-    pc.add_argument("--symbol", required=True)
+    pc.add_argument("--symbol", required=True,
+                    help="one symbol, or several separated by commas (shared cash and risk)")
     pc.add_argument("--timeframe", default="1d")
     pc.add_argument("--source", required=True)
     pc.add_argument("--capital", type=float, default=100_000.0)
@@ -328,7 +329,8 @@ def main(argv: list[str] | None = None) -> int:
             now = datetime.now(UTC)
             if args.cmd == "paper-create":
                 store.create_account(s, args.name, strategy_key=args.strategy,
-                                     symbol=args.symbol, timeframe=args.timeframe,
+                                     symbol=[x.strip() for x in args.symbol.split(",")],
+                                     timeframe=args.timeframe,
                                      source=args.source, capital=args.capital)
                 s.commit()
                 print(f"created paper account {args.name} (SIMULATED)")

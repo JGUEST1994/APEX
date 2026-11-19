@@ -157,6 +157,7 @@ def create_app(settings: Settings | None = None,
         units = {p.symbol: p.units for p in s.scalars(
             select(PaperPosition).where(PaperPosition.account_id == a.id))}
         return {"name": a.name, "strategy": a.strategy_key, "symbol": a.symbol,
+                "symbols": a.all_symbols,
                 "timeframe": a.timeframe, "source": a.source, "params": a.params,
                 "status": a.status, "initial_capital": a.initial_capital, "cash": a.cash,
                 "realised": a.realised, "peak_equity": a.peak_equity,
