@@ -25,3 +25,4 @@
 | LIQ-PDHL-001 | 0.1.0 | 2026-11-19 | experimental | Prior-session high/low sweep: first implementation. Not validated. |
 | MS-FVG-001 | 0.1.0 | 2026-11-19 | experimental | Fair value gap retest: first implementation. Not validated. |
 | VOL-ATRX-001 | 0.1.0 | 2026-11-19 | experimental | ATR expansion follow-through: first implementation. Not validated. |
+| ML-LOGIT-001 | 0.1.0 | 2026-11-19 | experimental | Walk-forward logistic triple-barrier model: first implementation. Not validated. |
