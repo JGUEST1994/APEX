@@ -11,9 +11,10 @@ def test_nyse_holidays_2025():
     h = nyse_holidays(2025)
     for d in [date(2025, 1, 1), date(2025, 1, 20), date(2025, 2, 17), date(2025, 4, 18),
               date(2025, 5, 26), date(2025, 6, 19), date(2025, 7, 4), date(2025, 9, 1),
-              date(2025, 11, 27), date(2025, 12, 25)]:
+              date(2025, 11, 27), date(2025, 12, 25),
+              date(2025, 1, 9)]:  # day of mourning for President Carter
         assert d in h, d
-    assert len(h) == 10
+    assert len(h) == 11
 
 
 def test_nyse_observed_rules():
@@ -71,3 +72,12 @@ def test_nyse_early_closes():
     bars = list(cal.expected_bars(datetime(2025, 12, 24, tzinfo=UTC),
                                   datetime(2025, 12, 25, tzinfo=UTC), Timeframe.M30))
     assert len(bars) == 7  # 09:30 to 13:00
+
+
+def test_nyse_one_off_closures():
+    cal = get_calendar("us_equity_rth")
+    for d in (date(2012, 10, 29), date(2012, 10, 30), date(2018, 12, 5), date(2001, 9, 14)):
+        assert not cal.is_session_day(d), d
+    assert cal.is_session_day(date(2012, 10, 31)) and cal.is_session_day(date(2001, 9, 17))
+    # the special closure must not leak into other years
+    assert date(2018, 12, 5) not in nyse_holidays(2019)

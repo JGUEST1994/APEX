@@ -51,7 +51,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 
 ## Known limitations
 
-- NYSE regular early closes (13:00 ET on 3 July and 24 December when Mon-Thu, and the day after Thanksgiving) are modelled; one-off closures (e.g. national days of mourning) are not. CME/FX holidays approximated (25 Dec, 1 Jan, CME Good Friday); other exchange holidays and early closes will show as gap warnings.
+- NYSE regular early closes (13:00 ET on 3 July and 24 December when Mon-Thu, and the day after Thanksgiving) are modelled, and so are one-off full closures since 2000 (`NYSE_SPECIAL_CLOSURES`: 9/11, Hurricane Sandy, presidential days of mourning up to Carter 2025-01-09); future one-offs must be added by hand. CME/FX holidays approximated (25 Dec, 1 Jan, CME Good Friday); other exchange holidays and early closes will show as gap warnings.
 - Research search scans all chunks in memory: fine for tens of thousands of chunks; move to PostgreSQL full-text + pgvector beyond that.
 - The default embedder is lexical (feature hashing). Install `sentence-transformers` with a local model for true semantic similarity.
 - Scanned PDFs (no text layer) are rejected: OCR not supported yet.
@@ -59,7 +59,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 - No authentication on the API yet: keep it on localhost.
 - Backtester does not yet model: margin calls, partial fills, intrabar stop/limit orders, market impact beyond bps slippage, futures roll. Positions open at the end are marked at the last close and counted as a trade (`closed_at_end`).
 - Plain `apex backtest` Sharpe is raw; use `apex validate` for out-of-sample, trial-adjusted figures. The tournament uses family-wide trial counts; `apex validate` alone counts only its own grid.
-- Session-close detection uses the calendars above, so intraday strategies inherit their approximations (one-off NYSE closures and CME/FX early closes are not known).
+- Session-close detection uses the calendars above, so intraday strategies inherit their approximations (CME/FX early closes are not known, and future one-off NYSE closures must be added by hand).
 - Daily bars use 00:00 UTC of the session date as `ts`; providers with other conventions must be mapped.
 
 ## Next steps (in order)

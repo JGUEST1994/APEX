@@ -8,7 +8,8 @@ Each calendar also maps an instant to its ``session_date`` (the trading day it b
 which daily resampling uses: an FX bar at Sunday 18:00 New York belongs to Monday.
 
 Known simplifications (tracked in docs/STATUS.md): NYSE early closes (13:00 ET) follow the
-regular rules (3 July, the day after Thanksgiving, 24 December) but not one-off closures;
+regular rules (3 July, the day after Thanksgiving, 24 December); one-off full closures since
+2000 are listed in ``NYSE_SPECIAL_CLOSURES``;
 CME and FX holidays are approximated by full closures on 25 Dec and 1 Jan (plus Good Friday
 for CME) and their early closes are ignored.
 """
@@ -183,6 +184,18 @@ def _observed(d: date) -> date:
     return d
 
 
+# One-off full-day NYSE closures since 2000 (national days of mourning, 9/11, Hurricane
+# Sandy). Extend when the exchange announces a new one.
+NYSE_SPECIAL_CLOSURES: frozenset[date] = frozenset({
+    date(2001, 9, 11), date(2001, 9, 12), date(2001, 9, 13), date(2001, 9, 14),
+    date(2004, 6, 11),  # President Reagan
+    date(2007, 1, 2),  # President Ford
+    date(2012, 10, 29), date(2012, 10, 30),  # Hurricane Sandy
+    date(2018, 12, 5),  # President G. H. W. Bush
+    date(2025, 1, 9),  # President Carter
+})
+
+
 @lru_cache(maxsize=64)
 def nyse_holidays(year: int) -> frozenset[date]:
     days = {
@@ -200,6 +213,7 @@ def nyse_holidays(year: int) -> frozenset[date]:
         days.add(_observed(ny))
     if year >= 2022:
         days.add(_observed(date(year, 6, 19)))  # Juneteenth
+    days |= {d for d in NYSE_SPECIAL_CLOSURES if d.year == year}
     return frozenset(days)
 
 
