@@ -41,3 +41,30 @@ def test_dashboard_never_injects_html():
     html = (STATIC / "index.html").read_text()
     assert "innerHTML" not in html.replace("never innerHTML", "")
     assert "<script src=" not in html  # no third-party scripts
+
+
+def test_paper_endpoints_are_read_only(db_url, session):
+    from datetime import UTC, datetime
+
+    from apex.execution import store
+
+    ingest_bars(session, SyntheticProvider(annual_vol=0.4), by_symbol()["SPY"], Timeframe.D1,
+                utc(2021, 1, 1), utc(2023, 1, 1))
+    store.create_account(session, "demo", strategy_key="TF-SMA-001", symbol="SPY",
+                         timeframe="1d", source="synthetic", params={"fast": 10, "slow": 40})
+    session.commit()
+    store.run_account(session, "demo", now=datetime(2026, 1, 1, tzinfo=UTC))
+    engine = make_engine(db_url)
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                              make_session_factory(engine)))
+    accts = c.get("/paper/accounts").json()
+    assert [a["name"] for a in accts] == ["demo"] and accts[0]["simulated"] is True
+    assert accts[0]["kill_switch"]["engaged"] is False
+    one = c.get("/paper/accounts/demo").json()
+    assert one["fills"] and one["orders"] and one["fills"][0]["ts"] >= one["fills"][-1]["ts"]
+    assert c.get("/paper/accounts/nope").status_code == 404
+    # nothing on the API can change an account or reset the kill switch
+    for path in ("/paper/accounts", "/paper/accounts/demo"):
+        assert c.post(path).status_code == 405 and c.delete(path).status_code == 405
+    assert not [r for r in c.app.routes if "reset" in getattr(r, "path", "")]
+    engine.dispose()

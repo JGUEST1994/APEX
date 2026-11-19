@@ -59,6 +59,12 @@
       <table id="lb"></table></div>
   </section>
   <section id="experiments"><div class="card"><table id="exps"></table></div></section>
+  <section id="paper">
+    <div class="card"><p class="muted">Practice (paper) accounts trade on simulated fills only.
+      The kill switch can only be reset from the command line by a named person.</p>
+      <table id="paccts"></table></div>
+    <div class="card"><h3 id="pname">Select an account</h3><table id="pfills"></table></div>
+  </section>
   <section id="research">
     <div class="card"><input id="q" placeholder="Search the research library" size="40">
       <table id="hits"></table></div>
@@ -67,7 +73,7 @@
 <script>
 "use strict";
 const TABS = [["overview","Overview"],["markets","Markets"],["strategies","Strategy lab"],
-  ["leaderboard","Tournament"],["experiments","Backtests"],["research","Research"]];
+  ["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["research","Research"]];
 const $ = (id) => document.getElementById(id);
 async function get(path) {
   const r = await fetch(path);
@@ -172,6 +178,24 @@ const LOAD = {
       ["Sharpe", (r) => fmt((r.metrics || {}).sharpe)], ["Return", (r) => pct((r.metrics || {}).total_return)],
       ["Max DD", (r) => pct((r.metrics || {}).max_drawdown)], ["Trades", (r) => (r.metrics || {}).trades ?? "–"],
       ["Code", (r) => (r.code_version || "").slice(0, 10)], ["", () => el("span", "SIMULATED", "tag")]], ex);
+  },
+  async paper() {
+    const accts = await get("/paper/accounts");
+    const open = async (name) => { const a = await get("/paper/accounts/" + encodeURIComponent(name));
+      $("pname").textContent = `${a.name} · recent simulated fills`;
+      table($("pfills"), [["Time (UTC)", (r) => r.ts.slice(0, 19).replace("T", " ")], ["Symbol", (r) => r.symbol],
+        ["Side", (r) => r.qty > 0 ? "buy" : "sell"], ["Units", (r) => fmt(Math.abs(r.qty), 4)],
+        ["Price", (r) => fmt(r.price, 4)], ["Costs", (r) => fmt(r.cost)]], a.fills); };
+    table($("paccts"), [["Account", (r) => { const b = el("button", r.name); b.onclick = () => open(r.name).catch(console.error); return b; }],
+      ["Strategy", (r) => r.strategy], ["Market", (r) => `${r.symbol} ${r.timeframe}`],
+      ["Status", (r) => el("span", r.status, r.status === "halted" ? "fail" : "pass")],
+      ["Kill switch", (r) => el("span", r.kill_switch.engaged ? "ON: " + r.kill_switch.reason : "off",
+        r.kill_switch.engaged ? "fail" : "pass")],
+      ["Cash", (r) => fmt(r.cash)], ["Realised P&L", (r) => fmt(r.realised)],
+      ["Holding", (r) => Object.entries(r.units).filter(([, u]) => u).map(([k, u]) => `${k} ${fmt(u, 4)}`).join(", ") || "flat"],
+      ["Last bar", (r) => r.last_bar_ts ? r.last_bar_ts.slice(0, 10) : "–"],
+      ["", () => el("span", "SIMULATED", "tag")]], accts);
+    if (accts.length) await open(accts[0].name);
   },
   async research() {
     const run = async () => { const q = $("q").value.trim(); if (!q) return;

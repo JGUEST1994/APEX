@@ -31,6 +31,7 @@ class AccountState:
     peak_equity: float
     positions: dict[str, float] = field(default_factory=dict)  # symbol -> signed notional
     consecutive_losses: int = 0
+    clusters: dict[str, str] = field(default_factory=dict)  # symbol -> correlated group
 
 
 @dataclass
@@ -112,6 +113,11 @@ class RiskService:
                 r.append("max net exposure")
             if gross / eq > lim.max_leverage:
                 r.append("max leverage")
+            group = acct.clusters.get(o.symbol, o.symbol)
+            in_group = sum(abs(v) for k, v in others.items()
+                           if acct.clusters.get(k, k) == group) + abs(new)
+            if in_group / eq > lim.max_cluster_exposure:
+                r.append("max correlated exposure")
             if cur == 0 and len(others) + 1 > lim.max_positions:
                 r.append("max concurrent positions")
             if acct.consecutive_losses >= lim.max_consecutive_losses:

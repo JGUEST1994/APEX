@@ -19,6 +19,10 @@ from apex.db.models import (
     Experiment,
     IngestionRun,
     Instrument,
+    PaperAccount,
+    PaperFill,
+    PaperOrder,
+    PaperPosition,
     PriceBar,
     ResearchDocument,
     StrategyVersion,
@@ -148,6 +152,46 @@ def create_app(settings: Settings | None = None,
         return [{"symbol": sym, "timeframe": tf, "source": src, "bars": n,
                  "first": lo.isoformat() if lo else None, "last": hi.isoformat() if hi else None}
                 for sym, tf, src, n, lo, hi in s.execute(q)]
+
+    def _account(a: PaperAccount, s: Session) -> dict:
+        units = {p.symbol: p.units for p in s.scalars(
+            select(PaperPosition).where(PaperPosition.account_id == a.id))}
+        return {"name": a.name, "strategy": a.strategy_key, "symbol": a.symbol,
+                "timeframe": a.timeframe, "source": a.source, "params": a.params,
+                "status": a.status, "initial_capital": a.initial_capital, "cash": a.cash,
+                "realised": a.realised, "peak_equity": a.peak_equity,
+                "consecutive_losses": a.consecutive_losses, "units": units,
+                "limits": a.limits,
+                "last_bar_ts": a.last_bar_ts.isoformat() if a.last_bar_ts else None,
+                "kill_switch": {"engaged": a.kill_engaged, "reason": a.kill_reason,
+                                "at": a.kill_at.isoformat() if a.kill_at else None,
+                                "by": a.kill_by},
+                "simulated": True}
+
+    # Paper (simulated) accounts are read-only here. Creating, running and resetting the
+    # kill switch stay on the command line, where a named human is recorded.
+    @app.get("/paper/accounts")
+    def paper_accounts(s: Session = Depends(db)) -> list[dict]:
+        return [_account(a, s) for a in s.scalars(select(PaperAccount).order_by(PaperAccount.name))]
+
+    @app.get("/paper/accounts/{name}")
+    def paper_account(name: str, limit: int = Query(200, le=5000),
+                      s: Session = Depends(db)) -> dict:
+        a = s.scalar(select(PaperAccount).where(PaperAccount.name == name))
+        if a is None:
+            raise HTTPException(404, "paper account not found")
+        fills = s.scalars(select(PaperFill).where(PaperFill.account_id == a.id)
+                          .order_by(PaperFill.id.desc()).limit(limit))
+        orders = s.scalars(select(PaperOrder).where(PaperOrder.account_id == a.id)
+                           .order_by(PaperOrder.id.desc()).limit(limit))
+        out = _account(a, s)
+        out["fills"] = [{"client_order_id": f.client_order_id, "symbol": f.symbol, "qty": f.qty,
+                         "price": f.price, "cost": f.cost, "ts": f.ts.isoformat()} for f in fills]
+        out["orders"] = [{"client_order_id": o.client_order_id, "symbol": o.symbol, "qty": o.qty,
+                          "status": o.status, "filled_qty": o.filled_qty,
+                          "avg_price": o.avg_price, "reason": o.reason,
+                          "signal_ts": o.signal_ts.isoformat()} for o in orders]
+        return out
 
     static = Path(__file__).parent / "static"
     app.mount("/ui", StaticFiles(directory=static, html=True), name="ui")

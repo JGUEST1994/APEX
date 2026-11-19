@@ -16,6 +16,7 @@ class RiskLimits:
     max_daily_loss: float = 0.02  # fraction of start-of-day equity
     max_drawdown: float = 0.10  # from equity peak; breach trips the kill switch
     max_consecutive_losses: int = 6
+    max_cluster_exposure: float = 0.40  # gross notional of one correlated group / equity
 
     def tightened(self, **changes: float) -> RiskLimits:
         """Return new limits; raises if any change would loosen a limit."""
