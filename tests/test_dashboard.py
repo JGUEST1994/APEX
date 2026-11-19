@@ -80,3 +80,11 @@ def test_dashboard_brand_assets_and_banner(db_url):
         assert path in page
         assert c.get("/ui/" + path).status_code == 200, path
     engine.dispose()
+
+
+def test_dashboard_has_empty_and_error_states():
+    html = (STATIC / "index.html").read_text()
+    # every table gets a next-step message when empty, and a failed load explains itself
+    for table_id in ("runs", "lb", "exps", "paccts", "hits"):
+        assert f'id="{table_id}"' in html and f"  {table_id}: " in html
+    assert "This page couldn't load." in html and 'id="glance"' in html

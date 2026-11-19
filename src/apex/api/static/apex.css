@@ -116,6 +116,37 @@ td.wrap { white-space: normal; min-width: 320px; color: var(--ink-2); }
 .pass { color: var(--good); } .fail { color: var(--bad); }
 .pass::before { content: "\2713\00a0"; } .fail::before { content: "\2715\00a0"; }
 
+/* ---- Markets at a glance (overview) ---- */
+.glance { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.glance:empty { display: none; }
+.tile {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 14px;
+}
+.tile:hover { border-color: var(--brand); }
+.tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.tile-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tile-top b { font: 600 15px/1.2 var(--font-display); }
+.tile-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tile-last { font: 600 16px/1.2 var(--num); }
+.tile .chg { font: 600 12.5px/1 var(--num); }
+.chg.up { color: var(--good); } .chg.down { color: var(--bad); }
+svg.spark { width: 100%; height: 36px; display: block; }
+svg.spark path { fill: none; stroke: var(--ink-2); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.tile:hover svg.spark path { stroke: var(--brand); }
+.tile-foot { font-size: 11.5px; color: var(--muted); }
+
+/* ---- Loading, empty and error states ---- */
+.state { margin: 0 0 16px; padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--rule);
+         background: var(--panel); color: var(--muted); }
+.state.loading::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px;
+  border-radius: 50%; background: var(--brand); animation: apex-pulse 1s ease-in-out infinite alternate; }
+.state.error { border-color: var(--bad); color: var(--ink); }
+.state.error b { color: var(--bad); }
+.state.error ~ .card { display: none; }
+@keyframes apex-pulse { from { opacity: .25; } to { opacity: 1; } }
+td.empty { color: var(--muted); padding: 18px 10px; white-space: normal; }
+
 /* ---- Controls ---- */
 .linkbtn { all: unset; cursor: pointer; color: var(--brand); font-weight: 600; text-decoration: underline;
            text-underline-offset: 3px; text-decoration-thickness: 1px; }

@@ -24,6 +24,7 @@
   <header class="page-head"><h1 id="ptitle">Overview</h1><p id="pdesc"></p></header>
   <section id="overview">
     <div class="card kpis" id="kpis"></div>
+    <div class="glance" id="glance" aria-label="Markets at a glance"></div>
     <div class="card"><h3>Recent data downloads</h3><table id="runs"></table></div>
   </section>
   <section id="markets">
@@ -64,6 +65,16 @@ const DESC = {
   paper: "Practice (paper) accounts trade on simulated fills only. The kill switch can only be reset from the command line by a named person.",
   research: "Search the notes, papers and transcripts you have imported.",
 };
+// what an empty table should tell the operator to do next
+const EMPTY = {
+  runs: "No price data downloaded yet. Run apex ingest to fetch some.",
+  strats: "No strategies registered.",
+  lb: "No tournament results yet. Run apex tournament to rank strategies.",
+  exps: "No backtests yet. Run apex backtest or apex validate.",
+  paccts: "No practice accounts yet. Create one with apex paper-create (paper mode only).",
+  pfills: "No simulated fills for this account yet.",
+  hits: "No matches. Try a broader term, or import files with apex research-import.",
+};
 const $ = (id) => document.getElementById(id);
 async function get(path) {
   const r = await fetch(path);
@@ -84,7 +95,7 @@ function table(t, cols, rows) {
   const h = t.insertRow();
   cols.forEach(([label, , cls]) => h.appendChild(el("th", label, cls)));
   if (!rows.length) { const r = t.insertRow(); const c = r.insertCell();
-    c.colSpan = cols.length; c.textContent = "Nothing yet."; c.className = "muted"; }
+    c.colSpan = cols.length; c.textContent = EMPTY[t.id] || "Nothing here yet."; c.className = "empty"; }
   rows.forEach((row) => { const r = t.insertRow();
     cols.forEach(([, f, cls]) => { const c = r.insertCell(); const v = f(row); if (cls) c.className = cls;
       if (v instanceof Node) c.appendChild(v); else c.textContent = v; }); });
@@ -99,8 +110,20 @@ function show(id) {
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === id));
   const t = TABS.find(([k]) => k === id); $("ptitle").textContent = t ? t[1] : id;
   $("pdesc").textContent = DESC[id] || ""; document.title = (t ? t[1] + " · " : "") + "APEX";
-  if (!loaded[id]) { loaded[id] = true; LOAD[id]().catch((e) => console.error(e)); }
+  if (!loaded[id]) { loaded[id] = true; load(id); }
   if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+}
+function load(id) {
+  const sec = $(id); let note = sec.querySelector(":scope > .state");
+  if (!note) { note = el("p", "", "state"); note.setAttribute("role", "status"); sec.prepend(note); }
+  note.className = "state loading"; note.textContent = "Loading…";
+  LOAD[id]().then(() => { note.remove(); }).catch((e) => {
+    console.error(e); loaded[id] = false;
+    note.className = "state error";
+    note.replaceChildren(el("b", "This page couldn't load."),
+      el("span", " Check that apex serve is still running. "));
+    const retry = el("button", "Try again", "linkbtn"); retry.onclick = () => load(id); note.appendChild(retry);
+  });
 }
 const NS = "http://www.w3.org/2000/svg";
 function svgEl(tag, attrs, text) {
@@ -173,6 +196,33 @@ function quote(d, ys) {
   q.appendChild(el("span", (ch >= 0 ? "+" : "") + (100 * ch).toFixed(2) + "% over window", "chg " + (ch >= 0 ? "up" : "down")));
   q.appendChild(el("span", "source: " + d.source, "tag sim"));
 }
+async function glance(ds) {
+  const g = $("glance"); g.replaceChildren();
+  const pick = ds.slice(0, 8);
+  const series = await Promise.all(pick.map((d) => get(`/instruments/${encodeURIComponent(d.symbol)}/bars?timeframe=${d.timeframe}` +
+    `&source=${encodeURIComponent(d.source)}&limit=120`).then((b) => b.map((x) => x.close)).catch(() => [])));
+  pick.forEach((d, k) => {
+    const ys = series[k]; const tile = el("button", "", "tile");
+    tile.setAttribute("aria-label", `Open ${d.symbol} ${d.timeframe} chart`);
+    tile.onclick = () => { pendingDataset = ds.indexOf(d); location.hash = "#markets"; };
+    const top = el("span", "", "tile-top"); top.appendChild(el("b", d.symbol)); top.appendChild(el("span", d.timeframe, "muted"));
+    tile.appendChild(top);
+    if (ys.length > 1) {
+      const last = ys[ys.length - 1], ch = ys[0] ? last / ys[0] - 1 : 0;
+      const row = el("span", "", "tile-row");
+      row.appendChild(el("span", last.toPrecision(6), "tile-last"));
+      row.appendChild(el("span", (ch >= 0 ? "+" : "−") + Math.abs(100 * ch).toFixed(1) + "%", "chg " + (ch >= 0 ? "up" : "down")));
+      tile.appendChild(row);
+      const W = 160, H = 36, lo = Math.min(...ys), hi = Math.max(...ys), sp = hi - lo || 1;
+      const sv = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "spark", "aria-hidden": "true", preserveAspectRatio: "none" });
+      sv.appendChild(svgEl("path", { d: "M" + ys.map((v, i) => `${(W * i / (ys.length - 1)).toFixed(1)},${(2 + (H - 4) * (1 - (v - lo) / sp)).toFixed(1)}`).join("L") }));
+      tile.appendChild(sv);
+    } else tile.appendChild(el("span", "not enough bars yet", "muted"));
+    tile.appendChild(el("span", `last ${ys.length} bars · ${d.source}`, "tile-foot"));
+    g.appendChild(tile);
+  });
+}
+let pendingDataset = null;
 const LOAD = {
   async overview() {
     const [h, runs, ds, st] = await Promise.all([get("/health"), get("/ingestion-runs?limit=20"),
@@ -186,6 +236,7 @@ const LOAD = {
       ["Status", (r) => el("span", r.status, r.status === "failed" ? "fail" : "pass")],
       ["Rows stored", (r) => r.rows_stored, "num"], ["Data hash", (r) => (r.content_sha256 || "").slice(0, 12)],
       ["Started", (r) => r.started_at.slice(0, 19).replace("T", " ")]], runs);
+    await glance(ds);
   },
   async markets() {
     const ds = await get("/datasets"); const sel = $("dataset"); sel.replaceChildren();
@@ -197,7 +248,11 @@ const LOAD = {
         `&source=${encodeURIComponent(d.source)}&limit=2000`);
       const ys = bars.map((b) => b.close); quote(d, ys);
       chart($("chart"), bars.map((b) => b.ts), ys); };
-    sel.onchange = draw; await draw();
+    sel.onchange = draw;
+    if (!ds.length) { $("dsinfo").textContent = "No price data stored yet. Run apex ingest, then reload."; return; }
+    const pick = () => { if (pendingDataset !== null && ds[pendingDataset]) { sel.value = pendingDataset; } pendingDataset = null; };
+    pick(); window.addEventListener("hashchange", () => { if (pendingDataset !== null && location.hash === "#markets") { pick(); draw(); } });
+    await draw();
     let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 200); });
   },
   async strategies() {
