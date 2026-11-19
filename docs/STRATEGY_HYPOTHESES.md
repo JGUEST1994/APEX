@@ -7,7 +7,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H51 | Micro pullback scalp | futures,crypto | 1m | 3+ trend bars then 1-2 bar pullback holding 9 EMA | next swing | below pullback low | ohlcv | - |
-| H52 | Round-number fade | forex,crypto | 1m | first touch of round number | 5 bars | 5 ticks through | ohlcv | - |
+| H52 | Round-number fade | forex,crypto | 1m | first touch of round number | 5 bars | 5 ticks through | ohlcv | SC-ROUND-001 |
 
 ## Momentum (5)
 
@@ -15,9 +15,9 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H06 | Time-series momentum | futures,forex,crypto | 1d | sign of 60-bar return | sign flip | vol targeting | ohlcv | MOM-TSMOM-001 |
 | H07 | Cross-sectional momentum | equity,crypto | 1d | long top decile of 12-1 month return | monthly rebalance | portfolio-level DD stop | multi | MOM-XSEC-001 |
-| H08 | Intraday momentum (first half hour) | equity,futures | 30m | sign of first-30m return at 15:30 ET | close | none | ohlcv | - |
+| H08 | Intraday momentum (first half hour) | equity,futures | 30m | sign of first-30m return at 15:30 ET | close | none | ohlcv | MOM-ID30-001 |
 | H09 | 52-week high proximity | equity | 1d | close within 2% of 52w high | close 10% below entry high | 10% trail | multi | - |
-| H10 | Crypto weekend momentum | crypto | 1h | Friday 20:00 UTC 24h return sign | Monday 00:00 UTC | 2 ATR | ohlcv | - |
+| H10 | Crypto weekend momentum | crypto | 1h | Friday 20:00 UTC 24h return sign | Monday 00:00 UTC | 2 ATR | ohlcv | MOM-WKND-001 |
 
 ## Mean Reversion (5)
 
@@ -96,7 +96,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H38 | Cointegrated pairs | equity | 1d | spread z < -2 | z > 0 | z < -4 | multi | STAT-PAIR-001 |
-| H39 | ES/NQ ratio reversion | futures | 15m | ratio z beyond 2 | z = 0 | z beyond 4 | multi | - |
+| H39 | ES/NQ ratio reversion | futures | 15m | ratio z beyond 2 | z = 0 | z beyond 4 | multi | STAT-PAIR-001 |
 | H40 | BTC/ETH spread | crypto | 1h | spread z beyond 2 | z = 0 | z beyond 4 | multi | STAT-PAIR-001 |
 | H41 | ETF vs basket | equity | 5m | z beyond 2.5 | z = 0 | time 1 day | multi | STAT-BASKET-001 |
 
@@ -106,7 +106,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H42 | Bollinger squeeze breakout | forex,crypto,futures,equity | 15m,1h,1d | bandwidth in bottom 10% then close outside band | cross middle band | middle band | ohlcv | VOL-SQZ-001 |
 | H43 | ATR expansion day follow-through | futures,equity | 1d | range > 2 ATR and close in top 20% | next close | bar midpoint | ohlcv | VOL-ATRX-001 |
-| H44 | Volatility-regime switch | futures,forex | 1d | trade H01 when realised vol rising else H12 | regime flip | underlying stops | ohlcv | - |
+| H44 | Volatility-regime switch | futures,forex | 1d | trade H01 when realised vol rising else H12 | regime flip | underlying stops | ohlcv | VOL-SWITCH-001 |
 
 ## Multi Timeframe (3)
 
@@ -121,7 +121,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H48 | Gradient-boosted direction filter | forex,crypto,futures | 1h | base signal and P(up) > 0.55 | base exit | base stop | ohlcv | ML-GBT-001 |
-| H49 | Regime classifier gating | futures,equity | 1d | regime = trend -> H06; regime = range -> H11 | regime change | underlying | ohlcv | - |
+| H49 | Regime classifier gating | futures,equity | 1d | regime = trend -> H06; regime = range -> H11 | regime change | underlying | ohlcv | ML-HMM-001 |
 | H50 | Meta-labelling | forex,crypto,futures,equity | 1h | primary signal; size by meta-model probability | primary exit | primary stop | ohlcv | ML-META-001 |
 | H53 | Walk-forward logistic triple-barrier | forex,equity,crypto,futures | 1h,1d | walk-forward P(up) > 0.55 (long) / < 0.45 (short) | probability back inside band | triple-barrier width | ohlcv | ML-LOGIT-001 |
 

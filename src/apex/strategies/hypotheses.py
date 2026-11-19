@@ -72,13 +72,14 @@ HYPOTHESES: list[Hypothesis] = [
       "none", "any", data="multi", implemented="MOM-XSEC-001"),
     H("H08", "Intraday momentum (first half hour)", "momentum", "equity,futures", "30m",
       "The first 30-minute return predicts the last 30-minute return (Gao et al.).",
-      "sign of first-30m return at 15:30 ET", "close", "none", "close", "high volatility days"),
+      "sign of first-30m return at 15:30 ET", "close", "none", "close", "high volatility days",
+      implemented="MOM-ID30-001"),
     H("H09", "52-week high proximity", "momentum", "equity", "1d",
       "Stocks near 52-week highs under-react to good news.", "close within 2% of 52w high",
       "close 10% below entry high", "10% trail", "none", "trending", data="multi"),
     H("H10", "Crypto weekend momentum", "momentum", "crypto", "1h",
       "Thin weekend liquidity extends moves started on Friday.", "Friday 20:00 UTC 24h return sign",
-      "Monday 00:00 UTC", "2 ATR", "time exit", "any"),
+      "Monday 00:00 UTC", "2 ATR", "time exit", "any", implemented="MOM-WKND-001"),
     # --- mean reversion
     H("H11", "RSI(2) pullback", "mean_reversion", "equity,futures", "1d",
       "Short-term oversold dips in uptrends revert.", "RSI2 < 10 and close > SMA200",
@@ -200,7 +201,7 @@ HYPOTHESES: list[Hypothesis] = [
       "z = 0", "any", data="multi", implemented="STAT-PAIR-001"),
     H("H39", "ES/NQ ratio reversion", "statistical_arbitrage", "futures", "15m",
       "The ES/NQ ratio mean-reverts intraday.", "ratio z beyond 2", "z = 0", "z beyond 4",
-      "z = 0", "range", data="multi"),
+      "z = 0", "range", data="multi", implemented="STAT-PAIR-001"),
     H("H40", "BTC/ETH spread", "statistical_arbitrage", "crypto", "1h",
       "ETH/BTC deviations from a rolling hedge ratio revert.", "spread z beyond 2", "z = 0",
       "z beyond 4", "z = 0", "any", data="multi", implemented="STAT-PAIR-001"),
@@ -220,7 +221,7 @@ HYPOTHESES: list[Hypothesis] = [
     H("H44", "Volatility-regime switch", "volatility_expansion", "futures,forex", "1d",
       "Trend strategies work in rising vol, reversion in falling vol.",
       "trade H01 when realised vol rising else H12", "regime flip", "underlying stops", "none",
-      "regime-dependent"),
+      "regime-dependent", implemented="VOL-SWITCH-001"),
     # --- multi-timeframe
     H("H45", "HTF trend with LTF pullback", "multi_timeframe", "forex,crypto,futures,equity",
       "15m,1h", "Entering pullbacks in the higher-timeframe trend improves timing.",
@@ -242,7 +243,7 @@ HYPOTHESES: list[Hypothesis] = [
     H("H49", "Regime classifier gating", "machine_learning", "futures,equity", "1d",
       "An HMM/cluster regime label selects trend vs reversion strategies.",
       "regime = trend -> H06; regime = range -> H11", "regime change", "underlying",
-      "underlying", "regime-dependent"),
+      "underlying", "regime-dependent", implemented="ML-HMM-001"),
     H("H50", "Meta-labelling", "machine_learning", "forex,crypto,futures,equity", "1h",
       "A secondary model sizes primary signals by predicted hit probability (Lopez de Prado).",
       "primary signal; size by meta-model probability", "primary exit", "primary stop",
@@ -260,7 +261,8 @@ HYPOTHESES: list[Hypothesis] = [
       "1R", "trending"),
     H("H52", "Round-number fade", "scalping", "forex,crypto", "1m",
       "First touches of round numbers (e.g. 1.1000, 50 000) see short-term rejection.",
-      "first touch of round number", "5 bars", "5 ticks through", "10 ticks", "range"),
+      "first touch of round number", "5 bars", "5 ticks through", "10 ticks", "range",
+      implemented="SC-ROUND-001"),
 ]
 
 
