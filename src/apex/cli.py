@@ -16,7 +16,7 @@ def _dt(s: str) -> datetime:
     return d if d.tzinfo else d.replace(tzinfo=UTC)
 
 
-PROVIDERS = ["synthetic", "csv", "binance", "alpaca"]
+PROVIDERS = ["synthetic", "csv", "binance", "kraken", "alpaca", "polygon"]
 
 
 def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201
@@ -40,6 +40,16 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
         return AlpacaStocksProvider(settings.alpaca_key_id.get_secret_value(),
                                     settings.alpaca_secret_key.get_secret_value(),
                                     feed=settings.alpaca_feed)
+    if name == "kraken":
+        from apex.marketdata.providers.kraken import KrakenSpotProvider
+
+        return KrakenSpotProvider()
+    if name == "polygon":
+        from apex.marketdata.providers.polygon import PolygonStocksProvider
+
+        if not settings.polygon_api_key:
+            raise SystemExit("set APEX_POLYGON_API_KEY")
+        return PolygonStocksProvider(settings.polygon_api_key.get_secret_value())
     raise SystemExit(f"unknown provider {name}")
 
 
