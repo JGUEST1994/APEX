@@ -1,6 +1,6 @@
 # APEX project status
 
-Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6, 7 (first model), 8 complete, Phase 10 read-only dashboard; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → Phase 9 slices 1-2 (risk, paper broker, persistence) done; Phase 9 correlation cap, paper dashboard page and paper-vs-backtest report done; multi-instrument paper accounts done; in-process scheduler and multi-instrument strategies (pairs) and meta-labelling done; walk-forward/tournament for pairs done; H05 cross-asset trend portfolio and H07 cross-sectional momentum done; dashboard shows which strategy each backtest used and how many markets a strategy trades; next: Phase 3 remainder (Dukascopy), paper trading for multi-instrument strategies.**
+Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6, 7 (first model), 8 complete, Phase 10 read-only dashboard; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → Phase 9 slices 1-2 (risk, paper broker, persistence) done; Phase 9 correlation cap, paper dashboard page and paper-vs-backtest report done; multi-instrument paper accounts done; in-process scheduler and multi-instrument strategies (pairs) and meta-labelling done; walk-forward/tournament for pairs done; H05 cross-asset trend portfolio and H07 cross-sectional momentum done; dashboard shows which strategy each backtest used and how many markets a strategy trades; intraday strategies close before the session ends; next: Phase 3 remainder (Dukascopy), paper trading for multi-instrument strategies.**
 Update this file at the end of every working session so work can continue from any tool.
 
 ## Milestone 1 target (spec Section 21)
@@ -42,6 +42,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 - `apex.api`: read-only FastAPI (health, instruments, bars, ingestion runs, research search, research documents).
 - `apex` CLI: db-upgrade, seed-instruments, ingest, research-import (file or folder), research-search, serve (CLI smoke-tested end to end on SQLite).
 - CI workflow for GitHub Actions: lint + tests on PostgreSQL, and a `pip-audit` job that fails on known vulnerabilities in runtime dependencies.
+- Session close: `indicators.bars_left_in_session` counts the bars the trading calendar still schedules in a bar's session (calendar only, so causal; DST, weekends and CME's 17:00 ET close handled). VWAP-MR, ORB, VWAP-PB, VWAP-BAND and LIQ-PDHL (now v0.2.0) take `flat_bars` (default 1): with next-open fills they are flat by the open of the session's last bar instead of holding to the next session's open. `flat_bars=0` restores the old rule.
 
 ## Written but not verified
 
@@ -58,7 +59,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 - No authentication on the API yet: keep it on localhost.
 - Backtester does not yet model: margin calls, partial fills, intrabar stop/limit orders, market impact beyond bps slippage, futures roll. Positions open at the end are marked at the last close and counted as a trade (`closed_at_end`).
 - Plain `apex backtest` Sharpe is raw; use `apex validate` for out-of-sample, trial-adjusted figures. The tournament uses family-wide trial counts; `apex validate` alone counts only its own grid.
-- Session-flat intraday strategies (VWAP-MR, ORB, VWAP-PB, VWAP-BAND, LIQ-PDHL) reset at the first bar of the next session, so with next-bar fills a position can be held from the last bar of a session to the second bar of the next. Exiting before the close needs calendar-aware session-end detection (to do).
+- Session-close detection uses the calendars above, so intraday strategies inherit their approximations (early closes are not known, so on those days the strategy is still in a position when the market shuts).
 - Daily bars use 00:00 UTC of the session date as `ts`; providers with other conventions must be mapped.
 
 ## Next steps (in order)

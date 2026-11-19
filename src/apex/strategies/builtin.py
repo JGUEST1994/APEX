@@ -138,13 +138,14 @@ class BollingerReversion(Strategy):
 @register
 class VwapReversion(Strategy):
     meta = _meta("VWAP-MR-001", "Intraday VWAP reversion", "vwap",
-                 "Fade large deviations from the session VWAP, exit at VWAP; flat at the "
-                 "session's last `flat_bars` bars.",
+                 "Fade large deviations from the session VWAP, exit at VWAP; hold nothing "
+                 "over the session's last `flat_bars` bars or overnight.",
                  "(close - VWAP) / rolling std of that deviation < -k (long) or > k (short)",
                  "touch VWAP", "deviation beyond `stop_k`", "VWAP",
                  {"k": 2.0, "stop_k": 4.0, "window": 30, "calendar": "us_equity_rth",
-                  "allow_short": True},
-                 tfs=(Timeframe.M1, Timeframe.M5, Timeframe.M15), regimes=("range",))
+                  "allow_short": True, "flat_bars": 1},
+                 tfs=(Timeframe.M1, Timeframe.M5, Timeframe.M15), regimes=("range",),
+                 version="0.2.0")
 
     def target_position(self, bars, p):
         vwap = ind.session_vwap(bars, p["calendar"])
@@ -169,18 +170,20 @@ class VwapReversion(Strategy):
                 elif p["allow_short"] and p["k"] < zi < p["stop_k"]:
                     state = -1.0
             out[i] = state
-        return pd.Series(out, index=bars.index)
+        return ind.flat_before_close(pd.Series(out, index=bars.index), bars, p["calendar"],
+                                     p["flat_bars"])
 
 
 @register
 class OpeningRangeBreakout(Strategy):
     meta = _meta("BO-ORB-001", "Opening range breakout", "breakout",
-                 "Trade the break of the first `range_bars` bars of each session; flat by the "
-                 "session close.",
+                 "Trade the break of the first `range_bars` bars of each session; hold nothing "
+                 "over the session's last `flat_bars` bars or overnight.",
                  "close above opening-range high (long) / below low (short), once per session",
                  "session end", "opposite side of the opening range", "none (session close)",
-                 {"range_bars": 6, "calendar": "us_equity_rth", "allow_short": True},
-                 tfs=INTRADAY, assets=(AssetClass.EQUITY, AssetClass.FUTURES))
+                 {"range_bars": 6, "calendar": "us_equity_rth", "allow_short": True,
+                  "flat_bars": 1},
+                 tfs=INTRADAY, assets=(AssetClass.EQUITY, AssetClass.FUTURES), version="0.2.0")
 
     def target_position(self, bars, p):
         key = ind.session_keys(bars, p["calendar"])
@@ -209,7 +212,8 @@ class OpeningRangeBreakout(Strategy):
                     elif p["allow_short"] and c.iat[i] < or_lo.iat[i]:
                         state, traded = -1.0, True
             out[i] = state
-        return pd.Series(out, index=bars.index)
+        return ind.flat_before_close(pd.Series(out, index=bars.index), bars, p["calendar"],
+                                     p["flat_bars"])
 
     # note: or_hi/or_lo use only the first `range_bars` bars of the session and are used
     # only after those bars have closed, so the computation is causal.

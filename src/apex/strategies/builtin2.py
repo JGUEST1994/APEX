@@ -227,10 +227,10 @@ class VwapTrendPullback(Strategy):
                  "trend morning, then low <= VWAP < close", "session end",
                  "close below VWAP - `atr_mult` ATR", "session close",
                  {"morning_bars": 12, "atr_n": 14, "atr_mult": 1.0,
-                  "calendar": "us_equity_rth", "allow_short": True},
+                  "calendar": "us_equity_rth", "allow_short": True, "flat_bars": 1},
                  tfs=(Timeframe.M5, Timeframe.M15), assets=(AssetClass.EQUITY,
                                                             AssetClass.FUTURES),
-                 regimes=("trending",))
+                 regimes=("trending",), version="0.2.0")
 
     def target_position(self, bars, p):
         key = ind.session_keys(bars, p["calendar"])
@@ -248,7 +248,8 @@ class VwapTrendPullback(Strategy):
         sig = _directional(long_, short, p["allow_short"])
         stop = pd.Series(np.where(sig > 0, vwap - p["atr_mult"] * a,
                                   vwap + p["atr_mult"] * a), index=bars.index)
-        return _flat_each_session(bars, key, sig, stop)
+        return ind.flat_before_close(_flat_each_session(bars, key, sig, stop), bars,
+                                     p["calendar"], p["flat_bars"])
 
 
 def _flat_each_session(bars, key, sig, stop, exit_long=None, exit_short=None, target=None):
@@ -271,11 +272,11 @@ class VwapBandBreakout(Strategy):
                  "`confirm` consecutive closes beyond VWAP +/- k sigma",
                  "close back inside the `exit_k`-sigma band, or session end", "VWAP", "none",
                  {"k": 2.0, "exit_k": 1.0, "confirm": 2, "min_bars": 6,
-                  "calendar": "us_equity_rth", "allow_short": True},
+                  "calendar": "us_equity_rth", "allow_short": True, "flat_bars": 1},
                  tfs=(Timeframe.M5, Timeframe.M15), assets=(AssetClass.FUTURES,
                                                             AssetClass.CRYPTO,
                                                             AssetClass.EQUITY),
-                 regimes=("trending",))
+                 regimes=("trending",), version="0.2.0")
 
     def target_position(self, bars, p):
         key = ind.session_keys(bars, p["calendar"])
@@ -294,9 +295,10 @@ class VwapBandBreakout(Strategy):
         cu = cu.reset_index(level=0, drop=True).reindex(bars.index) == p["confirm"]
         cd = cd.reset_index(level=0, drop=True).reindex(bars.index) == p["confirm"]
         sig = _directional(cu, cd, p["allow_short"])
-        return _flat_each_session(bars, key, sig, vwap,
-                                  exit_long=c < vwap + p["exit_k"] * sd,
-                                  exit_short=c > vwap - p["exit_k"] * sd)
+        pos = _flat_each_session(bars, key, sig, vwap,
+                                 exit_long=c < vwap + p["exit_k"] * sd,
+                                 exit_short=c > vwap - p["exit_k"] * sd)
+        return ind.flat_before_close(pos, bars, p["calendar"], p["flat_bars"])
 
 
 @register
@@ -306,9 +308,9 @@ class PriorDaySweep(Strategy):
                  "failed breakouts: fade them toward VWAP.",
                  "high > prior-session high and close back below (short); mirror for long",
                  "session end", "sweep bar extreme", "session VWAP",
-                 {"calendar": "us_equity_rth", "allow_short": True},
+                 {"calendar": "us_equity_rth", "allow_short": True, "flat_bars": 1},
                  tfs=INTRADAY, assets=(AssetClass.FUTURES, AssetClass.EQUITY),
-                 regimes=("range",))
+                 regimes=("range",), version="0.2.0")
 
     def target_position(self, bars, p):
         key = ind.session_keys(bars, p["calendar"])
@@ -321,7 +323,8 @@ class PriorDaySweep(Strategy):
         short = (h > pdh) & (c < pdh) & (c > vwap)
         sig = _directional(long_, short, p["allow_short"])
         stop = pd.Series(np.where(sig > 0, lo, h), index=bars.index)
-        return _flat_each_session(bars, key, sig, stop, target=vwap)
+        return ind.flat_before_close(_flat_each_session(bars, key, sig, stop, target=vwap),
+                                     bars, p["calendar"], p["flat_bars"])
 
 
 @register
