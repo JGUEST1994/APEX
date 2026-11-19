@@ -120,7 +120,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
-| H48 | Gradient-boosted direction filter | forex,crypto,futures | 1h | base signal and P(up) > 0.55 | base exit | base stop | ohlcv | - |
+| H48 | Gradient-boosted direction filter | forex,crypto,futures | 1h | base signal and P(up) > 0.55 | base exit | base stop | ohlcv | ML-GBT-001 |
 | H49 | Regime classifier gating | futures,equity | 1d | regime = trend -> H06; regime = range -> H11 | regime change | underlying | ohlcv | - |
 | H50 | Meta-labelling | forex,crypto,futures,equity | 1h | primary signal; size by meta-model probability | primary exit | primary stop | ohlcv | ML-META-001 |
 | H53 | Walk-forward logistic triple-barrier | forex,equity,crypto,futures | 1h,1d | walk-forward P(up) > 0.55 (long) / < 0.45 (short) | probability back inside band | triple-barrier width | ohlcv | ML-LOGIT-001 |
