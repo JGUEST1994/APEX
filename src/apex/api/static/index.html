@@ -259,7 +259,9 @@ const LOAD = {
   async strategies() {
     const st = await get("/strategies");
     table($("strats"), [["Key", (r) => r.key], ["Name", (r) => r.name], ["Category", (r) => r.category],
-      ["Version", (r) => r.version], ["Status", (r) => el("span", r.status, "tag")],
+      ["Version", (r) => r.version],
+      ["Markets", (r) => r.instruments === 1 ? "one" : r.instruments === "2+" ? "basket (2+)" : `${r.instruments} together`],
+      ["Status", (r) => el("span", r.status, "tag")],
       ["Regimes", (r) => r.regimes.join(", ")], ["Timeframes", (r) => r.timeframes.join(", ")]], st);
   },
   async leaderboard() {
@@ -273,7 +275,7 @@ const LOAD = {
   },
   async experiments() {
     const ex = await get("/experiments?limit=100");
-    table($("exps"), [["ID", (r) => r.id], ["Kind", (r) => r.kind],
+    table($("exps"), [["ID", (r) => r.id], ["Kind", (r) => r.kind], ["Strategy", (r) => r.strategy || "–"],
       ["Symbol", (r) => (r.data_manifest || {}).symbol], ["TF", (r) => (r.data_manifest || {}).timeframe],
       ["Sharpe", (r) => fmt((r.metrics || {}).sharpe), "num"], ["Return", (r) => pct((r.metrics || {}).total_return), "num"],
       ["Max DD", (r) => pct((r.metrics || {}).max_drawdown), "num"], ["Trades", (r) => (r.metrics || {}).trades ?? "–", "num"],

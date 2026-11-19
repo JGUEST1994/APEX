@@ -88,11 +88,16 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/experiments")
     def experiments(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
-        rows = s.scalars(select(Experiment).order_by(Experiment.id.desc()).limit(limit))
+        sv = StrategyVersion
+        rows = s.execute(select(Experiment, StrategyRow.key, sv.version)
+                         .join(sv, Experiment.strategy_version_id == sv.id)
+                         .join(StrategyRow, sv.strategy_id == StrategyRow.id)
+                         .order_by(Experiment.id.desc()).limit(limit))
         return [{"id": e.id, "strategy_version_id": e.strategy_version_id, "kind": e.kind,
-                 "simulated": True, "params": e.params, "data_manifest": e.data_manifest,
+                 "strategy": key, "strategy_version": ver, "simulated": True,
+                 "params": e.params, "data_manifest": e.data_manifest,
                  "code_version": e.code_version, "metrics": e.metrics,
-                 "created_at": e.created_at.isoformat()} for e in rows]
+                 "created_at": e.created_at.isoformat()} for e, key, ver in rows]
 
     @app.get("/leaderboard")
     def get_leaderboard(asset_class: str | None = None, symbol: str | None = None,
