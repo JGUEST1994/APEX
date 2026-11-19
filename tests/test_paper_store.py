@@ -124,6 +124,13 @@ def test_compare_flags_and_explains_divergence(seeded):
     rep = compare(s, "streak")
     assert rep["consistent"] is False and rep["missed_changes"] > 0
     assert any("losing trades in a row" in n for n in rep["notes"])
+    acc = s.scalar(select(PaperAccount).where(PaperAccount.name == "streak"))
+    assert acc.kill_engaged and "losing trades in a row" in acc.kill_reason
+    store.reset_kill_switch(s, "streak", "jake", NOW)  # a named human restarts it
+    s.commit()
+    assert acc.consecutive_losses == 0 and not acc.kill_engaged
+    ev = s.scalars(select(AuditEvent).where(AuditEvent.action == "kill_switch.reset")).all()
+    assert "cleared_losing_streak" in ev[-1].detail
 
 
 def test_unknown_strategy_or_params_rejected(seeded):

@@ -83,6 +83,10 @@ class RiskService:
         elif acct.day_start_equity > 0 and \
                 1 - acct.equity / acct.day_start_equity >= lim.max_daily_loss:
             self.kill.engage(f"daily loss >= {lim.max_daily_loss:.1%}", now)
+        elif acct.consecutive_losses >= lim.max_consecutive_losses:
+            # Jake's decision (2026-11-19): a losing streak stops the account until a named
+            # human resets the kill switch; the reset also clears the streak.
+            self.kill.engage(f"{acct.consecutive_losses} losing trades in a row", now)
 
     def check(self, o: OrderIntent, acct: AccountState, *, data_stale: bool,
               now: datetime) -> Decision:
