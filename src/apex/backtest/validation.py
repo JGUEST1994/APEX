@@ -63,6 +63,7 @@ def deflated_sharpe(returns: pd.Series, n_trials: int, sr_variance: float) -> di
     kurt = float(r.kurt()) + 3.0 if len(r) > 3 else 3.0
     sr0 = expected_max_sharpe(n_trials, sr_variance)
     return {"sharpe_per_period": sr, "sr_benchmark": sr0, "n_trials": n_trials,
+            "n_obs": len(r), "skew": skew, "kurtosis": kurt, "sr_variance": sr_variance,
             "dsr": probabilistic_sharpe(sr, len(r), skew, kurt, sr0),
             "psr_vs_zero": probabilistic_sharpe(sr, len(r), skew, kurt, 0.0)}
 
@@ -238,6 +239,8 @@ def summarise_walk_forward(wf: WalkForwardResult) -> dict:
                                     if is_scores and oos_sharpes and np.mean(is_scores) > 0
                                     else None),
         "deflated_sharpe": dsr["dsr"], "psr_vs_zero": dsr["psr_vs_zero"],
+        "dsr_inputs": {k: dsr[k] for k in ("sharpe_per_period", "n_obs", "skew", "kurtosis",
+                                            "sr_variance")},
         "param_stability": _param_stability([f.params for f in wf.folds]),
     }
 

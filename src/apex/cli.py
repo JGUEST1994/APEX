@@ -105,6 +105,19 @@ def main(argv: list[str] | None = None) -> int:
     va.add_argument("--train-bars", type=int, required=True)
     va.add_argument("--test-bars", type=int, required=True)
     va.add_argument("--anchored", action="store_true")
+    tn = sub.add_parser("tournament", help="validate many strategies and rank them")
+    tn.add_argument("--strategies", default="all", help="comma-separated keys or 'all'")
+    tn.add_argument("--symbols", required=True)
+    tn.add_argument("--timeframe", default="1d")
+    tn.add_argument("--source", required=True)
+    tn.add_argument("--start", required=True, type=_dt)
+    tn.add_argument("--end", required=True, type=_dt)
+    tn.add_argument("--train-bars", type=int, required=True)
+    tn.add_argument("--test-bars", type=int, required=True)
+    tn.add_argument("--no-promote", action="store_true")
+    lb = sub.add_parser("leaderboard", help="show the strategy leaderboard")
+    for opt in ("--asset-class", "--symbol", "--timeframe", "--category"):
+        lb.add_argument(opt)
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
     sv = sub.add_parser("serve", help="run the API server")
@@ -231,6 +244,42 @@ def main(argv: list[str] | None = None) -> int:
             for k, v in exp.metrics.items():
                 if k not in ("folds_detail",):
                     print(f"  {k:26} {v}")
+        elif args.cmd == "tournament":
+            from apex.backtest.tournament import run_tournament
+            from apex.domain.market import Timeframe
+            from apex.strategies.registry import all_strategies
+
+            reg = all_strategies()
+            keys = sorted(reg) if args.strategies == "all" else args.strategies.split(",")
+            missing = [k for k in keys if k not in reg]
+            if missing:
+                print(f"unknown strategies: {missing}", file=sys.stderr)
+                return 2
+            entries = run_tournament(
+                s, [reg[k]() for k in keys], symbols=args.symbols.split(","),
+                timeframe=Timeframe(args.timeframe), source=args.source, start=args.start,
+                end=args.end, train_bars=args.train_bars, test_bars=args.test_bars,
+                promote=not args.no_promote)
+            print("TOURNAMENT (SIMULATED, out-of-sample, trial-adjusted)")
+            for e in entries:
+                verdict = "PASS" if e.passed else "fail"
+                print(f"{verdict:4} {e.score:6.3f} {e.strategy_key:14} {e.symbol:8} "
+                      f"{e.timeframe:4} {'; '.join(e.reasons)[:110]}")
+        elif args.cmd == "leaderboard":
+            import pandas as pd
+
+            from apex.backtest.tournament import leaderboard
+
+            df = leaderboard(s, asset_class=args.asset_class, symbol=args.symbol,
+                             timeframe=args.timeframe, category=args.category)
+            if df.empty:
+                print("no walk-forward results yet; run `apex tournament`")
+            else:
+                cols = ["strategy", "status", "symbol", "timeframe", "passed_gates", "score",
+                        "deflated_sharpe", "oos_sharpe", "oos_max_drawdown", "pbo",
+                        "oos_trades", "family_trials"]
+                with pd.option_context("display.width", 200, "display.max_columns", 20):
+                    print(df[cols].to_string(index=False))
         elif args.cmd == "strategies":
             from apex.strategies.registry import all_strategies
 
