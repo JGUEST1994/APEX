@@ -80,6 +80,12 @@ class Strategy(ABC):
             raise ValueError(f"unknown parameters for {self.meta.key}: {sorted(unknown)}")
         return {**self.meta.default_params, **(overrides or {})}
 
+    def source_code(self) -> str:
+        """Source used to fingerprint a strategy version (wrappers include the inner one)."""
+        import inspect
+
+        return inspect.getsource(type(self))
+
     @abstractmethod
     def target_position(self, bars: pd.DataFrame, params: dict[str, Any]) -> pd.Series:
         """Return a Series aligned to ``bars`` with values in [-1, 1] (fraction of max size)."""

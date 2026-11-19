@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import inspect
 import math
 import subprocess
 from dataclasses import asdict
@@ -44,7 +43,7 @@ def ensure_strategy_version(session: Session, strategy: Strategy) -> StrategyVer
                           description=meta.description)
         session.add(row)
         session.flush()
-    code_sha = hashlib.sha256(inspect.getsource(type(strategy)).encode()).hexdigest()
+    code_sha = hashlib.sha256(strategy.source_code().encode()).hexdigest()
     ver = session.scalar(select(StrategyVersion).where(
         StrategyVersion.strategy_id == row.id, StrategyVersion.version == meta.version))
     if ver is None:

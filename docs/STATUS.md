@@ -1,6 +1,6 @@
 # APEX project status
 
-Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6 complete; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → next: Phase 3 remaining data adapters.**
+Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6, 8 complete; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → next: Phase 7 ML.**
 Update this file at the end of every working session so work can continue from any tool.
 
 ## Milestone 1 target (spec Section 21)
@@ -16,7 +16,7 @@ Update this file at the end of every working session so work can continue from a
 
 ## Implemented and tested
 
-Tests last run: 2026-11-19, `ruff check` clean, **237 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
+Tests last run: 2026-11-19, `ruff check` clean, **250 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
 
 - `apex.core`: env config, live trading impossible to enable, secret redaction in logs, injectable clock.
 - `apex.domain`: Bar, Timeframe, InstrumentSpec, CostModel; 22-instrument default universe (FX majors, US ETFs/stocks, BTC/ETH, ES/MES/NQ/MNQ).
@@ -27,6 +27,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **237 passed**, with database te
 - `apex.backtest` (Phase 5 core): bar-based event-driven engine (`engine.py`) that fills at the next bar's open (configurable latency, never same-bar), sizes by equity x leverage rounded to lot size, trades only on target changes, charges commission/spread/slippage/funding from the instrument `CostModel` with a stress multiplier; metrics (`metrics.py`): total return, CAGR, volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, expectancy, average win/loss, max consecutive losses, trades/year, exposure, % positive months, costs; reproducible experiments (`experiments.py`) recording data SHA-256, git commit, full params and config, and registering strategy versions with a code hash (refuses to reuse a version number after the strategy code changes). CLI `apex backtest`, `apex strategies`; API `/experiments` (all flagged simulated). Hand-calculated reference tests for fills, P&L, costs, flips, futures multipliers.
 - Phase 5 validation (`backtest/validation.py`): rolling or anchored walk-forward optimisation (grid search in-sample, evaluation on the next unseen window, stitched out-of-sample returns, walk-forward efficiency, parameter stability), Probabilistic and Deflated Sharpe Ratio (trial count = grid size x folds), Probability of Backtest Overfitting via CSCV, Monte Carlo bootstrap of outcomes, parameter sensitivity, hold-out split. `run_validation` records a `walk_forward` experiment with all of it; CLI `apex validate`.
 - Phase 6 tournament (`backtest/tournament.py`, `strategies/lifecycle.py`): runs walk-forward validation for each strategy x symbol, re-deflates the Sharpe ratio with the family-wide trial count (every walk-forward trial ever recorded for that strategy key), checks promotion gates (min OOS trades 100, family DSR >= 0.95, >= 60% profitable folds, max drawdown <= 25%, PBO <= 0.5), and scores on robustness (DSR, fold consistency, drawdown, PBO, parameter stability; raw return has no weight). Auto-promotion goes experimental -> backtesting -> validation only; `approved` needs a human actor. Every status change writes `strategy_status_changes` and an audit event. CLI `apex tournament`, `apex leaderboard`; API `/leaderboard` (flagged simulated).
+- Phase 8 regimes (`apex.regime`): causal efficiency-ratio trend regime (`trending`/`range`, matching `StrategyMeta.regimes`), trailing-percentile volatility regime, and a dependency-free Gaussian HMM fitted on a training window then run as a forward filter (never smoothed) on later data. Stability (switch rate, mean run) and an out-of-sample check (forward realised vol per HMM state). `RegimeFiltered` wraps any strategy as `<KEY>+RF` and zeroes positions outside its declared regimes; its version fingerprint covers the wrapped code. CLI `apex regimes`, `--regime-filter` on `backtest`/`validate`. Tests check the HMM recovers known regimes out of sample (>85% accuracy on synthetic switching data) and that every label is causal.
 - Architecture test: core packages may not import `apex.ai` (AST scan in `tests/test_architecture.py`).
 - Phase 4: `strategies/hypotheses.py` holds 52 documented hypotheses (all 14 categories in spec Section 6) rendered to `docs/STRATEGY_HYPOTHESES.md` (`apex hypotheses`; a test keeps them in sync). `strategies/indicators.py` (causal SMA/EMA/RSI/ATR/Bollinger/Donchian/session VWAP). `strategies/builtin.py` implements 10 more: BO-DONCH-001, MOM-TSMOM-001, MR-RSI2-001, MR-BB-001, VWAP-MR-001, BO-ORB-001, VOL-SQZ-001, LIQ-SWEEP-001, MS-BOS-001, MTF-PB-001. Batch 2 (`strategies/builtin2.py`, shared `_trade` state machine with frozen stop/target/time exits) adds 12: TF-EMA-RIB-001, TF-CHAND-001, MR-IBS-001, MR-DOWN-001, BO-INSIDE-001, BO-NR7-001, BO-LDN-001, VWAP-PB-001, VWAP-BAND-001, LIQ-PDHL-001, MS-FVG-001, VOL-ATRX-001 (23 registered in total), with hand-built rule tests in `tests/test_strategies_batch2.py`. Every registered strategy is tested for look-ahead on daily, 15m and 5m data and must trade on at least one dataset. Hypotheses needing tick, order-book or multi-instrument data are specs only.
 - `apex.strategies`: interface, 7-state lifecycle with transition rules, entry-point plugin registry, generic no-look-ahead test.
@@ -57,7 +58,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **237 passed**, with database te
 
 1. Phase 3 remainder: Databento (futures, paid; needs Jake's go-ahead on cost), Dukascopy (FX tick files), in-process scheduler.
 2. Multi-instrument strategy support (stat-arb H38-H40, cross-asset H05).
-3. Phase 8 regime detection, Phase 7 ML (with leakage-safe labels), Phase 9 paper trading + independent risk engine (Jake reviews before merge).
+3. Phase 7 ML (with leakage-safe labels; ONNX export), regime filter option in the tournament, Phase 9 paper trading + independent risk engine (Jake reviews before merge).
 
 ## Decisions needed from Jake
 
