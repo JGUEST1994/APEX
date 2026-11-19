@@ -28,10 +28,11 @@ def main(argv: list[str] | None = None) -> int:
     ing.add_argument("--start", required=True, type=_dt)
     ing.add_argument("--end", required=True, type=_dt)
     ing.add_argument("--csv-root", default="data/csv")
-    ra = sub.add_parser("research-add", help="add a plain-text document to the library")
+    ra = sub.add_parser("research-import",
+                        help="import .txt/.md/.html/.pdf/.csv/.vtt/.srt files or a folder")
     ra.add_argument("path")
-    ra.add_argument("--title", required=True)
-    ra.add_argument("--licence-note", default="", help="why we may lawfully use it")
+    ra.add_argument("--title", help="override the extracted title (single file only)")
+    ra.add_argument("--licence-note", required=True, help="why APEX may lawfully use it")
     rs = sub.add_parser("research-search")
     rs.add_argument("query")
     sv = sub.add_parser("serve", help="run the API server")
@@ -92,17 +93,26 @@ def main(argv: list[str] | None = None) -> int:
             print(f"run {r.run_id}: {r.status} received={r.received} stored={r.stored}"
                   + (f" issues={len(r.report.issues)}" if r.report else f" error={r.error}"))
             return 0 if r.status != "failed" else 1
-        elif args.cmd == "research-add":
-            from apex.research.library import add_document
+        elif args.cmd == "research-import":
+            from apex.research.extract import SUPPORTED
+            from apex.research.library import import_file
 
-            doc = add_document(s, title=args.title, text=Path(args.path).read_text(),
-                               source_type="doc", source_ref=args.path,
-                               licence_note=args.licence_note)
-            print(f"document {doc.id}: {len(doc.chunks)} chunks")
+            root = Path(args.path)
+            files = ([f for f in sorted(root.rglob("*")) if f.suffix.lower() in SUPPORTED]
+                     if root.is_dir() else [root])
+            for f in files:
+                try:
+                    doc = import_file(s, f, licence_note=args.licence_note,
+                                      title=args.title if len(files) == 1 else None)
+                except ValueError as exc:
+                    print(f"skipped {f.name}: {exc}", file=sys.stderr)
+                    continue
+                top = ", ".join(list(doc.extracted.get("concepts", {}))[:5]) or "-"
+                print(f"document {doc.id} {doc.title!r}: {len(doc.chunks)} chunks; concepts: {top}")
         elif args.cmd == "research-search":
-            from apex.research.library import keyword_search
+            from apex.research.library import search
 
-            for h in keyword_search(s, args.query):
+            for h in search(s, args.query):
                 print(f"[{h.score:.2f}] {h.title} #{h.chunk_ordinal}: {h.snippet[:120]}")
     return 0
 

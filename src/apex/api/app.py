@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from apex import __version__
 from apex.core.config import Settings, get_settings
 from apex.core.errors import UnknownInstrumentError
-from apex.db.models import IngestionRun, Instrument
+from apex.db.models import IngestionRun, Instrument, ResearchDocument
 from apex.db.session import make_engine, make_session_factory
 from apex.domain.market import Timeframe
 from apex.marketdata.repository import get_instrument, load_bars
-from apex.research.library import keyword_search
+from apex.research.library import search
 
 
 def create_app(settings: Settings | None = None,
@@ -74,6 +74,24 @@ def create_app(settings: Settings | None = None,
     @app.get("/research/search")
     def research_search(q: str, limit: int = Query(10, le=100),
                         s: Session = Depends(db)) -> list[dict]:
-        return [h.__dict__ for h in keyword_search(s, q, limit)]
+        return [h.__dict__ for h in search(s, q, limit)]
+
+    @app.get("/research/documents")
+    def research_documents(limit: int = Query(100, le=1000),
+                           s: Session = Depends(db)) -> list[dict]:
+        rows = s.scalars(select(ResearchDocument).order_by(ResearchDocument.id.desc()).limit(limit))
+        return [{"id": d.id, "title": d.title, "authors": d.authors, "source_type": d.source_type,
+                 "published": d.published, "subjects": d.subjects,
+                 "imported_at": d.imported_at.isoformat()} for d in rows]
+
+    @app.get("/research/documents/{doc_id}")
+    def research_document(doc_id: int, s: Session = Depends(db)) -> dict:
+        d = s.get(ResearchDocument, doc_id)
+        if d is None:
+            raise HTTPException(404, "document not found")
+        return {"id": d.id, "title": d.title, "authors": d.authors, "published": d.published,
+                "source_type": d.source_type, "source_ref": d.source_ref,
+                "licence_note": d.licence_note, "extracted": d.extracted,
+                "chunks": len(d.chunks)}
 
     return app

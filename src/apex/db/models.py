@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -191,6 +192,16 @@ class ResearchChunk(Base):
     text: Mapped[str] = mapped_column(Text)
 
     document: Mapped[ResearchDocument] = relationship(back_populates="chunks")
+
+
+class ChunkVector(Base):
+    __tablename__ = "research_chunk_vectors"
+
+    chunk_id: Mapped[int] = mapped_column(
+        ForeignKey("research_chunks.id", ondelete="CASCADE"), primary_key=True)
+    model: Mapped[str] = mapped_column(String(64), primary_key=True)
+    dim: Mapped[int] = mapped_column(Integer)
+    vector: Mapped[bytes] = mapped_column(LargeBinary)
 
 
 class JournalEntry(Base):
