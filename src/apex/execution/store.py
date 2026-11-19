@@ -206,4 +206,6 @@ def reset_kill_switch(session: Session, name: str, actor: str, now: datetime) ->
     acc.kill_engaged, acc.kill_reason, acc.kill_at, acc.kill_by = (False, f"reset by {actor}",
                                                                    now, actor)
     acc.status = "running"
-    session.add(AuditEvent(actor=actor, action="kill_switch.reset", target=name, detail={}))
+    streak, acc.consecutive_losses = acc.consecutive_losses, 0  # a human chose to restart
+    session.add(AuditEvent(actor=actor, action="kill_switch.reset", target=name,
+                           detail={"cleared_losing_streak": streak}))

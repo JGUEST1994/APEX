@@ -69,13 +69,8 @@ def compare(session: Session, name: str) -> dict:
 
     kill_note = []
     if acc.kill_engaged or "reset" in (acc.kill_reason or ""):
-        kill_note = ["the kill switch has been engaged on this account; paper was flat "
-                     "while the backtest kept trading, which lowers agreement"]
-    streak_cap = (acc.limits or {}).get("max_consecutive_losses")
-    if streak_cap is not None and acc.consecutive_losses >= streak_cap:
-        kill_note.append(f"{acc.consecutive_losses} losing trades in a row hit the risk "
-                         f"limit ({streak_cap}); new trades are refused, so paper stops "
-                         "following the backtest")
+        kill_note = [f"the kill switch has been engaged on this account ({acc.kill_reason}); "
+                     "paper was flat while the backtest kept trading, which lowers agreement"]
     consistent = bool(agree >= MIN_AGREEMENT and gap <= MAX_PRICE_GAP_BPS)
     notes = kill_note + ([] if consistent else
                          [f"direction agreement {agree:.1%} below {MIN_AGREEMENT:.0%}"

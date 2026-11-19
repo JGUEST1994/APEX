@@ -209,3 +209,13 @@ def test_reversal_closes_old_position_even_if_new_entry_is_refused():
             assert held == 0 or held * target[i - 1] > 0, row["ts"]
     assert any(e.kind == "refused" for e in t.events)
     assert t.pf.units.get("SPY", 0) == 0
+
+
+def test_losing_streak_trips_kill_switch():
+    r = _risk(max_consecutive_losses=3)
+    r.monitor(_acct(consecutive_losses=2), NOW)
+    assert not r.kill.engaged
+    r.monitor(_acct(consecutive_losses=3), NOW)
+    assert r.kill.engaged and "3 losing trades in a row" in r.kill.reason
+    assert r.check(_intent("s"), _acct(consecutive_losses=3), data_stale=False, now=NOW).reasons[0] \
+        .startswith("kill switch engaged")
