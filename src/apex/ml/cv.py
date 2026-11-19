@@ -7,7 +7,7 @@ from collections.abc import Iterator
 import numpy as np
 import pandas as pd
 
-from apex.ml.model import LogisticModel
+from apex.ml.model import GradientBoostedTrees, LogisticModel
 
 
 def purged_kfold(ends: np.ndarray, n_splits: int = 5,
@@ -25,7 +25,8 @@ def purged_kfold(ends: np.ndarray, n_splits: int = 5,
 
 
 def walk_forward_proba(x: pd.DataFrame, labels: pd.DataFrame, *, min_train: int = 500,
-                       retrain: int = 100, l2: float = 1.0) -> pd.Series:
+                       retrain: int = 100, l2: float = 1.0, model: str = "logistic",
+                       model_params: dict | None = None) -> pd.Series:
     """Out-of-sample P(label = +1) for every bar, retraining every ``retrain`` bars.
 
     A model used from bar t on is trained only on samples whose label ended BEFORE t
@@ -40,13 +41,21 @@ def walk_forward_proba(x: pd.DataFrame, labels: pd.DataFrame, *, min_train: int 
         train = ok_x & ~np.isnan(y) & (y != 0) & (ends >= 0) & (ends < t)
         if train.sum() < min_train // 2 or len(np.unique(y[train])) < 2:
             continue
-        m = LogisticModel(l2=l2).fit(feats[train], (y[train] > 0).astype(float))
+        m = _make_model(model, l2, model_params).fit(feats[train], (y[train] > 0).astype(float))
         seg = slice(t, min(t + retrain, len(x)))
         rows = ok_x[seg]
         p = np.full(rows.shape, np.nan)
         p[rows] = m.predict_proba(feats[seg][rows])
         out[seg] = p
     return pd.Series(out, index=x.index)
+
+
+def _make_model(kind: str, l2: float, extra: dict | None):
+    if kind == "logistic":
+        return LogisticModel(l2=l2, **(extra or {}))
+    if kind == "gbt":
+        return GradientBoostedTrees(l2=l2, **(extra or {}))
+    raise ValueError(f"unknown model {kind!r}; use 'logistic' or 'gbt'")
 
 
 def classification_report(proba: pd.Series, labels: pd.DataFrame) -> dict[str, float]:

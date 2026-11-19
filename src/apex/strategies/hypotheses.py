@@ -237,7 +237,8 @@ HYPOTHESES: list[Hypothesis] = [
     # --- machine learning assisted
     H("H48", "Gradient-boosted direction filter", "machine_learning", "forex,crypto,futures",
       "1h", "A LightGBM classifier on lagged returns/vol/time features filters H01 signals.",
-      "base signal and P(up) > 0.55", "base exit", "base stop", "base", "any"),
+      "base signal and P(up) > 0.55", "base exit", "base stop", "base", "any",
+      implemented="ML-GBT-001"),
     H("H49", "Regime classifier gating", "machine_learning", "futures,equity", "1d",
       "An HMM/cluster regime label selects trend vs reversion strategies.",
       "regime = trend -> H06; regime = range -> H11", "regime change", "underlying",

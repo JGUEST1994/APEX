@@ -1,6 +1,6 @@
 # APEX project status
 
-Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6, 7 (first model), 8 complete, Phase 10 read-only dashboard; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → Phase 9 slices 1-2 (risk, paper broker, persistence) done; Phase 9 correlation cap, paper dashboard page and paper-vs-backtest report done; multi-instrument paper accounts done; in-process scheduler and multi-instrument strategies (pairs) and meta-labelling done; walk-forward/tournament for pairs done; H05 cross-asset trend portfolio and H07 cross-sectional momentum and H41 ETF vs basket done; dashboard shows which strategy each backtest used and how many markets a strategy trades; intraday strategies close before the session ends (NYSE early closes included); next: Phase 3 remainder (Dukascopy), paper trading for multi-instrument strategies.**
+Last updated: 2026-11-19. Current phase: **Phases 1, 2, 5, 6, 7 (first model), 8 complete, Phase 10 read-only dashboard; Phase 4 batches 1-2 and Phase 3 core done; milestone 1 reached → Phase 9 slices 1-2 (risk, paper broker, persistence) done; Phase 9 correlation cap, paper dashboard page and paper-vs-backtest report done; multi-instrument paper accounts done; in-process scheduler and multi-instrument strategies (pairs) and meta-labelling done; walk-forward/tournament for pairs done; H05 cross-asset trend portfolio and H07 cross-sectional momentum and H41 ETF vs basket done; gradient-boosted trees model and H48 filter done; dashboard shows which strategy each backtest used and how many markets a strategy trades; intraday strategies close before the session ends (NYSE early closes included); next: Phase 3 remainder (Dukascopy), paper trading for multi-instrument strategies.**
 Update this file at the end of every working session so work can continue from any tool.
 
 ## Milestone 1 target (spec Section 21)
@@ -43,6 +43,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 - `apex` CLI: db-upgrade, seed-instruments, ingest, research-import (file or folder), research-search, serve (CLI smoke-tested end to end on SQLite).
 - CI workflow for GitHub Actions: lint + tests on PostgreSQL, and a `pip-audit` job that fails on known vulnerabilities in runtime dependencies.
 - Session close: `indicators.bars_left_in_session` counts the bars the trading calendar still schedules in a bar's session (calendar only, so causal; DST, weekends and CME's 17:00 ET close handled). VWAP-MR, ORB, VWAP-PB, VWAP-BAND and LIQ-PDHL (now v0.2.0) take `flat_bars` (default 1): with next-open fills they are flat by the open of the session's last bar instead of holding to the next session's open. `flat_bars=0` restores the old rule.
+- Gradient-boosted trees: `ml/model.GradientBoostedTrees` is a dependency-free LightGBM-style classifier (log-loss boosting, depth-2 trees on quantile bins, Newton leaves with L2, JSON save/load, deterministic). `walk_forward_proba(..., model="gbt")` uses it with the same leakage guards as the logistic model. ML-GBT-001 (H48) keeps the SMA crossover position only while the boosted model agrees with its direction.
 
 ## Written but not verified
 
@@ -66,7 +67,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 
 1. Phase 3 remainder: Databento (futures, paid; needs Jake's go-ahead on cost), Dukascopy (FX tick files).
 2. Paper trading for multi-instrument strategies.
-3. Optional LightGBM/ONNX extra; Phase 10 dashboard.
+3. Optional real LightGBM/ONNX backend behind the same interface (only if the built-in trees prove too slow); Phase 10 dashboard.
 
 ## Decisions needed from Jake
 
