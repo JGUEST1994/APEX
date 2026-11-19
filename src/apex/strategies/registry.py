@@ -28,6 +28,6 @@ def get(key: str) -> type[Strategy]:
 
 
 def all_strategies() -> dict[str, type[Strategy]]:
-    from apex.strategies import reference  # noqa: F401  (registers built-ins)
+    from apex.strategies import builtin, reference  # noqa: F401  (registers built-ins)
 
     return dict(_REGISTRY)

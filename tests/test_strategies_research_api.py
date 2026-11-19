@@ -25,17 +25,25 @@ def test_lifecycle_rules():
     assert not can_transition(S.REJECTED, S.EXPERIMENTAL)
 
 
+_DATASETS = {
+    "spy_daily": ("SPY", Timeframe.D1, utc(2022, 1, 1), utc(2025, 1, 1), 400),
+    "es_15m": ("ES", Timeframe.M15, utc(2025, 3, 3), utc(2025, 3, 21), 700),
+    "spy_5m": ("SPY", Timeframe.M5, utc(2025, 3, 3), utc(2025, 3, 14), 500),
+}
+
+
+@pytest.mark.parametrize("data", list(_DATASETS))
 @pytest.mark.parametrize("key", list(all_strategies()))
-def test_strategies_have_no_lookahead(key):
+def test_strategies_have_no_lookahead(key, data):
+    sym, tf, start, end, cut = _DATASETS[data]
     strat = all_strategies()[key]()
-    bars = SyntheticProvider().fetch_bars(by_symbol()["SPY"], Timeframe.D1,
-                                          utc(2022, 1, 1), utc(2025, 1, 1))
+    bars = SyntheticProvider(annual_vol=0.6).fetch_bars(by_symbol()[sym], tf, start, end)
     params = strat.params()
     full = strat.target_position(bars, params)
-    cut = 400
     partial = strat.target_position(bars.iloc[:cut].copy(), params)
-    assert full.iloc[:cut].equals(partial)
-    assert full.between(-1, 1).all()
+    assert len(full) == len(bars)
+    assert full.iloc[:cut].equals(partial), "signal changed when future bars were added"
+    assert full.between(-1, 1).all() and not full.isna().any()
 
 
 def test_unknown_param_rejected():
@@ -83,3 +91,33 @@ def test_api(db_url, session):
                       params={"timeframe": "1d", "source": "synthetic"}).status_code == 404
     assert client.get("/ingestion-runs").json()[0]["status"] == "ok"
     engine.dispose()
+
+
+def test_hypothesis_bank():
+    from pathlib import Path
+
+    from apex.strategies.hypotheses import CATEGORIES, HYPOTHESES, to_markdown
+
+    ids = [h.id for h in HYPOTHESES]
+    assert len(ids) >= 50 and len(set(ids)) == len(ids)
+    assert {h.category for h in HYPOTHESES} == set(CATEGORIES)
+    registry = all_strategies()
+    implemented = {h.implemented for h in HYPOTHESES if h.implemented}
+    assert implemented <= set(registry)
+    assert set(registry) <= implemented, "every registered strategy needs a hypothesis entry"
+    for h in HYPOTHESES:
+        assert h.data in {"ohlcv", "ticks", "l2", "multi"}
+        assert all([h.entry, h.exit, h.stop, h.markets, h.timeframes, h.idea])
+    doc = Path(__file__).resolve().parent.parent / "docs" / "STRATEGY_HYPOTHESES.md"
+    assert doc.read_text().strip() == to_markdown().strip(), "run: apex hypotheses > docs/STRATEGY_HYPOTHESES.md"
+
+
+@pytest.mark.parametrize("key", list(all_strategies()))
+def test_every_strategy_trades_on_some_data(key):
+    from apex.backtest.engine import run_backtest
+
+    trades = 0
+    for sym, tf, start, end, _ in _DATASETS.values():
+        bars = SyntheticProvider(annual_vol=0.6).fetch_bars(by_symbol()[sym], tf, start, end)
+        trades += run_backtest(bars, all_strategies()[key](), by_symbol()[sym]).metrics["trades"]
+    assert trades > 0

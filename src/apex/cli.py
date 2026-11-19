@@ -94,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     bt.add_argument("--capital", type=float, default=100_000.0)
     bt.add_argument("--cost-multiplier", type=float, default=1.0)
     sub.add_parser("strategies", help="list registered strategies")
+    sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
     sv = sub.add_parser("serve", help="run the API server")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
@@ -107,6 +108,11 @@ def main(argv: list[str] | None = None) -> int:
 
         upgrade(settings.database_url)
         print("database at head")
+        return 0
+    if args.cmd == "hypotheses":
+        from apex.strategies.hypotheses import to_markdown
+
+        print(to_markdown())
         return 0
     if args.cmd == "serve":
         import uvicorn
