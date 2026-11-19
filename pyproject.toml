@@ -35,6 +35,7 @@ apex = ["migrations/*.py", "migrations/versions/*.py", "migrations/*.mako"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

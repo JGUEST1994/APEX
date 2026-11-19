@@ -16,7 +16,7 @@ jobs:
           POSTGRES_DB: apex_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U apex" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U apex -d apex_test" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       APEX_TEST_POSTGRES_URL: postgresql+psycopg://apex:apex@localhost:5432/apex_test
     steps:
