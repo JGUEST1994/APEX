@@ -16,18 +16,66 @@ def _dt(s: str) -> datetime:
     return d if d.tzinfo else d.replace(tzinfo=UTC)
 
 
+PROVIDERS = ["synthetic", "csv", "binance", "alpaca"]
+
+
+def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201
+    if name == "synthetic":
+        from apex.marketdata.providers.synthetic import SyntheticProvider
+
+        return SyntheticProvider()
+    if name == "csv":
+        from apex.marketdata.providers.csv_file import CsvFileProvider
+
+        return CsvFileProvider(Path(csv_root))
+    if name == "binance":
+        from apex.marketdata.providers.binance import BinanceSpotProvider
+
+        return BinanceSpotProvider()
+    if name == "alpaca":
+        from apex.marketdata.providers.alpaca import AlpacaStocksProvider
+
+        if not (settings.alpaca_key_id and settings.alpaca_secret_key):
+            raise SystemExit("set APEX_ALPACA_KEY_ID and APEX_ALPACA_SECRET_KEY")
+        return AlpacaStocksProvider(settings.alpaca_key_id.get_secret_value(),
+                                    settings.alpaca_secret_key.get_secret_value(),
+                                    feed=settings.alpaca_feed)
+    raise SystemExit(f"unknown provider {name}")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="apex")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("db-upgrade", help="apply database migrations")
     sub.add_parser("seed-instruments", help="load the default instrument universe")
     ing = sub.add_parser("ingest", help="ingest historical bars")
-    ing.add_argument("--provider", choices=["synthetic", "csv", "binance"], required=True)
+    ing.add_argument("--provider", choices=PROVIDERS, required=True)
     ing.add_argument("--symbol", required=True)
     ing.add_argument("--timeframe", default="1d")
     ing.add_argument("--start", required=True, type=_dt)
     ing.add_argument("--end", required=True, type=_dt)
     ing.add_argument("--csv-root", default="data/csv")
+    up = sub.add_parser("update", help="incremental update of completed bars (cron-safe)")
+    up.add_argument("--provider", choices=PROVIDERS, required=True)
+    up.add_argument("--symbols", required=True, help="comma-separated")
+    up.add_argument("--timeframe", default="1m")
+    up.add_argument("--backfill-start", required=True, type=_dt,
+                    help="start date when nothing is stored yet")
+    up.add_argument("--csv-root", default="data/csv")
+    rsp = sub.add_parser("resample", help="derive a coarser timeframe from stored bars")
+    rsp.add_argument("--symbol", required=True)
+    rsp.add_argument("--source", required=True)
+    rsp.add_argument("--from-timeframe", required=True)
+    rsp.add_argument("--to-timeframe", required=True)
+    rsp.add_argument("--start", required=True, type=_dt)
+    rsp.add_argument("--end", required=True, type=_dt)
+    rc = sub.add_parser("reconcile", help="compare one instrument across two sources")
+    rc.add_argument("--symbol", required=True)
+    rc.add_argument("--timeframe", default="1d")
+    rc.add_argument("--sources", required=True, help="two sources, comma-separated")
+    rc.add_argument("--start", type=_dt)
+    rc.add_argument("--end", type=_dt)
+    rc.add_argument("--tolerance-bps", type=float, default=5.0)
     ra = sub.add_parser("research-import",
                         help="import .txt/.md/.html/.pdf/.csv/.vtt/.srt files or a folder")
     ra.add_argument("path")
@@ -88,22 +136,59 @@ def main(argv: list[str] | None = None) -> int:
             if spec is None:
                 print(f"unknown symbol {args.symbol}", file=sys.stderr)
                 return 2
-            if args.provider == "synthetic":
-                from apex.marketdata.providers.synthetic import SyntheticProvider as P
-
-                provider = P()
-            elif args.provider == "csv":
-                from apex.marketdata.providers.csv_file import CsvFileProvider
-
-                provider = CsvFileProvider(Path(args.csv_root))
-            else:
-                from apex.marketdata.providers.binance import BinanceSpotProvider
-
-                provider = BinanceSpotProvider()
+            provider = make_provider(args.provider, settings, args.csv_root)
             r = ingest_bars(s, provider, spec, Timeframe(args.timeframe), args.start, args.end)
             print(f"run {r.run_id}: {r.status} received={r.received} stored={r.stored}"
                   + (f" issues={len(r.report.issues)}" if r.report else f" error={r.error}"))
             return 0 if r.status != "failed" else 1
+        elif args.cmd == "update":
+            from apex.domain.instruments import by_symbol
+            from apex.domain.market import Timeframe
+            from apex.marketdata.ingest import update_bars
+
+            provider = make_provider(args.provider, settings, args.csv_root)
+            universe, rc_ = by_symbol(), 0
+            for sym in [x.strip() for x in args.symbols.split(",") if x.strip()]:
+                if sym not in universe:
+                    print(f"{sym}: unknown symbol", file=sys.stderr)
+                    rc_ = 2
+                    continue
+                r = update_bars(s, provider, universe[sym], Timeframe(args.timeframe),
+                                backfill_start=args.backfill_start)
+                if r is None:
+                    print(f"{sym}: up to date")
+                else:
+                    print(f"{sym}: run {r.run_id} {r.status} stored={r.stored}")
+                    rc_ = rc_ or (1 if r.status == "failed" else 0)
+                s.commit()  # keep completed symbols even if a later one fails
+            return rc_
+        elif args.cmd == "resample":
+            from apex.domain.market import Timeframe
+            from apex.marketdata.ingest import ingest_bars
+            from apex.marketdata.providers.stored import ResampledProvider
+            from apex.marketdata.repository import get_instrument, to_spec
+
+            spec = to_spec(get_instrument(s, args.symbol))
+            prov = ResampledProvider(s, args.source, Timeframe(args.from_timeframe))
+            r = ingest_bars(s, prov, spec, Timeframe(args.to_timeframe), args.start, args.end)
+            print(f"run {r.run_id}: {r.status} source={prov.name} stored={r.stored}")
+            return 0 if r.status != "failed" else 1
+        elif args.cmd == "reconcile":
+            from apex.domain.market import Timeframe
+            from apex.marketdata.reconcile import reconcile
+            from apex.marketdata.repository import get_instrument, load_bars
+
+            a_src, b_src = [x.strip() for x in args.sources.split(",")]
+            inst = get_instrument(s, args.symbol)
+            tf = Timeframe(args.timeframe)
+            rep = reconcile(load_bars(s, inst.id, tf, a_src, args.start, args.end),
+                            load_bars(s, inst.id, tf, b_src, args.start, args.end),
+                            args.tolerance_bps)
+            print(f"compared={rep.compared} only_{a_src}={len(rep.only_in_a)} "
+                  f"only_{b_src}={len(rep.only_in_b)} mismatches={len(rep.mismatches)}")
+            if not rep.mismatches.empty:
+                print(rep.mismatches.head(20).to_string(index=False))
+            return 0 if rep.ok else 1
         elif args.cmd == "strategies":
             from apex.strategies.registry import all_strategies
 

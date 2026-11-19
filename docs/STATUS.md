@@ -1,6 +1,6 @@
 # APEX project status
 
-Last updated: 2026-11-19. Current phase: **Phases 1, 2 and 5-core complete (milestone 1 reached) → next: Phase 3 data, Phase 4 strategy library, Phase 5 validation.**
+Last updated: 2026-11-19. Current phase: **Phases 1, 2, 3 (core) and 5 (core) complete; milestone 1 reached → next: Phase 4 strategy library, then Phase 5 validation.**
 Update this file at the end of every working session so work can continue from any tool.
 
 ## Milestone 1 target (spec Section 21)
@@ -16,13 +16,14 @@ Update this file at the end of every working session so work can continue from a
 
 ## Implemented and tested
 
-Tests last run: 2026-11-19, `ruff check` clean, **99 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
+Tests last run: 2026-11-19, `ruff check` clean, **113 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
 
 - `apex.core`: env config, live trading impossible to enable, secret redaction in logs, injectable clock.
 - `apex.domain`: Bar, Timeframe, InstrumentSpec, CostModel; 22-instrument default universe (FX majors, US ETFs/stocks, BTC/ETH, ES/MES/NQ/MNQ).
 - `apex.db`: 12 tables, Alembic migrations `0001` (schema) and `0002` (pgvector, no-op when unavailable), tested upgrade/downgrade on both engines.
 - `apex.marketdata`: provider interface + normalisation; calendars (FX 24x5, CME Globex with daily halt, NYSE RTH with computed holidays, crypto 24x7); validation (NaN, non-positive, OHLC consistency, duplicates/conflicts, misalignment, out-of-session, gaps, spikes) and staleness check; repository with content hashing; ingestion pipeline that records runs and issues.
 - `apex.research` (Phase 2): file extraction (`extract.py`: text/markdown, HTML with metadata, PDF text layer + metadata via pypdf, CSV dataset summaries, VTT/SRT transcripts), deterministic extraction of concepts, risk techniques, formulas and if/then trading rules stored as untested hypotheses (`concepts.py`), local embeddings (`embeddings.py`: dependency-free hashing embedder by default, sentence-transformers optional), hybrid BM25 + cosine search, concept and formula lookup, licence note required on import (`library.py`). Migration `0003` adds portable chunk vectors.
+- Phase 3 data infrastructure: calendar `session_date` (FX/CME evening sessions roll to the next trading day), approximate CME/FX holiday closures; `resample.py` (calendar-aware resampling with partial-bucket detection); `ResampledProvider` so derived timeframes go through the normal validation + versioning pipeline (source `<src>:rs<tf>`); `reconcile.py` cross-source comparison; `update_bars` incremental, cron-safe updates of completed bars only; `AlpacaStocksProvider` for US equities (mock-tested; needs `APEX_ALPACA_KEY_ID`/`APEX_ALPACA_SECRET_KEY`). CLI: `update`, `resample`, `reconcile`; `ingest` gains `--provider alpaca`.
 - `apex.backtest` (Phase 5 core): bar-based event-driven engine (`engine.py`) that fills at the next bar's open (configurable latency, never same-bar), sizes by equity x leverage rounded to lot size, trades only on target changes, charges commission/spread/slippage/funding from the instrument `CostModel` with a stress multiplier; metrics (`metrics.py`): total return, CAGR, volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, expectancy, average win/loss, max consecutive losses, trades/year, exposure, % positive months, costs; reproducible experiments (`experiments.py`) recording data SHA-256, git commit, full params and config, and registering strategy versions with a code hash (refuses to reuse a version number after the strategy code changes). CLI `apex backtest`, `apex strategies`; API `/experiments` (all flagged simulated). Hand-calculated reference tests for fills, P&L, costs, flips, futures multipliers.
 - Architecture test: core packages may not import `apex.ai` (AST scan in `tests/test_architecture.py`).
 - `apex.strategies`: interface, 7-state lifecycle with transition rules, entry-point plugin registry, generic no-look-ahead test.
@@ -34,11 +35,11 @@ Tests last run: 2026-11-19, `ruff check` clean, **99 passed**, with database tes
 ## Written but not verified
 
 - `Dockerfile` and `docker-compose.yml` (no Docker daemon in the build environment).
-- `BinanceSpotProvider` against the real endpoint (sandbox network blocks Binance; logic tested with mocked HTTP).
+- `BinanceSpotProvider` and `AlpacaStocksProvider` against the real endpoints (sandbox network blocks them; logic tested with mocked HTTP).
 
 ## Known limitations
 
-- NYSE early closes treated as full days; CME and FX holidays not modelled (gap warnings will appear on those days).
+- NYSE early closes treated as full days; CME/FX holidays approximated (25 Dec, 1 Jan, CME Good Friday); other exchange holidays and early closes will show as gap warnings.
 - Research search scans all chunks in memory: fine for tens of thousands of chunks; move to PostgreSQL full-text + pgvector beyond that.
 - The default embedder is lexical (feature hashing). Install `sentence-transformers` with a local model for true semantic similarity.
 - Scanned PDFs (no text layer) are rejected: OCR not supported yet.
@@ -50,9 +51,9 @@ Tests last run: 2026-11-19, `ruff check` clean, **99 passed**, with database tes
 
 ## Next steps (in order)
 
-1. Phase 3: scheduler for incremental ingestion; Databento (futures), Alpaca or Polygon/Massive (equities), Dukascopy (FX), Kraken (crypto) adapters; resampling 1m → higher timeframes; multi-source reconciliation; CME/FX holiday tables.
-2. Phase 4: write the 50 strategy hypotheses as specs; implement the first ~10.
-3. Phase 5 remainder: walk-forward, Monte Carlo, sensitivity, DSR/PBO.
+1. Phase 4: write the 50 strategy hypotheses as specs; implement the first ~10.
+2. Phase 5 remainder: walk-forward, Monte Carlo, sensitivity, DSR/PBO.
+3. Phase 3 remainder: Databento (futures), Polygon/Massive, Dukascopy (FX), Kraken adapters; in-process scheduler.
 4. pip-audit in CI.
 
 ## Decisions needed from Jake

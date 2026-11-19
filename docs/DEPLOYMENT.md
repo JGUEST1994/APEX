@@ -16,6 +16,16 @@ curl http://127.0.0.1:8000/health
 
 The API is published on `127.0.0.1` only. Expose it remotely through a TLS reverse proxy or VPN, never directly.
 
+## Scheduled data updates
+
+`apex update` only fetches completed bars after the newest stored one, so it is safe to run on a timer. Example crontab (every 5 minutes, crypto 1m bars):
+
+```
+*/5 * * * * cd /opt/apex && .venv/bin/apex update --provider binance --symbols BTCUSDT,ETHUSDT --timeframe 1m --backfill-start 2024-01-01 >> logs/update.log 2>&1
+```
+
+On Windows use Task Scheduler with the same command.
+
 ## Restart behaviour
 
 Containers use `restart: unless-stopped`; the API applies migrations on start. When trading arrives (Phase 9) the engine will start in a halted, reconciling state and will not resume trading automatically if account state is uncertain.

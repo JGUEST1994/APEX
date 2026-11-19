@@ -60,3 +60,24 @@ def ingest_bars(session: Session, provider: MarketDataProvider, spec: Instrument
     log.info("ingested %s %s from %s: received=%d stored=%d issues=%d", spec.symbol,
              timeframe.value, provider.name, len(raw), stored, len(report.issues))
     return IngestResult(run.id, run.status, len(raw), stored, report)
+
+
+def update_bars(session: Session, provider: MarketDataProvider, spec: InstrumentSpec,
+                timeframe: Timeframe, *, backfill_start: datetime,
+                now: datetime | None = None) -> IngestResult | None:
+    """Incremental update: fetch from the bar after the newest stored one up to ``now``.
+
+    Only completed bars are requested (the current, still-forming bar is excluded). Returns
+    None when already up to date. Safe to run repeatedly, e.g. from cron or a systemd timer.
+    """
+    from apex.marketdata.repository import latest_bar_ts
+
+    now = now or datetime.now(UTC)
+    instrument = upsert_instrument(session, spec)
+    last = latest_bar_ts(session, instrument.id, timeframe, provider.name)
+    start = backfill_start if last is None else last + timeframe.delta
+    step = timeframe.delta
+    end = now - (now - datetime(1970, 1, 1, tzinfo=UTC)) % step  # start of forming bar
+    if start >= end:
+        return None
+    return ingest_bars(session, provider, spec, timeframe, start, end)
