@@ -111,11 +111,20 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
                    timeframe: Timeframe, source: str, start: datetime, end: datetime,
                    grids: dict[str, dict[str, list]] | None = None, train_bars: int,
                    test_bars: int, gates: Gates | None = None,
-                   promote: bool = True) -> list[Entry]:
+                   promote: bool = True, regime_filter: bool = False) -> list[Entry]:
+    """Validate and rank ``strategies``. With ``regime_filter`` every strategy that declares
+    specific regimes also competes as a ``<KEY>+RF`` variant; both variants share one trial
+    family, so trying the filter counts against the deflated Sharpe of each."""
     gates = gates or Gates()
     entries: list[Entry] = []
+    if regime_filter:
+        from apex.regime.filtered import RegimeFiltered
+
+        strategies = list(strategies) + [RegimeFiltered(s) for s in strategies
+                                         if "any" not in s.meta.regimes]
     for strat in strategies:
-        grid = (grids or {}).get(strat.meta.key) or {k: [v] for k, v in
+        base_key = strat.meta.key.removesuffix("+RF")
+        grid = (grids or {}).get(base_key) or {k: [v] for k, v in
                                                       strat.meta.default_params.items()}
         for sym in symbols:
             try:
@@ -126,7 +135,7 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
                 entries.append(Entry(strat.meta.key, strat.meta.version, strat.meta.category,
                                      sym, timeframe.value, -1, {}, 0, False, [str(exc)]))
                 continue
-            fam = family_trials(session, strat.meta.key)
+            fam = family_trials(session, base_key) + family_trials(session, base_key + "+RF")
             ok, reasons, m = evaluate(exp.metrics, gates, fam)
             e = Entry(strat.meta.key, strat.meta.version, strat.meta.category, sym,
                       timeframe.value, exp.id, m, fam, ok, reasons, score(m) if ok else 0.0)

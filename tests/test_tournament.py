@@ -157,3 +157,23 @@ def test_cli_and_api(db_url, monkeypatch, capsys):
     rows = client.get("/leaderboard").json()
     assert len(rows) == 2 and all(r["simulated"] for r in rows)
     engine.dispose()
+
+
+def test_regime_filtered_variants_share_trial_family(session):
+    btc = by_symbol()["BTCUSDT"]
+    ingest_bars(session, SyntheticProvider(), btc, Timeframe.D1, utc(2018, 1, 1),
+                utc(2024, 1, 1))
+    session.commit()
+    reg = all_strategies()
+    strats = [reg["BO-DONCH-001"](), reg["LIQ-SWEEP-001"]()]  # trending-only vs "any"
+    entries = run_tournament(session, strats, symbols=["BTCUSDT"], timeframe=Timeframe.D1,
+                             source="synthetic", start=utc(2018, 1, 1), end=utc(2024, 1, 1),
+                             train_bars=700, test_bars=250, regime_filter=True,
+                             promote=False)
+    session.commit()
+    keys = {e.strategy_key for e in entries}
+    assert keys == {"BO-DONCH-001", "BO-DONCH-001+RF", "LIQ-SWEEP-001"}
+    by_key = {e.strategy_key: e for e in entries}
+    total = family_trials(session, "BO-DONCH-001") + family_trials(session, "BO-DONCH-001+RF")
+    assert by_key["BO-DONCH-001+RF"].family_trials == total
+    assert family_trials(session, "BO-DONCH-001+RF") > 0

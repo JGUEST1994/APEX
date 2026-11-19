@@ -128,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
     tn.add_argument("--train-bars", type=int, required=True)
     tn.add_argument("--test-bars", type=int, required=True)
     tn.add_argument("--no-promote", action="store_true")
+    tn.add_argument("--regime-filter", action="store_true",
+                    help="also enter regime-filtered variants (<KEY>+RF)")
     lb = sub.add_parser("leaderboard", help="show the strategy leaderboard")
     for opt in ("--asset-class", "--symbol", "--timeframe", "--category"):
         lb.add_argument(opt)
@@ -284,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
                 s, [reg[k]() for k in keys], symbols=args.symbols.split(","),
                 timeframe=Timeframe(args.timeframe), source=args.source, start=args.start,
                 end=args.end, train_bars=args.train_bars, test_bars=args.test_bars,
-                promote=not args.no_promote)
+                promote=not args.no_promote, regime_filter=args.regime_filter)
             print("TOURNAMENT (SIMULATED, out-of-sample, trial-adjusted)")
             for e in entries:
                 verdict = "PASS" if e.passed else "fail"
