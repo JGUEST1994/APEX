@@ -103,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     bt.add_argument("--param", action="append", default=[], help="name=value (repeatable)")
     bt.add_argument("--capital", type=float, default=100_000.0)
     bt.add_argument("--cost-multiplier", type=float, default=1.0)
+    bt.add_argument("--regime-filter", action="store_true",
+                    help="trade only in the regimes the strategy declares")
     va = sub.add_parser("validate", help="walk-forward + PBO + Monte Carlo validation")
     va.add_argument("--strategy", required=True)
     va.add_argument("--symbol", required=True)
@@ -115,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     va.add_argument("--train-bars", type=int, required=True)
     va.add_argument("--test-bars", type=int, required=True)
     va.add_argument("--anchored", action="store_true")
+    va.add_argument("--regime-filter", action="store_true")
     tn = sub.add_parser("tournament", help="validate many strategies and rank them")
     tn.add_argument("--strategies", default="all", help="comma-separated keys or 'all'")
     tn.add_argument("--symbols", required=True)
@@ -128,6 +131,13 @@ def main(argv: list[str] | None = None) -> int:
     lb = sub.add_parser("leaderboard", help="show the strategy leaderboard")
     for opt in ("--asset-class", "--symbol", "--timeframe", "--category"):
         lb.add_argument(opt)
+    rg = sub.add_parser("regimes", help="regime labels, stability and OOS check for stored bars")
+    rg.add_argument("--symbol", required=True)
+    rg.add_argument("--timeframe", default="1d")
+    rg.add_argument("--source", required=True)
+    rg.add_argument("--start", required=True, type=_dt)
+    rg.add_argument("--end", required=True, type=_dt)
+    rg.add_argument("--train-frac", type=float, default=0.5)
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
     sv = sub.add_parser("serve", help="run the API server")
@@ -245,7 +255,12 @@ def main(argv: list[str] | None = None) -> int:
             for g in args.grid:
                 k, _, vs = g.partition("=")
                 grid[k] = [json.loads(v) for v in vs.split(",")]
-            exp = run_validation(s, strategies[args.strategy](), symbol=args.symbol,
+            strat = strategies[args.strategy]()
+            if args.regime_filter:
+                from apex.regime.filtered import RegimeFiltered
+
+                strat = RegimeFiltered(strat)
+            exp = run_validation(s, strat, symbol=args.symbol,
                                  timeframe=Timeframe(args.timeframe), source=args.source,
                                  start=args.start, end=args.end, grid=grid,
                                  train_bars=args.train_bars, test_bars=args.test_bars,
@@ -275,6 +290,38 @@ def main(argv: list[str] | None = None) -> int:
                 verdict = "PASS" if e.passed else "fail"
                 print(f"{verdict:4} {e.score:6.3f} {e.strategy_key:14} {e.symbol:8} "
                       f"{e.timeframe:4} {'; '.join(e.reasons)[:110]}")
+        elif args.cmd == "regimes":
+            from apex.domain.market import Timeframe
+            from apex.marketdata.repository import get_instrument, load_bars
+            from apex.regime.detect import (
+                forward_vol_by_state,
+                hmm_regime,
+                stability,
+                trend_regime,
+                volatility_regime,
+            )
+
+            bars = load_bars(s, get_instrument(s, args.symbol).id, Timeframe(args.timeframe),
+                             args.source,
+                             args.start, args.end)
+            if len(bars) < 100:
+                print("need at least 100 stored bars", file=sys.stderr)
+                return 2
+            train_end = int(len(bars) * args.train_frac)
+            state, model = hmm_regime(bars, train_end)
+            for name, lab in (("trend", trend_regime(bars)), ("volatility",
+                                                             volatility_regime(bars)),
+                              ("hmm", state)):
+                counts = lab[lab.notna() & (lab != -1)].value_counts(normalize=True)
+                st = stability(lab)
+                print(f"{name:10} " + " ".join(f"{k}={v:.0%}" for k, v in counts.items())
+                      + f"  switch_rate={st['switch_rate']:.3f} mean_run={st['mean_run']:.1f}")
+            print("hmm state vol (per bar): " + ", ".join(
+                f"{i}={v ** 0.5:.4f}" for i, v in enumerate(model.var_))
+                + "  expected durations: " + ", ".join(
+                f"{d:.1f}" for d in model.expected_durations()))
+            print("OOS mean forward vol by hmm state: "
+                  + str(forward_vol_by_state(bars, state, train_end)))
         elif args.cmd == "leaderboard":
             import pandas as pd
 
@@ -309,6 +356,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"unknown strategy {args.strategy}; see `apex strategies`", file=sys.stderr)
                 return 2
             strat = strategies[args.strategy]()
+            if args.regime_filter:
+                from apex.regime.filtered import RegimeFiltered
+
+                strat = RegimeFiltered(strat)
             params = {}
             for kv in args.param:
                 k, _, v = kv.partition("=")
