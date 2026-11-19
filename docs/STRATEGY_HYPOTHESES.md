@@ -25,8 +25,8 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H11 | RSI(2) pullback | equity,futures | 1d | RSI2 < 10 and close > SMA200 | close > SMA5 | trend filter fails | ohlcv | MR-RSI2-001 |
 | H12 | Bollinger band fade | forex,crypto,equity | 15m,1h | close outside 2-sigma band | middle band | 3.5 sigma | ohlcv | MR-BB-001 |
-| H13 | Internal bar strength | equity | 1d | (close-low)/(high-low) < 0.2 | next close > prior high | 5 days | ohlcv | - |
-| H14 | Consecutive down days | equity,futures | 1d | 3 lower closes and close > SMA200 | first up close | 5 bars | ohlcv | - |
+| H13 | Internal bar strength | equity | 1d | (close-low)/(high-low) < 0.2 | next close > prior high | 5 days | ohlcv | MR-IBS-001 |
+| H14 | Consecutive down days | equity,futures | 1d | 3 lower closes and close > SMA200 | first up close | 5 bars | ohlcv | MR-DOWN-001 |
 | H15 | FX overnight reversion | forex | 1h | Asia range break > 1.5x average | London 10:00 | 2x Asia range | ohlcv | - |
 
 ## Trend Following (5)
@@ -35,8 +35,8 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H01 | SMA crossover | forex,equity,crypto,futures | 1h,1d | fast SMA crosses above slow SMA | opposite cross | none / ATR stop | ohlcv | TF-SMA-001 |
 | H02 | Donchian breakout | forex,equity,crypto,futures | 1h,1d | close > prior 20-bar high | close < prior 10-bar low | 10-bar channel | ohlcv | BO-DONCH-001 |
-| H03 | EMA ribbon alignment | forex,crypto,futures | 1h,4h | all EMAs ordered and price above 8 EMA | ordering breaks | below 55 EMA | ohlcv | - |
-| H04 | ATR trailing trend | equity,futures,crypto | 1d | close > 50-day high | close < highest close - 3 ATR | 3 ATR trail | ohlcv | - |
+| H03 | EMA ribbon alignment | forex,crypto,futures | 1h,4h | all EMAs ordered and price above 8 EMA | ordering breaks | below 55 EMA | ohlcv | TF-EMA-RIB-001 |
+| H04 | ATR trailing trend | equity,futures,crypto | 1d | close > 50-day high | close < highest close - 3 ATR | 3 ATR trail | ohlcv | TF-CHAND-001 |
 | H05 | Cross-asset trend portfolio | futures,forex | 1d | 12-month return > 0 per market | monthly rebalance | volatility-scaled sizing | multi | - |
 
 ## Breakout (5)
@@ -44,9 +44,9 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H16 | Opening range breakout | equity,futures | 5m,15m | close beyond opening range | session close | opposite side of range | ohlcv | BO-ORB-001 |
-| H17 | Inside-day breakout | equity,futures,forex | 1d | break of inside bar high/low | 2 days | other side of inside bar | ohlcv | - |
-| H18 | London breakout | forex | 15m | break of 00:00-07:00 UTC range | 16:00 UTC | range midpoint | ohlcv | - |
-| H19 | NR7 breakout | equity,futures,crypto | 1d | break of NR7 bar | 3 days | other side | ohlcv | - |
+| H17 | Inside-day breakout | equity,futures,forex | 1d | break of inside bar high/low | 2 days | other side of inside bar | ohlcv | BO-INSIDE-001 |
+| H18 | London breakout | forex | 15m | break of 00:00-07:00 UTC range | 16:00 UTC | range midpoint | ohlcv | BO-LDN-001 |
+| H19 | NR7 breakout | equity,futures,crypto | 1d | break of NR7 bar | 3 days | other side | ohlcv | BO-NR7-001 |
 | H20 | Gap-and-go | equity | 5m | gap > 2% and first 5m bar breaks in gap direction | session close | first bar low/high | multi | - |
 
 ## Vwap (4)
@@ -54,9 +54,9 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H21 | VWAP deviation reversion | equity,futures | 1m,5m | z(close-VWAP) < -2 | touch VWAP | z < -4 | ohlcv | VWAP-MR-001 |
-| H22 | VWAP trend pullback | equity,futures | 5m | price above VWAP all morning, touches VWAP | session close | close below VWAP - 1 ATR | ohlcv | - |
+| H22 | VWAP trend pullback | equity,futures | 5m | price above VWAP all morning, touches VWAP | session close | close below VWAP - 1 ATR | ohlcv | VWAP-PB-001 |
 | H23 | Anchored VWAP from earnings | equity | 1d | reclaim of AVWAP | close below AVWAP | AVWAP - 1 ATR | multi | - |
-| H24 | VWAP band breakout | futures,crypto | 5m | two closes beyond 2-sigma band | close back inside 1-sigma | VWAP | ohlcv | - |
+| H24 | VWAP band breakout | futures,crypto | 5m | two closes beyond 2-sigma band | close back inside 1-sigma | VWAP | ohlcv | VWAP-BAND-001 |
 
 ## Volume Profile (3)
 
@@ -80,7 +80,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H31 | Prior-low sweep reversal | forex,crypto,futures,equity | 15m,1h | low < prior 20-bar low and close back above | 5 bars | sweep low | ohlcv | LIQ-SWEEP-001 |
 | H32 | Asian range sweep (FX) | forex | 15m | sweep of Asia high/low then close inside | 16:00 UTC | sweep extreme | ohlcv | - |
-| H33 | Previous day high/low sweep | futures,equity | 5m | trade through PDH/PDL and close back | session close | sweep extreme | ohlcv | - |
+| H33 | Previous day high/low sweep | futures,equity | 5m | trade through PDH/PDL and close back | session close | sweep extreme | ohlcv | LIQ-PDHL-001 |
 | H34 | Equal highs raid | crypto,forex | 1h | two highs within 0.1 ATR swept and rejected | 6 bars | sweep extreme | ohlcv | - |
 
 ## Market Structure (3)
@@ -89,7 +89,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H35 | Break of structure with higher low | forex,crypto,futures,equity | 15m,1h | close > last swing high with HL | close < last swing low | last swing low | ohlcv | MS-BOS-001 |
 | H36 | Change of character reversal | forex,crypto | 15m | first lower low after series of HH/HL | new swing high | last swing high | ohlcv | - |
-| H37 | Fair value gap fill | forex,futures,crypto | 5m,15m | price returns into FVG in trend direction | FVG far edge broken | beyond FVG | ohlcv | - |
+| H37 | Fair value gap fill | forex,futures,crypto | 5m,15m | price returns into FVG in trend direction | FVG far edge broken | beyond FVG | ohlcv | MS-FVG-001 |
 
 ## Statistical Arbitrage (4)
 
@@ -105,7 +105,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H42 | Bollinger squeeze breakout | forex,crypto,futures,equity | 15m,1h,1d | bandwidth in bottom 10% then close outside band | cross middle band | middle band | ohlcv | VOL-SQZ-001 |
-| H43 | ATR expansion day follow-through | futures,equity | 1d | range > 2 ATR and close in top 20% | next close | bar midpoint | ohlcv | - |
+| H43 | ATR expansion day follow-through | futures,equity | 1d | range > 2 ATR and close in top 20% | next close | bar midpoint | ohlcv | VOL-ATRX-001 |
 | H44 | Volatility-regime switch | futures,forex | 1d | trade H01 when realised vol rising else H12 | regime flip | underlying stops | ohlcv | - |
 
 ## Multi Timeframe (3)
