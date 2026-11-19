@@ -79,6 +79,16 @@ def create_app(settings: Settings | None = None,
                  "code_version": e.code_version, "metrics": e.metrics,
                  "created_at": e.created_at.isoformat()} for e in rows]
 
+    @app.get("/leaderboard")
+    def get_leaderboard(asset_class: str | None = None, symbol: str | None = None,
+                        timeframe: str | None = None, category: str | None = None,
+                        s: Session = Depends(db)) -> list[dict]:
+        from apex.backtest.tournament import leaderboard
+
+        df = leaderboard(s, asset_class=asset_class, symbol=symbol, timeframe=timeframe,
+                         category=category)
+        return df.astype(object).where(df.notna(), None).to_dict(orient="records")
+
     @app.get("/research/search")
     def research_search(q: str, limit: int = Query(10, le=100),
                         s: Session = Depends(db)) -> list[dict]:

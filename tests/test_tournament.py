@@ -1,0 +1,159 @@
+import numpy as np
+import pandas as pd
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+
+from apex.api.app import create_app
+from apex.backtest.experiments import ensure_strategy_version
+from apex.backtest.tournament import (
+    Gates,
+    evaluate,
+    family_trials,
+    leaderboard,
+    run_tournament,
+    score,
+)
+from apex.cli import main as cli
+from apex.core.config import Settings
+from apex.db.models import AuditEvent, StrategyStatusChange
+from apex.db.session import make_engine, make_session_factory
+from apex.domain.instruments import by_symbol
+from apex.domain.market import Timeframe
+from apex.marketdata.base import MarketDataProvider
+from apex.marketdata.calendars import get_calendar
+from apex.marketdata.ingest import ingest_bars
+from apex.marketdata.providers.synthetic import SyntheticProvider
+from apex.strategies.base import StrategyStatus as S
+from apex.strategies.lifecycle import IllegalTransition, transition
+from apex.strategies.registry import all_strategies
+from tests.conftest import utc
+
+SMA = all_strategies()["TF-SMA-001"]
+BB = all_strategies()["MR-BB-001"]
+
+
+def test_transitions_are_audited_and_guarded(session):
+    ver = ensure_strategy_version(session, SMA())
+    with pytest.raises(IllegalTransition):
+        transition(session, ver, S.APPROVED, reason="skip")
+    for st in (S.BACKTESTING, S.VALIDATION, S.PAPER_TRADING):
+        transition(session, ver, st, reason="test")
+    with pytest.raises(IllegalTransition, match="human"):
+        transition(session, ver, S.APPROVED, reason="auto")
+    transition(session, ver, S.APPROVED, reason="reviewed", actor="jake")
+    session.commit()
+    changes = session.scalars(select(StrategyStatusChange)).all()
+    assert [c.to_status for c in changes][-1] == "approved" and changes[-1].actor == "jake"
+    assert session.scalars(select(AuditEvent)).first().action == "strategy_status"
+
+
+def _m(**kw):
+    base = {"n_trials": 4, "deflated_sharpe": 0.99, "pct_profitable_folds": 0.8,
+            "oos_max_drawdown": -0.1, "pbo": 0.1, "param_stability": 1.0,
+            "folds_detail": [{"oos": {"trades": 60}}, {"oos": {"trades": 60}}],
+            "dsr_inputs": {"sharpe_per_period": 0.15, "n_obs": 1000, "skew": 0.0,
+                           "kurtosis": 3.0, "sr_variance": 0.002}}
+    base.update(kw)
+    return base
+
+
+def test_gates():
+    ok, reasons, m = evaluate(_m(), Gates(), 4)
+    assert ok and not reasons and m["oos_trades"] == 120
+    ok, reasons, _ = evaluate(_m(deflated_sharpe=0.5, pbo=0.7, oos_max_drawdown=-0.4,
+                                 folds_detail=[]), Gates(), 4)
+    assert not ok and len(reasons) == 4
+
+
+def test_family_trials_deflate():
+    _, _, few = evaluate(_m(), Gates(), 4)
+    _, _, many = evaluate(_m(), Gates(), 5000)
+    assert many["deflated_sharpe_family"] < few["deflated_sharpe_family"]
+
+
+def test_score_ignores_raw_return():
+    a = _m(oos_total_return=0.05)
+    b = _m(oos_total_return=5.0)
+    assert score(evaluate(a, Gates(), 4)[2]) == score(evaluate(b, Gates(), 4)[2])
+
+
+class Trending(MarketDataProvider):
+    """Smooth cycles: trend-following works almost every fold (to exercise promotion)."""
+
+    name = "trend"
+
+    def supports(self, spec, timeframe):
+        return True
+
+    def _fetch(self, spec, timeframe, start, end):
+        ts = list(get_calendar(spec.calendar).expected_bars(start, end, timeframe))
+        t = np.arange(len(ts))
+        close = 100 * np.exp(0.15 * np.sin(t / 40) + 0.0002 * t)
+        rng = np.random.default_rng(0)
+        close = close * (1 + rng.normal(0, 0.001, len(t)))
+        open_ = np.concatenate([[close[0]], close[:-1]])
+        return pd.DataFrame({"ts": ts, "open": open_, "high": np.maximum(open_, close) * 1.001,
+                             "low": np.minimum(open_, close) * 0.999, "close": close,
+                             "volume": 1.0})
+
+
+def test_tournament_promotes_only_to_validation(session):
+    btc = by_symbol()["BTCUSDT"]
+    ingest_bars(session, Trending(), btc, Timeframe.D1, utc(2015, 1, 1), utc(2025, 1, 1))
+    ingest_bars(session, SyntheticProvider(), btc, Timeframe.D1, utc(2015, 1, 1), utc(2025, 1, 1))
+    session.commit()
+    lenient = Gates(min_oos_trades=10, min_dsr=0.5, min_profitable_folds=0.5, max_drawdown=0.5,
+                    max_pbo=1.0)
+    entries = run_tournament(session, [SMA()], symbols=["BTCUSDT"], timeframe=Timeframe.D1,
+                             source="trend", start=utc(2015, 1, 1), end=utc(2025, 1, 1),
+                             grids={"TF-SMA-001": {"fast": [5, 10], "slow": [30, 60]}},
+                             train_bars=1000, test_bars=365, gates=lenient)
+    session.commit()
+    assert entries[0].passed, entries[0].reasons
+    ver = ensure_strategy_version(session, SMA())
+    assert ver.status == "validation"  # never beyond, automatically
+
+    # random walk data: strict default gates must fail, strategy stays in backtesting
+    noise = run_tournament(session, [BB()], symbols=["BTCUSDT"], timeframe=Timeframe.D1,
+                           source="synthetic", start=utc(2015, 1, 1), end=utc(2025, 1, 1),
+                           train_bars=1000, test_bars=365)
+    session.commit()
+    assert not noise[0].passed and noise[0].reasons
+    assert ensure_strategy_version(session, BB()).status == "backtesting"
+    n_folds = entries[0].metrics["folds"]
+    assert family_trials(session, "TF-SMA-001") == 4 * n_folds == entries[0].metrics["n_trials"]
+
+    lb = leaderboard(session)
+    assert set(lb["strategy"]) == {"TF-SMA-001", "MR-BB-001"}
+    assert lb["simulated"].all()
+    assert len(leaderboard(session, category="mean_reversion")) == 1
+    assert leaderboard(session, asset_class="forex").empty
+
+
+def test_cli_and_api(db_url, monkeypatch, capsys):
+    from apex.core.config import get_settings
+
+    monkeypatch.setenv("APEX_DATABASE_URL", db_url)
+    get_settings.cache_clear()
+    try:
+        assert cli(["leaderboard"]) == 0
+        assert cli(["ingest", "--provider", "synthetic", "--symbol", "SPY", "--timeframe", "1d",
+                    "--start", "2018-01-01", "--end", "2025-01-01"]) == 0
+        assert cli(["tournament", "--strategies", "TF-SMA-001,MOM-TSMOM-001", "--symbols", "SPY",
+                    "--source", "synthetic", "--start", "2018-01-01", "--end", "2025-01-01",
+                    "--train-bars", "500", "--test-bars", "250"]) == 0
+        assert cli(["tournament", "--strategies", "NOPE", "--symbols", "SPY", "--source", "x",
+                    "--start", "2018-01-01", "--end", "2025-01-01", "--train-bars", "1",
+                    "--test-bars", "1"]) == 2
+        assert cli(["leaderboard", "--symbol", "SPY"]) == 0
+    finally:
+        get_settings.cache_clear()
+    out = capsys.readouterr().out
+    assert "no walk-forward results yet" in out and "TOURNAMENT" in out
+    engine = make_engine(db_url)
+    client = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                                   make_session_factory(engine)))
+    rows = client.get("/leaderboard").json()
+    assert len(rows) == 2 and all(r["simulated"] for r in rows)
+    engine.dispose()
