@@ -8,7 +8,7 @@ through it is the same code path a live paper feed uses.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 import pandas as pd
@@ -59,6 +59,16 @@ class PaperTrader:
         lot = self.spec.lot_size
         return math.copysign(math.floor(units / lot) * lot, target) if target else 0.0
 
+    def _submit(self, intent: OrderIntent, acct: AccountState, ts: datetime,
+                data_stale: bool) -> None:
+        decision = self.risk.check(intent, acct, data_stale=data_stale, now=ts)
+        if decision:
+            self.broker.submit(Order(intent.client_order_id, intent.symbol, intent.qty,
+                                     intent.stop_price))
+        else:
+            self.events.append(Event(ts, "refused", {"qty": intent.qty,
+                                                     "reasons": list(decision.reasons)}))
+
     # -- main entry point
     def on_bar(self, bar: dict, *, data_stale: bool = False) -> list[Fill]:
         ts, sym = bar["ts"], self.spec.symbol
@@ -90,11 +100,16 @@ class PaperTrader:
             return fills
         stop = bar["close"] - math.copysign(stop_dist, want) if want else None
         coid = client_order_id(self.strategy.meta.key, sym, ts, self.account)
+        if have and (want == 0 or (want > 0) != (have > 0)):
+            # Exit or reversal: close first as its own (always-allowed) reducing order, so
+            # a refused new entry can never leave the old position open.
+            close = OrderIntent(coid + "-x", sym, -have, bar["close"],
+                                self.spec.contract_multiplier, None)
+            self._submit(close, acct, ts, data_stale)
+            if not want:
+                return fills
+            acct = replace(acct, positions={**acct.positions, sym: 0.0})
+            qty = want
         intent = OrderIntent(coid, sym, qty, bar["close"], self.spec.contract_multiplier, stop)
-        decision = self.risk.check(intent, acct, data_stale=data_stale, now=ts)
-        if decision:
-            self.broker.submit(Order(coid, sym, qty, stop))
-        else:
-            self.events.append(Event(ts, "refused", {"qty": qty,
-                                                     "reasons": list(decision.reasons)}))
+        self._submit(intent, acct, ts, data_stale)
         return fills

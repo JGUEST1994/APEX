@@ -29,16 +29,25 @@ class Portfolio:
     avg_cost: dict[str, float] = field(default_factory=dict)
     realised: float = 0.0
     consecutive_losses: int = 0
+    trade_pnl: dict[str, float] = field(default_factory=dict)  # open round trip, net of costs
 
     def apply(self, f: Fill, spec: InstrumentSpec) -> None:
         m = spec.contract_multiplier
         cur = self.units.get(f.symbol, 0.0)
         new = cur + f.qty
+        open_pnl = self.trade_pnl.get(f.symbol, 0.0) - f.cost
         if cur != 0 and (cur > 0) != (f.qty > 0):  # closing (part of) a position
             closed = min(abs(f.qty), abs(cur)) * (1 if cur > 0 else -1)
             pnl = closed * (f.price - self.avg_cost[f.symbol]) * m
             self.realised += pnl
-            self.consecutive_losses = self.consecutive_losses + 1 if pnl - f.cost < 0 else 0
+            open_pnl += pnl
+            if new == 0 or (new > 0) != (cur > 0):  # round trip finished: one trade
+                self.consecutive_losses = self.consecutive_losses + 1 if open_pnl < 0 else 0
+                open_pnl = 0.0
+        if new == 0:
+            self.trade_pnl.pop(f.symbol, None)
+        else:
+            self.trade_pnl[f.symbol] = open_pnl
         if new == 0:
             self.avg_cost.pop(f.symbol, None)
         elif cur == 0 or (cur > 0) != (new > 0):

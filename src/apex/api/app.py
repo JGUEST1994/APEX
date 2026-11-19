@@ -193,6 +193,15 @@ def create_app(settings: Settings | None = None,
                           "signal_ts": o.signal_ts.isoformat()} for o in orders]
         return out
 
+    @app.get("/paper/accounts/{name}/consistency")
+    def paper_consistency(name: str, s: Session = Depends(db)) -> dict:
+        from apex.execution.consistency import compare
+
+        try:
+            return compare(s, name)
+        except KeyError as exc:
+            raise HTTPException(404, "paper account not found") from exc
+
     static = Path(__file__).parent / "static"
     app.mount("/ui", StaticFiles(directory=static, html=True), name="ui")
 

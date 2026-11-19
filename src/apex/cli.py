@@ -154,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     pk = sub.add_parser("paper-reset-kill", help="human reset of a paper account kill switch")
     pk.add_argument("--name", required=True)
     pk.add_argument("--actor", required=True, help="your name (recorded in the audit log)")
+    pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
+                        "the same strategy over the same bars (read-only)")
+    pq.add_argument("--name", required=True)
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
     sv = sub.add_parser("serve", help="run the API server")
@@ -306,6 +309,13 @@ def main(argv: list[str] | None = None) -> int:
                 verdict = "PASS" if e.passed else "fail"
                 print(f"{verdict:4} {e.score:6.3f} {e.strategy_key:14} {e.symbol:8} "
                       f"{e.timeframe:4} {'; '.join(e.reasons)[:110]}")
+        elif args.cmd == "paper-compare":
+            from apex.execution.consistency import compare
+
+            rep = compare(s, args.name)
+            for k, v in rep.items():
+                print(f"{k:24} {v}")
+            return 0 if rep.get("consistent") else 4
         elif args.cmd in ("paper-create", "paper-run", "paper-reset-kill"):
             from datetime import UTC, datetime
 

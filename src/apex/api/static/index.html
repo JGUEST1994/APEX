@@ -63,7 +63,8 @@
     <div class="card"><p class="muted">Practice (paper) accounts trade on simulated fills only.
       The kill switch can only be reset from the command line by a named person.</p>
       <table id="paccts"></table></div>
-    <div class="card"><h3 id="pname">Select an account</h3><table id="pfills"></table></div>
+    <div class="card"><h3 id="pname">Select an account</h3>
+      <p id="pcheck" class="muted"></p><table id="pfills"></table></div>
   </section>
   <section id="research">
     <div class="card"><input id="q" placeholder="Search the research library" size="40">
@@ -183,6 +184,14 @@ const LOAD = {
     const accts = await get("/paper/accounts");
     const open = async (name) => { const a = await get("/paper/accounts/" + encodeURIComponent(name));
       $("pname").textContent = `${a.name} · recent simulated fills`;
+      $("pcheck").textContent = "Checking against the backtest…";
+      get("/paper/accounts/" + encodeURIComponent(name) + "/consistency").then((c) => {
+        const p = $("pcheck"); p.replaceChildren();
+        if (c.consistent === null || c.consistent === undefined) { p.textContent = (c.notes || []).join(" "); return; }
+        p.appendChild(el("span", c.consistent ? "matches backtest" : "differs from backtest", c.consistent ? "pass" : "fail"));
+        p.appendChild(el("span", ` · same direction on ${pct(c.direction_agreement)} of ${c.bars} bars` +
+          ` · ${c.paper_changes} of ${c.backtest_changes} position changes followed. ` + (c.notes || []).join(" ")));
+      }).catch((e) => { $("pcheck").textContent = "Comparison unavailable."; console.error(e); });
       table($("pfills"), [["Time (UTC)", (r) => r.ts.slice(0, 19).replace("T", " ")], ["Symbol", (r) => r.symbol],
         ["Side", (r) => r.qty > 0 ? "buy" : "sell"], ["Units", (r) => fmt(Math.abs(r.qty), 4)],
         ["Price", (r) => fmt(r.price, 4)], ["Costs", (r) => fmt(r.cost)]], a.fills); };
