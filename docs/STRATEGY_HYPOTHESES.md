@@ -37,7 +37,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | H02 | Donchian breakout | forex,equity,crypto,futures | 1h,1d | close > prior 20-bar high | close < prior 10-bar low | 10-bar channel | ohlcv | BO-DONCH-001 |
 | H03 | EMA ribbon alignment | forex,crypto,futures | 1h,4h | all EMAs ordered and price above 8 EMA | ordering breaks | below 55 EMA | ohlcv | TF-EMA-RIB-001 |
 | H04 | ATR trailing trend | equity,futures,crypto | 1d | close > 50-day high | close < highest close - 3 ATR | 3 ATR trail | ohlcv | TF-CHAND-001 |
-| H05 | Cross-asset trend portfolio | futures,forex | 1d | 12-month return > 0 per market | monthly rebalance | volatility-scaled sizing | multi | - |
+| H05 | Cross-asset trend portfolio | futures,forex | 1d | 12-month return > 0 per market | monthly rebalance | volatility-scaled sizing | multi | TF-XASSET-001 |
 
 ## Breakout (5)
 

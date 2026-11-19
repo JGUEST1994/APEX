@@ -1,98 +1,119 @@
-"""Phase 10 read-only dashboard: static page, new endpoints, and safe rendering."""
+"""Multi-instrument strategies: portfolio backtester and the pairs strategy."""
 
-from pathlib import Path
+import numpy as np
+import pandas as pd
+import pytest
 
-from fastapi.testclient import TestClient
-
-from apex.api.app import create_app
-from apex.core.config import Settings
-from apex.db.session import make_engine, make_session_factory
+from apex.backtest.engine import BacktestConfig, run_backtest
+from apex.backtest.portfolio import run_portfolio_backtest
 from apex.domain.instruments import by_symbol
-from apex.domain.market import Timeframe
-from apex.marketdata.ingest import ingest_bars
-from apex.marketdata.providers.synthetic import SyntheticProvider
+from apex.strategies.multi import MultiStrategy, PairsZScore, align, all_multi_strategies
 from apex.strategies.registry import all_strategies
-from tests.conftest import utc
 
-STATIC = Path(__file__).resolve().parent.parent / "src" / "apex" / "api" / "static"
-
-
-def test_dashboard_and_endpoints(db_url, session):
-    ingest_bars(session, SyntheticProvider(), by_symbol()["SPY"], Timeframe.D1,
-                utc(2024, 1, 1), utc(2024, 3, 1))
-    session.commit()
-    engine = make_engine(db_url)
-    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
-                              make_session_factory(engine)))
-    r = c.get("/", follow_redirects=False)
-    assert r.status_code in (302, 307) and r.headers["location"] == "/ui/"
-    page = c.get("/ui/")
-    assert page.status_code == 200 and "SIMULATED RESULTS ONLY" in page.text
-    ds = c.get("/datasets").json()
-    assert ds == [{"symbol": "SPY", "timeframe": "1d", "source": "synthetic", "bars": ds[0]["bars"],
-                   "first": ds[0]["first"], "last": ds[0]["last"]}] and ds[0]["bars"] > 30
-    st = c.get("/strategies").json()
-    from apex.strategies.multi import all_multi_strategies
-    assert {s["key"] for s in st} == set(all_strategies()) | set(all_multi_strategies())
-    assert {s["key"]: s["instruments"] for s in st}["STAT-PAIR-001"] == 2
-    assert all(s["status"] == "experimental" for s in st)
-    engine.dispose()
+SYMS = by_symbol()
 
 
-def test_dashboard_never_injects_html():
-    html = (STATIC / "index.html").read_text()
-    assert "innerHTML" not in html.replace("never innerHTML", "")
-    assert "<script src=" not in html  # no third-party scripts
+def _bars(close, start="2020-01-01", freq="1D"):
+    close = np.asarray(close, float)
+    open_ = np.concatenate([[close[0]], close[:-1]])
+    return pd.DataFrame({"ts": pd.date_range(start, periods=len(close), freq=freq, tz="UTC"),
+                         "open": open_, "high": np.maximum(open_, close),
+                         "low": np.minimum(open_, close), "close": close, "volume": 1.0})
 
 
-def test_paper_endpoints_are_read_only(db_url, session):
-    from datetime import UTC, datetime
-
-    from apex.execution import store
-
-    ingest_bars(session, SyntheticProvider(annual_vol=0.4), by_symbol()["SPY"], Timeframe.D1,
-                utc(2021, 1, 1), utc(2023, 1, 1))
-    store.create_account(session, "demo", strategy_key="TF-SMA-001", symbol="SPY",
-                         timeframe="1d", source="synthetic", params={"fast": 10, "slow": 40})
-    session.commit()
-    store.run_account(session, "demo", now=datetime(2026, 1, 1, tzinfo=UTC))
-    engine = make_engine(db_url)
-    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
-                              make_session_factory(engine)))
-    accts = c.get("/paper/accounts").json()
-    assert [a["name"] for a in accts] == ["demo"] and accts[0]["simulated"] is True
-    assert accts[0]["kill_switch"]["engaged"] is False
-    one = c.get("/paper/accounts/demo").json()
-    assert one["fills"] and one["orders"] and one["fills"][0]["ts"] >= one["fills"][-1]["ts"]
-    assert c.get("/paper/accounts/nope").status_code == 404
-    cmp = c.get("/paper/accounts/demo/consistency").json()
-    assert cmp["consistent"] is True and cmp["direction_agreement"] == 1.0
-    assert c.get("/paper/accounts/nope/consistency").status_code == 404
-    # nothing on the API can change an account or reset the kill switch
-    for path in ("/paper/accounts", "/paper/accounts/demo", "/paper/accounts/demo/consistency"):
-        assert c.post(path).status_code == 405 and c.delete(path).status_code == 405
-    assert not [r for r in c.app.routes if "reset" in getattr(r, "path", "")]
+def _pair(seed=0, n=1500, coint=True):
+    rng = np.random.default_rng(seed)
+    lx = np.log(100) + np.cumsum(rng.normal(0, 0.01, n))
+    if coint:
+        ou = np.zeros(n)
+        for t in range(1, n):
+            ou[t] = 0.9 * ou[t - 1] + rng.normal(0, 0.006)
+        ly = 0.5 + 1.2 * lx + ou
+    else:
+        ly = np.log(100) + np.cumsum(rng.normal(0, 0.01, n))
+    return {"ETHUSDT": _bars(np.exp(ly)), "BTCUSDT": _bars(np.exp(lx))}
 
 
-def test_dashboard_brand_assets_and_banner(db_url):
-    engine = make_engine(db_url)
-    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
-                              make_session_factory(engine)))
-    page = c.get("/ui/").text
-    # the safety banner stays the first thing in the body
-    assert page.index('id="banner"') < page.index('class="frame"')
-    for path in ("apex.css", "brand/favicon.svg", "brand/favicon.ico", "brand/apple-touch-icon.png"):
-        assert path in page
-        assert c.get("/ui/" + path).status_code == 200, path
-    engine.dispose()
+def test_pairs_is_registered_separately_and_refuses_single_use():
+    assert "STAT-PAIR-001" in all_multi_strategies()
+    assert "STAT-PAIR-001" not in all_strategies()
+    with pytest.raises(TypeError):
+        PairsZScore().target_position(_bars([1, 2, 3]), PairsZScore().params())
 
 
-def test_dashboard_has_empty_and_error_states():
-    html = (STATIC / "index.html").read_text()
-    # every table gets a next-step message when empty, and a failed load explains itself
-    for table_id in ("runs", "lb", "exps", "paccts", "hits"):
-        assert f'id="{table_id}"' in html and f"  {table_id}: " in html
-    assert "This page couldn't load." in html and 'id="glance"' in html
+def test_pairs_weights_are_causal_and_hedged():
+    bars = _pair()
+    s = PairsZScore()
+    p = s.params()
+    full = s.target_weights(bars, p)
+    part = s.target_weights({k: v.iloc[:900].copy() for k, v in bars.items()}, p)
+    pd.testing.assert_frame_equal(full.iloc[:900], part)
+    on = full[(full != 0).any(axis=1)]
+    assert len(on) > 50
+    assert (np.sign(on["ETHUSDT"]) == -np.sign(on["BTCUSDT"])).all()  # always hedged
+    assert (on.abs().sum(axis=1) <= p["gross"] + 1e-9).all()
+
+
+def test_pairs_profits_on_cointegrated_pair_not_on_unrelated_ones():
+    specs = {s: SYMS[s] for s in ("ETHUSDT", "BTCUSDT")}
+    cheap = BacktestConfig(cost_multiplier=0.2)
+    good = [run_portfolio_backtest(_pair(seed), PairsZScore(), specs, config=cheap).metrics
+            for seed in range(4)]
+    assert all(m["trades"] >= 20 and m["total_return"] > 0.1 and m["sharpe"] > 1.5
+               for m in good)
+    bad = [run_portfolio_backtest(_pair(seed, coint=False), PairsZScore(), specs,
+                                  config=cheap).metrics["sharpe"] for seed in range(4)]
+    assert np.mean(bad) < 1.0  # unrelated random walks: no real edge
+
+
+class _OneLeg(MultiStrategy):
+    legs = 1
+    meta = PairsZScore.meta.__class__(**{**PairsZScore.meta.__dict__, "key": "T-ONE",
+                                        "default_params": {}})
+
+    def target_weights(self, bars, params):
+        (sym, df), = bars.items()
+        w = np.where(df["close"].pct_change(5) > 0, 1.0, -1.0)
+        return pd.DataFrame({sym: w}, index=df.index)
+
+
+class _Single(all_strategies()["TF-SMA-001"]):  # same rule as _OneLeg, single-asset API
+    def target_position(self, bars, params):
+        return pd.Series(np.where(bars["close"].pct_change(5) > 0, 1.0, -1.0),
+                         index=bars.index)
+
+
+def test_portfolio_engine_matches_single_engine_for_one_leg():
+    bars = _bars(100 * np.exp(np.cumsum(np.random.default_rng(2).normal(0, 0.01, 400))))
+    spy = SYMS["SPY"]
+    a = run_portfolio_backtest({"SPY": bars}, _OneLeg(), {"SPY": spy})
+    b = run_backtest(bars, _Single(), spy)
+    assert np.allclose(a.equity.to_numpy(), b.equity.to_numpy())
+    assert a.total_costs == pytest.approx(b.total_costs)
+    assert len(a.trades) == len(b.trades)
+    assert [round(t.pnl, 6) for t in a.trades] == [round(t.pnl, 6) for t in b.trades]
+
+
+def test_fills_at_next_open_and_alignment():
+    bars = _pair(n=400)
+    bars["BTCUSDT"] = bars["BTCUSDT"].drop(index=[10, 11]).reset_index(drop=True)
+    al = align(bars)
+    assert len(al["ETHUSDT"]) == len(al["BTCUSDT"]) == 398
+    res = run_portfolio_backtest(bars, PairsZScore(), {s: SYMS[s] for s in bars})
+    w = PairsZScore().target_weights(al, PairsZScore().params())
+    ts = pd.DatetimeIndex(al["ETHUSDT"]["ts"])
+    changed = [i for i in range(1, len(w)) if not w.iloc[i].equals(w.iloc[i - 1])]
+    first = res.fills["ts"].iloc[0]
+    assert first == ts[changed[0] + 1]  # decided at the close, filled at the next open
+    opens = al["ETHUSDT"].set_index("ts")["open"]
+    eth = res.fills[res.fills["symbol"] == "ETHUSDT"]
+    assert (eth["price"].to_numpy() == opens.loc[eth["ts"]].to_numpy()).all()
+
+
+def test_wrong_leg_count_rejected():
+    with pytest.raises(ValueError):
+        run_portfolio_backtest({"SPY": _bars(range(1, 50))}, PairsZScore(),
+                               {"SPY": SYMS["SPY"]})
 
 
 def test_cli_backtest_pair_records_experiment(db_url, monkeypatch, capsys):

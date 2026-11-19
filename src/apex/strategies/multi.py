@@ -21,7 +21,14 @@ _MULTI: dict[str, type[MultiStrategy]] = {}
 
 
 class MultiStrategy(Strategy):
-    legs: int = 2  # number of instruments, in the order the caller passes them
+    legs: int | None = 2  # instruments, in the order the caller passes them; None = 2 or more
+
+    @classmethod
+    def check_legs(cls, n: int) -> None:
+        ok = n >= 2 if cls.legs is None else n == cls.legs
+        if not ok:
+            want = "2 or more" if cls.legs is None else str(cls.legs)
+            raise ValueError(f"{cls.meta.key} needs {want} instruments, got {n}")
 
     def target_position(self, bars: pd.DataFrame, params: dict[str, Any]) -> pd.Series:
         raise TypeError(f"{self.meta.key} trades several instruments; use target_weights")
@@ -120,3 +127,50 @@ class PairsZScore(MultiStrategy):
                 k = g / (1 + abs(b0))
                 wy[t], wx[t] = side * k, -side * k * b0
         return pd.DataFrame({ys: wy, xs: wx}, index=yb.index)
+
+
+@register_multi
+class CrossAssetTrend(MultiStrategy):
+    """Diversified time-series trend across several markets, inverse-volatility weighted."""
+
+    legs = None
+    meta = StrategyMeta(
+        key="TF-XASSET-001", version="1.0.0", name="Cross-asset trend portfolio",
+        category="trend_following",
+        description="Holds each market long or short by the sign of its trailing return and "
+                    "sizes legs by inverse volatility so quiet and wild markets carry similar "
+                    "risk. Rebalanced on a fixed schedule. Hypothesis H05.",
+        entry_rules="at each rebalance: long if lookback-bar return > 0, short if < 0 "
+                    "(flat if long_only and the return is negative)",
+        exit_rules="sign of the trailing return flips at a rebalance",
+        stop_loss="none (diversification and volatility scaling instead)",
+        take_profit="none",
+        position_sizing="weights proportional to 1 / realised volatility, scaled to gross; "
+                        "held unchanged between rebalances",
+        asset_classes=(AssetClass.FUTURES, AssetClass.FOREX, AssetClass.EQUITY,
+                       AssetClass.CRYPTO),
+        timeframes=(Timeframe.D1,),
+        default_params={"lookback": 120, "vol_window": 60, "rebalance": 21, "gross": 1.0,
+                        "long_only": False},
+    )
+
+    def target_weights(self, bars: dict[str, pd.DataFrame], params: dict[str, Any]
+                       ) -> pd.DataFrame:
+        syms = list(bars)
+        close = pd.DataFrame({s: bars[s]["close"].to_numpy(float) for s in syms})
+        lb, vw, rb = int(params["lookback"]), int(params["vol_window"]), int(params["rebalance"])
+        mom = (close / close.shift(lb) - 1).to_numpy()
+        vol = np.log(close).diff().rolling(vw).std().to_numpy()
+        n = len(close)
+        w = np.zeros((n, len(syms)))
+        cur = np.zeros(len(syms))
+        for t in range(n):
+            if t % max(rb, 1) == 0:  # fixed calendar of rebalances, independent of later bars
+                sig = np.sign(np.nan_to_num(mom[t]))
+                if params["long_only"]:
+                    sig = np.clip(sig, 0, None)
+                inv = np.where(np.isfinite(vol[t]) & (vol[t] > 0), 1 / vol[t], 0.0) * (sig != 0)
+                tot = inv.sum()
+                cur = sig * inv / tot * params["gross"] if tot > 0 else np.zeros(len(syms))
+            w[t] = cur
+        return pd.DataFrame(w, columns=syms, index=next(iter(bars.values())).index)

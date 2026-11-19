@@ -467,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
 
             for key, cls in sorted({**all_strategies(), **all_multi_strategies()}.items()):
                 m = cls.meta
-                legs = f" [{cls.legs} instruments]" if hasattr(cls, "legs") else ""
+                legs = (f" [{cls.legs or '2+'} instruments]" if hasattr(cls, "legs") else "")
                 print(f"{key:14} v{m.version:7} {m.category:22} {m.name}{legs}")
         elif args.cmd == "backtest":
             import json
