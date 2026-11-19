@@ -26,6 +26,18 @@ The API is published on `127.0.0.1` only. Expose it remotely through a TLS rever
 
 On Windows use Task Scheduler with the same command.
 
+### Paper trading (simulated only)
+
+Paper commands refuse to run unless `APEX_TRADING_MODE=paper`. There is no live mode.
+
+```
+apex paper-create --name sma-spy --strategy TF-SMA-001 --symbol SPY --timeframe 1d --source alpaca
+# after each data update (cron-safe: only new stored bars are processed, each bar is one transaction)
+apex paper-run --name sma-spy
+# a tripped kill switch or a failed reconciliation halts the account until a person resets it
+apex paper-reset-kill --name sma-spy --actor jake
+```
+
 ## Restart behaviour
 
 Containers use `restart: unless-stopped`; the API applies migrations on start. When trading arrives (Phase 9) the engine will start in a halted, reconciling state and will not resume trading automatically if account state is uncertain.

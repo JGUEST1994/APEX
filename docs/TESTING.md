@@ -25,6 +25,7 @@ The PostgreSQL test database is **wiped** (schema dropped) by each DB test, so p
 | Regimes | HMM recovers known volatility regimes out of sample, filtered probabilities causal, rule regimes causal, stability metrics, regime-filtered strategy wrapper, CLI |
 | ML | triple-barrier labels, purged/embargoed folds, logistic fit + JSON round trip, causal features, walk-forward trains only on finished labels, chance-level on noise, recovers a planted signal |
 | Risk & paper | limits only tighten, every pre-trade check, reducing orders allowed, kill switch trips and needs a human reset, order state machine, idempotent paper broker, P&L and loss streaks, paper fills at next open, flatten after kill switch, risk package independence |
+| Paper persistence | restart mid-run gives identical fills, no duplicate orders on replay, tampered positions halt the account until human reset, kill switch survives restart, paper commands refuse research mode |
 | Architecture | core packages never import `apex.ai` |
 | AI | disabled by default and fails safely |
 | API | health, instruments, bars, 404, ingestion runs |

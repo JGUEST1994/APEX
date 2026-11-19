@@ -140,6 +140,20 @@ def main(argv: list[str] | None = None) -> int:
     rg.add_argument("--start", required=True, type=_dt)
     rg.add_argument("--end", required=True, type=_dt)
     rg.add_argument("--train-frac", type=float, default=0.5)
+    pc = sub.add_parser("paper-create", help="create a simulated paper account")
+    pc.add_argument("--name", required=True)
+    pc.add_argument("--strategy", required=True)
+    pc.add_argument("--symbol", required=True)
+    pc.add_argument("--timeframe", default="1d")
+    pc.add_argument("--source", required=True)
+    pc.add_argument("--capital", type=float, default=100_000.0)
+    pr = sub.add_parser("paper-run", help="process new stored bars for a paper account "
+                        "(restart-safe; run from cron or a scheduler)")
+    pr.add_argument("--name", required=True)
+    pr.add_argument("--end", type=_dt)
+    pk = sub.add_parser("paper-reset-kill", help="human reset of a paper account kill switch")
+    pk.add_argument("--name", required=True)
+    pk.add_argument("--actor", required=True, help="your name (recorded in the audit log)")
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
     sv = sub.add_parser("serve", help="run the API server")
@@ -292,6 +306,33 @@ def main(argv: list[str] | None = None) -> int:
                 verdict = "PASS" if e.passed else "fail"
                 print(f"{verdict:4} {e.score:6.3f} {e.strategy_key:14} {e.symbol:8} "
                       f"{e.timeframe:4} {'; '.join(e.reasons)[:110]}")
+        elif args.cmd in ("paper-create", "paper-run", "paper-reset-kill"):
+            from datetime import UTC, datetime
+
+            from apex.core.config import TradingMode
+            from apex.execution import store
+
+            if settings.trading_mode is not TradingMode.PAPER:
+                print("paper commands need APEX_TRADING_MODE=paper", file=sys.stderr)
+                return 2
+            now = datetime.now(UTC)
+            if args.cmd == "paper-create":
+                store.create_account(s, args.name, strategy_key=args.strategy,
+                                     symbol=args.symbol, timeframe=args.timeframe,
+                                     source=args.source, capital=args.capital)
+                s.commit()
+                print(f"created paper account {args.name} (SIMULATED)")
+            elif args.cmd == "paper-run":
+                try:
+                    out = store.run_account(s, args.name, now=now, end=args.end)
+                except store.AccountHalted as exc:
+                    print(f"HALTED: {exc}", file=sys.stderr)
+                    return 3
+                print("PAPER (SIMULATED) " + " ".join(f"{k}={v}" for k, v in out.items()))
+            else:
+                store.reset_kill_switch(s, args.name, args.actor, now)
+                s.commit()
+                print(f"kill switch reset by {args.actor}")
         elif args.cmd == "regimes":
             from apex.domain.market import Timeframe
             from apex.marketdata.repository import get_instrument, load_bars

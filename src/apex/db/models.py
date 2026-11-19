@@ -228,3 +228,75 @@ class AuditEvent(Base):
     action: Mapped[str] = mapped_column(String(64))
     target: Mapped[str] = mapped_column(String(256), default="")
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+# --------------------------------------------------------------------------- paper trading
+class PaperAccount(Base):
+    """One simulated account running one strategy on one instrument (Phase 9)."""
+
+    __tablename__ = "paper_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True)
+    strategy_key: Mapped[str] = mapped_column(String(64))
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    symbol: Mapped[str] = mapped_column(String(32))
+    timeframe: Mapped[str] = mapped_column(String(8))
+    source: Mapped[str] = mapped_column(String(64))
+    limits: Mapped[dict] = mapped_column(JSON, default=dict)
+    initial_capital: Mapped[float] = mapped_column(Float)
+    cash: Mapped[float] = mapped_column(Float)
+    realised: Mapped[float] = mapped_column(Float, default=0.0)
+    consecutive_losses: Mapped[int] = mapped_column(Integer, default=0)
+    peak_equity: Mapped[float] = mapped_column(Float)
+    day_start_equity: Mapped[float] = mapped_column(Float)
+    day: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    last_bar_ts: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # running|halted
+    kill_engaged: Mapped[bool] = mapped_column(Boolean, default=False)
+    kill_reason: Mapped[str] = mapped_column(String(256), default="")
+    kill_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    kill_by: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class PaperOrder(Base):
+    __tablename__ = "paper_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("paper_accounts.id", ondelete="CASCADE"),
+                                            index=True)
+    client_order_id: Mapped[str] = mapped_column(String(64), unique=True)
+    symbol: Mapped[str] = mapped_column(String(32))
+    qty: Mapped[float] = mapped_column(Float)
+    stop_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20))
+    filled_qty: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_price: Mapped[float] = mapped_column(Float, default=0.0)
+    reason: Mapped[str] = mapped_column(String(256), default="")
+    signal_ts: Mapped[datetime] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class PaperFill(Base):
+    __tablename__ = "paper_fills"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("paper_accounts.id", ondelete="CASCADE"),
+                                            index=True)
+    client_order_id: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32))
+    qty: Mapped[float] = mapped_column(Float)
+    price: Mapped[float] = mapped_column(Float)
+    cost: Mapped[float] = mapped_column(Float)
+    ts: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class PaperPosition(Base):
+    __tablename__ = "paper_positions"
+
+    account_id: Mapped[int] = mapped_column(ForeignKey("paper_accounts.id", ondelete="CASCADE"),
+                                            primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(32), primary_key=True)
+    units: Mapped[float] = mapped_column(Float)
+    avg_cost: Mapped[float] = mapped_column(Float, default=0.0)
