@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from apex import __version__
 from apex.core.config import Settings, get_settings
 from apex.core.errors import UnknownInstrumentError
-from apex.db.models import IngestionRun, Instrument, ResearchDocument
+from apex.db.models import Experiment, IngestionRun, Instrument, ResearchDocument
 from apex.db.session import make_engine, make_session_factory
 from apex.domain.market import Timeframe
 from apex.marketdata.repository import get_instrument, load_bars
@@ -70,6 +70,14 @@ def create_app(settings: Settings | None = None,
                  "timeframe": r.timeframe, "status": r.status, "rows_received": r.rows_received,
                  "rows_stored": r.rows_stored, "content_sha256": r.content_sha256,
                  "started_at": r.started_at.isoformat()} for r in rows]
+
+    @app.get("/experiments")
+    def experiments(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
+        rows = s.scalars(select(Experiment).order_by(Experiment.id.desc()).limit(limit))
+        return [{"id": e.id, "strategy_version_id": e.strategy_version_id, "kind": e.kind,
+                 "simulated": True, "params": e.params, "data_manifest": e.data_manifest,
+                 "code_version": e.code_version, "metrics": e.metrics,
+                 "created_at": e.created_at.isoformat()} for e in rows]
 
     @app.get("/research/search")
     def research_search(q: str, limit: int = Query(10, le=100),

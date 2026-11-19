@@ -1,6 +1,6 @@
 # APEX project status
 
-Last updated: 2026-11-19. Current phase: **Phase 2 complete → next: Phase 5 core backtester (to complete milestone 1), then Phase 3.**
+Last updated: 2026-11-19. Current phase: **Phases 1, 2 and 5-core complete (milestone 1 reached) → next: Phase 3 data, Phase 4 strategy library, Phase 5 validation.**
 Update this file at the end of every working session so work can continue from any tool.
 
 ## Milestone 1 target (spec Section 21)
@@ -12,17 +12,18 @@ Update this file at the end of every working session so work can continue from a
 | Collecting market data | ✅ Historical ingestion with validation, idempotent storage and data versioning. Providers: synthetic, CSV, Binance (mock-tested only) |
 | Storing research | ✅ Import of txt/md/html/pdf/csv/vtt/srt, concept/formula/rule extraction, local embeddings, hybrid BM25 + vector search |
 | Developing strategies | 🟡 Interface, lifecycle, plugin registry, one reference strategy. Hypothesis library is Phase 4 |
-| Running historical backtests | ❌ Phase 5. Schema (`experiments`) and data hashing are in place for it |
+| Running historical backtests | ✅ Event-driven backtester with costs, latency, metrics; every run recorded as a reproducible experiment. Walk-forward / Monte Carlo / DSR still to come |
 
 ## Implemented and tested
 
-Tests last run: 2026-11-19, `ruff check` clean, **87 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
+Tests last run: 2026-11-19, `ruff check` clean, **99 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
 
 - `apex.core`: env config, live trading impossible to enable, secret redaction in logs, injectable clock.
 - `apex.domain`: Bar, Timeframe, InstrumentSpec, CostModel; 22-instrument default universe (FX majors, US ETFs/stocks, BTC/ETH, ES/MES/NQ/MNQ).
 - `apex.db`: 12 tables, Alembic migrations `0001` (schema) and `0002` (pgvector, no-op when unavailable), tested upgrade/downgrade on both engines.
 - `apex.marketdata`: provider interface + normalisation; calendars (FX 24x5, CME Globex with daily halt, NYSE RTH with computed holidays, crypto 24x7); validation (NaN, non-positive, OHLC consistency, duplicates/conflicts, misalignment, out-of-session, gaps, spikes) and staleness check; repository with content hashing; ingestion pipeline that records runs and issues.
 - `apex.research` (Phase 2): file extraction (`extract.py`: text/markdown, HTML with metadata, PDF text layer + metadata via pypdf, CSV dataset summaries, VTT/SRT transcripts), deterministic extraction of concepts, risk techniques, formulas and if/then trading rules stored as untested hypotheses (`concepts.py`), local embeddings (`embeddings.py`: dependency-free hashing embedder by default, sentence-transformers optional), hybrid BM25 + cosine search, concept and formula lookup, licence note required on import (`library.py`). Migration `0003` adds portable chunk vectors.
+- `apex.backtest` (Phase 5 core): bar-based event-driven engine (`engine.py`) that fills at the next bar's open (configurable latency, never same-bar), sizes by equity x leverage rounded to lot size, trades only on target changes, charges commission/spread/slippage/funding from the instrument `CostModel` with a stress multiplier; metrics (`metrics.py`): total return, CAGR, volatility, Sharpe, Sortino, max drawdown, Calmar, win rate, profit factor, expectancy, average win/loss, max consecutive losses, trades/year, exposure, % positive months, costs; reproducible experiments (`experiments.py`) recording data SHA-256, git commit, full params and config, and registering strategy versions with a code hash (refuses to reuse a version number after the strategy code changes). CLI `apex backtest`, `apex strategies`; API `/experiments` (all flagged simulated). Hand-calculated reference tests for fills, P&L, costs, flips, futures multipliers.
 - Architecture test: core packages may not import `apex.ai` (AST scan in `tests/test_architecture.py`).
 - `apex.strategies`: interface, 7-state lifecycle with transition rules, entry-point plugin registry, generic no-look-ahead test.
 - `apex.ai`: optional provider interface, disabled by default.
@@ -43,15 +44,16 @@ Tests last run: 2026-11-19, `ruff check` clean, **87 passed**, with database tes
 - Scanned PDFs (no text layer) are rejected: OCR not supported yet.
 - YouTube: APEX imports transcript files the operator obtained through an authorised route; it does not fetch from YouTube. An official-API fetcher (YouTube Data API captions for channels you own, or platform exports) is a later addition.
 - No authentication on the API yet: keep it on localhost.
+- Backtester does not yet model: margin calls, partial fills, intrabar stop/limit orders, market impact beyond bps slippage, futures roll. Positions open at the end are marked at the last close and counted as a trade (`closed_at_end`).
+- Reported Sharpe etc. are raw; multiple-testing adjustment (Deflated Sharpe, PBO) arrives with Phase 5 validation.
 - Daily bars use 00:00 UTC of the session date as `ts`; providers with other conventions must be mapped.
 
 ## Next steps (in order)
 
-1. Phase 5 core (pulled forward to complete milestone 1): event-driven backtester with cost model, metrics, experiment recording.
-2. Phase 3: scheduler for incremental ingestion; Databento (futures), Alpaca or Polygon/Massive (equities), Dukascopy (FX), Kraken (crypto) adapters; resampling 1m → higher timeframes; multi-source reconciliation; CME/FX holiday tables.
-3. Phase 4: write the 50 strategy hypotheses as specs; implement the first ~10.
-4. Phase 5 remainder: walk-forward, Monte Carlo, sensitivity, DSR/PBO.
-5. pip-audit in CI.
+1. Phase 3: scheduler for incremental ingestion; Databento (futures), Alpaca or Polygon/Massive (equities), Dukascopy (FX), Kraken (crypto) adapters; resampling 1m → higher timeframes; multi-source reconciliation; CME/FX holiday tables.
+2. Phase 4: write the 50 strategy hypotheses as specs; implement the first ~10.
+3. Phase 5 remainder: walk-forward, Monte Carlo, sensitivity, DSR/PBO.
+4. pip-audit in CI.
 
 ## Decisions needed from Jake
 

@@ -17,7 +17,9 @@ The PostgreSQL test database is **wiped** (schema dropped) by each DB test, so p
 | Market data | normalisation, synthetic determinism, CSV provider, Binance pagination and errors (mocked HTTP), validation of NaN / non-positive / OHLC / duplicates / conflicts / misalignment / gaps / spikes, staleness |
 | Database | migrations create schema, full downgrade/upgrade, instrument round-trip, idempotent ingestion with stable content hash, quality issues recorded, failures recorded, batching above SQLite parameter limits |
 | Strategies | lifecycle transitions, no look-ahead for every registered strategy, parameter validation |
-| Research | chunking, dedupe by hash, keyword search |
+| Research | extraction (txt/md/html/pdf/csv/vtt/srt), concept/formula/rule extraction, embeddings, hybrid search, dedupe, licence note enforcement, API |
+| Backtesting | hand-calculated fills and P&L, short/flip with costs, latency, futures multiplier and lot rounding, cost stress, determinism, metric helpers, experiment recording and reproducibility, CLI + API |
+| Architecture | core packages never import `apex.ai` |
 | AI | disabled by default and fails safely |
 | API | health, instruments, bars, 404, ingestion runs |
 
