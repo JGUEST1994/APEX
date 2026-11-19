@@ -69,7 +69,7 @@ HYPOTHESES: list[Hypothesis] = [
     H("H07", "Cross-sectional momentum", "momentum", "equity,crypto", "1d",
       "Recent winners keep outperforming losers over 3-12 months.",
       "long top decile of 12-1 month return", "monthly rebalance", "portfolio-level DD stop",
-      "none", "any", data="multi"),
+      "none", "any", data="multi", implemented="MOM-XSEC-001"),
     H("H08", "Intraday momentum (first half hour)", "momentum", "equity,futures", "30m",
       "The first 30-minute return predicts the last 30-minute return (Gao et al.).",
       "sign of first-30m return at 15:30 ET", "close", "none", "close", "high volatility days"),
