@@ -47,7 +47,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | H17 | Inside-day breakout | equity,futures,forex | 1d | break of inside bar high/low | 2 days | other side of inside bar | ohlcv | BO-INSIDE-001 |
 | H18 | London breakout | forex | 15m | break of 00:00-07:00 UTC range | 16:00 UTC | range midpoint | ohlcv | BO-LDN-001 |
 | H19 | NR7 breakout | equity,futures,crypto | 1d | break of NR7 bar | 3 days | other side | ohlcv | BO-NR7-001 |
-| H20 | Gap-and-go | equity | 5m | gap > 2% and first 5m bar breaks in gap direction | session close | first bar low/high | multi | - |
+| H20 | Gap-and-go | equity | 5m | gap > 2% and first 5m bar breaks in gap direction | session close | first bar low/high | multi | BO-GAP-001 |
 
 ## Vwap (4)
 

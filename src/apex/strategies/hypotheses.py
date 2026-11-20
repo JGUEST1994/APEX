@@ -125,7 +125,7 @@ HYPOTHESES: list[Hypothesis] = [
     H("H20", "Gap-and-go", "breakout", "equity", "5m",
       "Large opening gaps on volume continue in the gap direction.",
       "gap > 2% and first 5m bar breaks in gap direction", "session close",
-      "first bar low/high", "2R", "news days", data="multi"),
+      "first bar low/high", "2R", "news days", data="multi", implemented="BO-GAP-001"),
     # --- VWAP
     H("H21", "VWAP deviation reversion", "vwap", "equity,futures", "1m,5m",
       "Extreme deviations from session VWAP revert intraday.", "z(close-VWAP) < -2",
