@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from apex.backtest.validation import (
+    _segment,
     deflated_sharpe,
     expected_max_sharpe,
     monte_carlo_trades,
@@ -94,6 +95,21 @@ def test_walk_forward(daily):
     again = walk_forward(daily, strat, SPY, {"fast": [10, 20], "slow": [50, 100]},
                          train_bars=750, test_bars=250)
     assert again.summary == s
+
+
+@pytest.mark.parametrize("key", ["TF-SMA-001", "MR-IBS-001", "VOL-SWITCH-001"])
+def test_unseen_windows_match_replaying_all_earlier_history(daily, key):
+    """Walk-forward works the signal out once; each unseen window must come out exactly as
+    if every earlier bar had been replayed with the strategy held flat (the old, slow way)."""
+    strat = all_strategies()[key]()
+    wf = walk_forward(daily, strat, SPY, {k: [v] for k, v in strat.meta.default_params.items()},
+                      train_bars=504, test_bars=126)
+    bars, p = daily.reset_index(drop=True), strat.params()
+    for f, start in zip(wf.folds, range(504, len(bars), 126), strict=False):
+        res, eq = _segment(bars, strat, SPY, p, None, start, start + 126, start)
+        np.testing.assert_allclose(wf.oos_returns.loc[eq.index].to_numpy(),
+                                   eq.pct_change().fillna(0.0).to_numpy(), rtol=0, atol=1e-12)
+        assert f.oos_metrics["trades"] == res.metrics["trades"]
 
 
 def test_walk_forward_reports_simply_holding_over_the_same_stretches(daily):

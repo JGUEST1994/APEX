@@ -2,16 +2,17 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from apex.backtest.experiments import run_validation
 from apex.backtest.tournament import leaderboard, run_tournament
-from apex.backtest.validation import returns_matrix, walk_forward
+from apex.backtest.validation import _segment, returns_matrix, walk_forward
 from apex.cli import main as cli
 from apex.domain.instruments import by_symbol
 from apex.domain.market import Timeframe
 from apex.marketdata.ingest import ingest_bars
 from apex.marketdata.providers.synthetic import SyntheticProvider
-from apex.strategies.multi import PairsZScore
+from apex.strategies.multi import PairsZScore, all_multi_strategies
 from apex.strategies.registry import all_strategies
 from tests.conftest import utc
 
@@ -46,6 +47,37 @@ def test_walk_forward_and_pbo_on_pairs():
     assert wf.summary["oos_buy_hold_return"] is None  # no single market to hold
     m = returns_matrix(bars, PairsZScore(), specs, GRID)
     assert m.shape == (1200, 4)
+
+
+def _legs(n_legs, n=1300):
+    syms = ["SPY", "QQQ", "IWM", "AAPL", "MSFT"][:n_legs]
+    return {s: SyntheticProvider(seed=i + 1, annual_vol=0.3).fetch_bars(
+        SYMS[s], Timeframe.D1, utc(2019, 1, 1), utc(2024, 1, 1)).iloc[:n].reset_index(drop=True)
+        for i, s in enumerate(syms)}
+
+
+@pytest.mark.parametrize("key", sorted(all_multi_strategies()))
+def test_every_multi_strategy_is_causal(key):
+    """Walk-forward works each signal out once over the whole history; that is only fair
+    because adding later bars never changes an earlier weight."""
+    s = all_multi_strategies()[key]()
+    bars = _legs(s.legs or 3)
+    p = s.params()
+    full = s.target_weights({k: v.copy() for k, v in bars.items()}, p)
+    part = s.target_weights({k: v.iloc[:900].copy() for k, v in bars.items()}, p)
+    pd.testing.assert_frame_equal(full.iloc[:900], part)
+
+
+def test_unseen_windows_match_replaying_all_earlier_history():
+    bars = _pair()
+    specs = {s: SYMS[s] for s in bars}
+    wf = walk_forward(bars, PairsZScore(), specs, {"lookback": [60]}, train_bars=400,
+                      test_bars=200)
+    p = PairsZScore().params({"lookback": 60})
+    for start in range(400, 1200, 200):  # the slow way: replay everything before the window
+        _, eq = _segment(bars, PairsZScore(), specs, p, None, start, start + 200, start)
+        np.testing.assert_allclose(wf.oos_returns.loc[eq.index].to_numpy(),
+                                   eq.pct_change().fillna(0.0).to_numpy(), rtol=0, atol=1e-12)
 
 
 def test_validation_tournament_and_leaderboard(session):
