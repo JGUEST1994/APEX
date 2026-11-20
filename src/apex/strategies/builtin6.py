@@ -142,3 +142,39 @@ class DeltaDivergence(Strategy):
         target = c - p["rr"] * (stop - c)
         return _trade(bars, sig, stop, target=target,
                       exit_long=c > prior_hi, exit_short=c < prior_lo)
+
+
+@register
+class Absorption(Strategy):
+    meta = _meta("OF-ABSORB-001", "Absorption at extremes", "order_flow",
+                 "Heavy aggressive selling at a fresh low that fails to push price lower means "
+                 "someone is quietly buying everything offered (absorption); expect a bounce. "
+                 "Mirror image at highs. A bar-level stand-in for the tick-level idea; needs "
+                 "data with buy volume (e.g. Binance), otherwise it never trades.",
+                 "bar trades at a new `lookback`-bar low (high), volume above `vol_mult` x its "
+                 "`vol_n`-bar average, aggressive sellers (buyers) in control of the bar, yet the "
+                 "close is within `progress_atr` x ATR of the open: buy (sell)",
+                 "after `max_bars` bars, or stop / target",
+                 "beyond the absorbed extreme by `stop_atr` x ATR", "`rr` x the risk",
+                 {"lookback": 20, "vol_n": 20, "vol_mult": 3.0, "progress_atr": 0.25,
+                  "atr_n": 14, "stop_atr": 0.1, "rr": 2.0, "max_bars": 10},
+                 tfs=(Timeframe.M1, Timeframe.M5), assets=(AssetClass.CRYPTO,),
+                 regimes=("range",))
+
+    def target_position(self, bars, p):
+        o, h, lo, c, v = (bars[x] for x in ("open", "high", "low", "close", "volume"))
+        known = delta_known(bars)
+        delta = (2.0 * bars["buy_volume"] - v) if "buy_volume" in bars.columns else v * 0.0
+        atr = ind.atr(bars, int(p["atr_n"]))
+        n = int(p["lookback"])
+        heavy = v > p["vol_mult"] * v.shift(1).rolling(int(p["vol_n"])).mean()
+        stalled = (c - o).abs() <= p["progress_atr"] * atr
+        at_low = lo < lo.shift(1).rolling(n).min()
+        at_high = h > h.shift(1).rolling(n).max()
+        buy = known & heavy & stalled & at_low & (delta < 0)
+        sell = known & heavy & stalled & at_high & (delta > 0)
+        sig = buy.astype(float) - sell.astype(float)
+        a = atr * p["stop_atr"]
+        stop = pd.Series(np.where(sig > 0, lo - a, h + a), index=bars.index)
+        target = c - p["rr"] * (stop - c)
+        return _trade(bars, sig, stop, target=target, max_bars=int(p["max_bars"]))
