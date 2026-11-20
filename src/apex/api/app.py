@@ -17,6 +17,7 @@ from apex import __version__
 from apex.core.config import Settings, get_settings
 from apex.core.errors import UnknownInstrumentError
 from apex.db.models import (
+    DataQualityIssue,
     Experiment,
     IngestionRun,
     Instrument,
@@ -115,11 +116,28 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/ingestion-runs")
     def runs(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
-        rows = s.scalars(select(IngestionRun).order_by(IngestionRun.id.desc()).limit(limit))
+        n_issues = (select(DataQualityIssue.run_id, func.count().label("n"))
+                    .group_by(DataQualityIssue.run_id).subquery())
+        rows = s.execute(select(IngestionRun, Instrument.symbol, n_issues.c.n)
+                         .join(Instrument, Instrument.id == IngestionRun.instrument_id)
+                         .outerjoin(n_issues, n_issues.c.run_id == IngestionRun.id)
+                         .order_by(IngestionRun.id.desc()).limit(limit))
         return [{"id": r.id, "source": r.source, "instrument_id": r.instrument_id,
-                 "timeframe": r.timeframe, "status": r.status, "rows_received": r.rows_received,
-                 "rows_stored": r.rows_stored, "content_sha256": r.content_sha256,
-                 "started_at": r.started_at.isoformat()} for r in rows]
+                 "symbol": sym, "timeframe": r.timeframe, "status": r.status,
+                 "rows_received": r.rows_received, "rows_stored": r.rows_stored,
+                 "content_sha256": r.content_sha256, "issues": n or 0, "error": r.error,
+                 "started_at": r.started_at.isoformat()} for r, sym, n in rows]
+
+    @app.get("/ingestion-runs/{run_id}/issues")
+    def run_issues(run_id: int, limit: int = Query(200, le=5000),
+                   s: Session = Depends(db)) -> list[dict]:
+        """Data-quality findings recorded for one download (gaps, spikes, bad rows...)."""
+        if s.get(IngestionRun, run_id) is None:
+            raise HTTPException(404, "ingestion run not found")
+        rows = s.scalars(select(DataQualityIssue).where(DataQualityIssue.run_id == run_id)
+                         .order_by(DataQualityIssue.id).limit(limit))
+        return [{"kind": i.kind, "severity": i.severity,
+                 "ts": i.ts.isoformat() if i.ts else None, "detail": i.detail} for i in rows]
 
     @app.get("/experiments")
     def experiments(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:

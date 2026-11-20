@@ -27,6 +27,7 @@
     <div class="glance" id="glance" aria-label="Markets at a glance"></div>
     <div class="card"><h3>Check-up</h3><table id="checks"></table></div>
     <div class="card"><h3>Recent data downloads</h3><table id="runs"></table></div>
+    <div class="card" id="issuecard" hidden><h3 id="iname"></h3><table id="issues"></table></div>
   </section>
   <section id="markets">
     <div class="card">
@@ -78,6 +79,7 @@ const DESC = {
 // what an empty table should tell the operator to do next
 const EMPTY = {
   checks: "Check-up unavailable. Run apex doctor in PowerShell instead.",
+  issues: "No problems recorded for this download.",
   runs: "No price data downloaded yet. Run apex ingest to fetch some.",
   strats: "No strategies registered.",
   ideatab: "No trading ideas found.",
@@ -128,6 +130,19 @@ const GLOSSARY = {
   pbo: ["Overfitting risk", "pct", "Chance the best-looking settings are just the luckiest. The tournament wants 50% or less."],
   folds: ["Stretches tested", "int", "Number of tune-then-test rounds."],
   n_trials: ["Variations tried", "int", "Parameter combinations tried; more tries make luck more likely."],
+};
+// What each data-quality finding means. "error" rows were not stored; warnings were.
+const ISSUE_TEXT = {
+  gap: "Bars missing where the market should have been open (often a holiday APEX does not know).",
+  spike: "A price jump far bigger than usual; check it is real before trusting results.",
+  outside_session: "A bar at a time the market is normally closed. Kept.",
+  duplicate: "The same bar twice. The copy was dropped.",
+  duplicate_conflict: "Two different bars for the same time. Not stored.",
+  missing_value: "A bar with a missing price or volume. Not stored.",
+  non_positive_price: "A zero or negative price. Not stored.",
+  negative_volume: "Negative volume. Not stored.",
+  ohlc_inconsistent: "High/low do not contain the open and close. Not stored.",
+  misaligned_timestamp: "A time that is not on the timeframe's boundary. Not stored.",
 };
 const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? "–"
   : (typeof v === "number" ? v.toFixed(d) : String(v));
@@ -277,9 +292,20 @@ const LOAD = {
     const LV = { OK: "pass", WARN: "warn", FAIL: "fail" };
     table($("checks"), [["Check", (c) => c.name],
       ["Result", (c) => el("span", c.level, LV[c.level] || "")], ["Detail", (c) => c.detail, "wrap"]], ck);
-    table($("runs"), [["ID", (r) => r.id], ["Source", (r) => r.source], ["TF", (r) => r.timeframe],
+    const showIssues = async (r) => {
+      const iss = await get(`/ingestion-runs/${r.id}/issues`);
+      $("issuecard").hidden = false;
+      $("iname").textContent = `Download ${r.id}: ${r.symbol} ${r.timeframe} from ${r.source}, ${r.issues} finding(s)` +
+        (r.issues > iss.length ? ` (first ${iss.length} shown)` : "");
+      table($("issues"), [["Time (UTC)", (i) => (i.ts || "").slice(0, 16).replace("T", " ")],
+        ["Finding", (i) => el("span", i.kind.replace(/_/g, " "), i.severity === "error" ? "fail" : "warn")],
+        ["What it means", (i) => ISSUE_TEXT[i.kind] || i.detail, "wrap"], ["Detail", (i) => i.detail, "wrap"]], iss);
+    };
+    table($("runs"), [["ID", (r) => r.id], ["Market", (r) => r.symbol], ["Source", (r) => r.source], ["TF", (r) => r.timeframe],
       ["Status", (r) => el("span", r.status, r.status === "failed" ? "fail" : "pass")],
-      ["Rows stored", (r) => r.rows_stored, "num"], ["Data hash", (r) => (r.content_sha256 || "").slice(0, 12)],
+      ["Rows stored", (r) => r.rows_stored, "num"],
+      ["Findings", (r) => { if (!r.issues) return "none"; const b = el("button", String(r.issues), "linkbtn");
+        b.onclick = () => showIssues(r).catch(console.error); return b; }, "num"], ["Data hash", (r) => (r.content_sha256 || "").slice(0, 12)],
       ["Started", (r) => r.started_at.slice(0, 19).replace("T", " ")]], runs);
     await glance(ds);
   },
