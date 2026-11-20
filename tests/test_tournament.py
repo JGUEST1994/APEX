@@ -163,15 +163,18 @@ def test_cli_and_api(db_url, monkeypatch, capsys):
                     "--source", "synthetic", "--start", "2018-01-01", "--end", "2025-01-01",
                     "--train-bars", "500", "--test-bars", "250", "--only-suited"]) == 0
         assert cli(["leaderboard", "--symbol", "SPY"]) == 0
+        assert cli(["shortlist", "--top", "3"]) == 0
     finally:
         get_settings.cache_clear()
     out = capsys.readouterr().out
     assert "no walk-forward results yet" in out and "TOURNAMENT" in out
+    assert "# APEX shortlist" in out and "Tested 2 strategy x market x timeframe" in out
     engine = make_engine(db_url)
     client = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
                                    make_session_factory(engine)))
     rows = client.get("/leaderboard").json()
     assert len(rows) == 2 and all(r["simulated"] for r in rows)
+    assert all("pct_profitable_folds" in r for r in rows)
     engine.dispose()
 
 

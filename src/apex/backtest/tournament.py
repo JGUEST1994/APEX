@@ -231,6 +231,7 @@ def leaderboard(session: Session, *, asset_class: str | None = None,
             "oos_sharpe": m.get("mean_oos_sharpe"), "oos_return": m.get("oos_total_return"),
             "oos_max_drawdown": m.get("oos_max_drawdown"), "pbo": m.get("pbo"),
             "oos_trades": m.get("oos_trades"), "family_trials": fam,
+            "pct_profitable_folds": m.get("pct_profitable_folds"),
             "fail_reasons": "; ".join(reasons), "simulated": True})
     df = pd.DataFrame(out)
     if df.empty:

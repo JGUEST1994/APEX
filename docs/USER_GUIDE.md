@@ -219,6 +219,10 @@ or on GitHub open the Actions tab, pick **research-run** and press **Run workflo
 downloads free crypto prices (plus US stocks and forex if your Alpaca and Tiingo keys are
 set) and saves the leaderboard in `research-out/`.
 
+`apex shortlist` turns the latest results into a short, plain-English list: the strategies
+that passed every test (the ones worth a 30-day practice run), the nearest misses, and how
+many failed each test.
+
 ## 5. Practice (paper) trading
 
 Paper accounts trade on simulated fills, with the same risk limits and emergency stop

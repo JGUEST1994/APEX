@@ -203,6 +203,9 @@ def main(argv: list[str] | None = None) -> int:
     lb = sub.add_parser("leaderboard", help="show the strategy leaderboard")
     for opt in ("--asset-class", "--symbol", "--timeframe", "--category"):
         lb.add_argument(opt)
+    sl = sub.add_parser("shortlist", help="plain-English shortlist of strategies worth a "
+                        "30-day practice run, and why the rest failed (read-only)")
+    sl.add_argument("--top", type=int, default=5)
     rg = sub.add_parser("regimes", help="regime labels, stability and OOS check for stored bars")
     rg.add_argument("--symbol", required=True)
     rg.add_argument("--timeframe", default="1d")
@@ -632,6 +635,11 @@ def main(argv: list[str] | None = None) -> int:
                         "oos_trades", "family_trials"]
                 with pd.option_context("display.width", 200, "display.max_columns", 20):
                     print(df[cols].to_string(index=False))
+        elif args.cmd == "shortlist":
+            from apex.backtest.tournament import leaderboard
+            from apex.shortlist import shortlist, to_markdown
+
+            print(to_markdown(shortlist(leaderboard(s), top=args.top)), end="")
         elif args.cmd == "strategies":
             from apex.strategies.multi import all_multi_strategies
             from apex.strategies.registry import all_strategies
