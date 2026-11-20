@@ -25,6 +25,7 @@
   <section id="overview">
     <div class="card kpis" id="kpis"></div>
     <div class="glance" id="glance" aria-label="Markets at a glance"></div>
+    <div class="card"><h3>Check-up</h3><table id="checks"></table></div>
     <div class="card"><h3>Recent data downloads</h3><table id="runs"></table></div>
   </section>
   <section id="markets">
@@ -71,6 +72,7 @@ const DESC = {
 };
 // what an empty table should tell the operator to do next
 const EMPTY = {
+  checks: "Check-up unavailable. Run apex doctor in PowerShell instead.",
   runs: "No price data downloaded yet. Run apex ingest to fetch some.",
   strats: "No strategies registered.",
   ideatab: "No trading ideas found.",
@@ -230,13 +232,16 @@ async function glance(ds) {
 let pendingDataset = null;
 const LOAD = {
   async overview() {
-    const [h, runs, ds, st] = await Promise.all([get("/health"), get("/ingestion-runs?limit=20"),
-      get("/datasets"), get("/strategies")]);
+    const [h, runs, ds, st, ck] = await Promise.all([get("/health"), get("/ingestion-runs?limit=20"),
+      get("/datasets"), get("/strategies"), get("/system/checks")]);
     const kp = $("kpis"); kp.replaceChildren();
     [["Status", h.status], ["Mode", h.trading_mode.toUpperCase()], ["Live trading", "not available"],
      ["Datasets", ds.length], ["Strategies", st.length], ["External AI", h.external_ai_enabled ? "on" : "off"],
      ["Version", h.version]].forEach(([k, v]) => { const d = el("div", k, "kpi muted");
        d.appendChild(el("b", v)); kp.appendChild(d); });
+    const LV = { OK: "pass", WARN: "warn", FAIL: "fail" };
+    table($("checks"), [["Check", (c) => c.name],
+      ["Result", (c) => el("span", c.level, LV[c.level] || "")], ["Detail", (c) => c.detail, "wrap"]], ck);
     table($("runs"), [["ID", (r) => r.id], ["Source", (r) => r.source], ["TF", (r) => r.timeframe],
       ["Status", (r) => el("span", r.status, r.status === "failed" ? "fail" : "pass")],
       ["Rows stored", (r) => r.rows_stored, "num"], ["Data hash", (r) => (r.content_sha256 || "").slice(0, 12)],

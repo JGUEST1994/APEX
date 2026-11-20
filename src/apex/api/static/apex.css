@@ -16,6 +16,7 @@
   --brand-soft: rgba(10, 125, 134, .10);
   --good: #1d7a45;
   --bad: #b8322a;
+  --warn: #9a6200;
   --research: #3f5160;    /* banner: research mode */
   --paper: #8a5a00;       /* banner: paper mode */
   --paper-ink: #fff;
@@ -30,7 +31,7 @@
   :root:not([data-theme="light"]) {
     --bg: #0f181e; --panel: #15212a; --sunk: #1b2933; --ink: #e2e9ee; --ink-2: #c3ced6;
     --muted: #93a3b0; --rule: #26353f; --grid: #1d2b35; --brand: #43c3cb;
-    --brand-soft: rgba(67, 195, 203, .12); --good: #4cc27a; --bad: #ff7a6e;
+    --brand-soft: rgba(67, 195, 203, .12); --good: #4cc27a; --bad: #ff7a6e; --warn: #f0b44c;
     --research: #3a4d5b; --paper: #b37a12; color-scheme: dark;
   }
 }
@@ -115,6 +116,7 @@ td.wrap { white-space: normal; min-width: 320px; color: var(--ink-2); }
 .pass, .fail { font-weight: 600; }
 .pass { color: var(--good); } .fail { color: var(--bad); }
 .pass::before { content: "\2713\00a0"; } .fail::before { content: "\2715\00a0"; }
+.warn { font-weight: 600; color: var(--warn); } .warn::before { content: "!\00a0"; }
 
 /* ---- Markets at a glance (overview) ---- */
 .glance { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }

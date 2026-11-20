@@ -42,6 +42,11 @@ def test_dashboard_and_endpoints(db_url, session):
     keys = {s["key"] for s in st}
     assert all(h["implemented"] in keys for h in hs if h["implemented"])
     assert 'id="ideas"' in page.text and '"/hypotheses"' in page.text
+    ck = c.get("/system/checks").json()
+    lv = {x["name"]: x["level"] for x in ck}
+    assert lv["Database tables"] == "OK" and lv["Stored prices"] == "OK"
+    assert all(set(x) == {"level", "name", "detail"} for x in ck)
+    assert 'id="checks"' in page.text and '"/system/checks"' in page.text
     engine.dispose()
 
 
