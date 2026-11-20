@@ -17,7 +17,7 @@ def _dt(s: str) -> datetime:
 
 
 PROVIDERS = ["synthetic", "csv", "csv-cont", "csv-cont-ratio", "dukascopy-csv", "binance",
-             "kraken", "coinbase", "alpaca", "polygon"]
+             "kraken", "coinbase", "alpaca", "polygon", "tiingo"]
 
 
 def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201
@@ -58,6 +58,12 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
         from apex.marketdata.providers.coinbase import CoinbaseSpotProvider
 
         return CoinbaseSpotProvider()
+    if name == "tiingo":
+        from apex.marketdata.providers.tiingo import TiingoProvider
+
+        if not settings.tiingo_api_key:
+            raise SystemExit("set APEX_TIINGO_API_KEY (free at tiingo.com)")
+        return TiingoProvider(settings.tiingo_api_key.get_secret_value())
     if name == "polygon":
         from apex.marketdata.providers.polygon import PolygonStocksProvider
 

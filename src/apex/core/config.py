@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     alpaca_secret_key: SecretStr | None = None
     alpaca_feed: str = "iex"
     polygon_api_key: SecretStr | None = None
+    tiingo_api_key: SecretStr | None = None
 
     # Optional access token for the API and dashboard. Unset = no token (keep it on localhost).
     api_token: SecretStr | None = None

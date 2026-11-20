@@ -16,7 +16,7 @@ _SECRET_PATTERNS = [
     # key=value / key: value pairs whose key names a secret
     re.compile(
         r"(?i)\b(api[_-]?key|secret|password|passwd|token|authorization|private[_-]?key)"
-        r"(\s*[=:]\s*)(\"[^\"]*\"|'[^']*'|[^\s,;&]+)"
+        r"(\s*[=:]\s*)((?:(?:Bearer|Token|Basic)\s+)?(?:\"[^\"]*\"|'[^']*'|[^\s,;&]+))"
     ),
     # credentials embedded in URLs: scheme://user:pass@host
     re.compile(r"(://[^:/\s]+:)([^@/\s]+)(@)"),

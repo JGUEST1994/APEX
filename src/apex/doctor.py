@@ -55,7 +55,7 @@ def _backup_check(folder: Path, now: datetime | None = None) -> Check:
             Check(WARN, "Backups", f"newest is {int(days)} days old; run: apex backup"))
 
 
-LIVE_SOURCES = ("alpaca", "polygon", "coinbase", "binance", "kraken")  # can be topped up
+LIVE_SOURCES = ("alpaca", "polygon", "tiingo", "coinbase", "binance", "kraken")  # can be topped up
 STALE_DAYS = 7
 
 
@@ -105,7 +105,8 @@ def run_checks(settings: Settings, env_file: Path | None = Path(".env"),
                    Check(WARN, "Settings file", f"no {env_file} here; defaults are used. Copy "
                          ".env.example to .env if you need API keys"))
     for label, *keys in (("Alpaca keys (US stocks)", "alpaca_key_id", "alpaca_secret_key"),
-                         ("Polygon key (US stocks)", "polygon_api_key")):
+                         ("Polygon key (US stocks)", "polygon_api_key"),
+                         ("Tiingo key (US stocks, forex)", "tiingo_api_key")):
         have = all(getattr(settings, k) is not None for k in keys)
         out.append(Check(OK, label, "set" if have else
                          "not set (only needed for that data source)"))
