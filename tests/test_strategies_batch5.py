@@ -92,3 +92,32 @@ def test_poc_magnet_trades_toward_the_prior_poc_and_is_flat_at_the_close():
     assert (c[entries & (pos > 0)] < poc[entries & (pos > 0)]).all()
     assert (c[entries & (pos < 0)] > poc[entries & (pos < 0)]).all()
     assert (pos[ind.bars_left_in_session(bars, "us_equity_rth") < 1] == 0).all()
+
+
+def _hvn_day1():
+    ts = pd.date_range("2025-02-03 14:30", periods=78, freq="5min", tz="UTC")
+    rows = ([(100, 100.1, 99.9, 100)] * 30 + [(105, 105.1, 104.9, 105)] * 30
+            + [(100, 105, 100, 105), (105, 105, 100, 100)] * 9)
+    vol = [1000.0] * 60 + [10.0] * 18
+    return _ohlc(ts, rows, vol)
+
+
+def test_high_volume_nodes_are_the_busy_prices():
+    nodes = ind.high_volume_nodes(_hvn_day1())
+    assert len(nodes) == 2
+    assert abs(nodes[0] - 100) < 0.2 and abs(nodes[1] - 105) < 0.2
+    flat = _ohlc(pd.date_range("2025-02-03", periods=3, freq="5min", tz="UTC"),
+                 [(1, 1, 1, 1)] * 3, 1.0)
+    assert len(ind.high_volume_nodes(flat)) == 0
+
+
+def test_hvn_rejection_buys_a_wick_off_the_prior_node_and_targets_the_next():
+    ts2 = pd.date_range("2025-02-04 14:30", periods=78, freq="5min", tz="UTC")
+    rows = ([(100.5, 100.55, 100.45, 100.5)] * 2 + [(100.5, 100.6, 99.95, 100.6)]
+            + [(100.7, 100.75, 100.65, 100.7)] * 75)
+    bars = pd.concat([_hvn_day1(), _ohlc(ts2, rows, 100.0)], ignore_index=True)
+    pos = _run("VP-HVN-001", bars)
+    i = 78 + 2
+    assert (pos[:i] == 0).all()
+    assert (pos.iloc[i:-2] == 1).all() and (pos.iloc[-2:] == 0).all()  # flat by the close
+    assert (_run("VP-HVN-001", bars, wick=10.0) == 0).all()  # wick too small: no trade

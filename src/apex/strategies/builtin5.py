@@ -115,3 +115,57 @@ class PocMagnet(Strategy):
         stop = c - sig * a
         pos = _trade(bars, sig, stop, poc, flat=new_session)
         return ind.flat_before_close(pos, bars, p["calendar"], p["flat_bars"])
+
+
+@register
+class HvnRejection(Strategy):
+    meta = _meta("VP-HVN-001", "High-volume node rejection", "volume_profile",
+                 "Prices where the previous session traded heavily (high-volume nodes) act "
+                 "as support and resistance: buy a bar that dips into a node and closes back "
+                 "above it with a long lower wick (mirror for shorts). Volume profile is "
+                 "approximated from bars.",
+                 "low <= node < close, lower wick >= `wick` x body (long); mirror short",
+                 "next node or session close", "`stop_atr` ATR beyond the node",
+                 "next high-volume node in the trade's direction (else `rr` x risk)",
+                 {"bins": 30, "node_mult": 1.5, "wick": 1.5, "stop_atr": 0.5, "atr_n": 14,
+                  "rr": 2.0, "calendar": "us_equity_rth", "flat_bars": 1,
+                  "allow_short": True},
+                 tfs=INTRADAY, assets=FUT_EQ, regimes=("any",))
+
+    def target_position(self, bars, p):
+        key = ind.session_keys(bars, p["calendar"])
+        groups = list(bars.groupby(key, sort=True).groups.items())
+        o, h, lo, c = (bars[x].to_numpy(float) for x in ("open", "high", "low", "close"))
+        a = ind.atr(bars, p["atr_n"]).to_numpy()
+        body = np.abs(c - o)
+        low_wick, up_wick = np.minimum(o, c) - lo, h - np.maximum(o, c)
+        n = len(bars)
+        sig, stop, target = np.zeros(n), np.full(n, np.nan), np.full(n, np.nan)
+        pos_of = {ix: i for i, ix in enumerate(bars.index)}
+        for (_, prev_ix), (_, ix) in zip(groups, groups[1:], strict=False):
+            nodes = ind.high_volume_nodes(bars.loc[prev_ix], int(p["bins"]), p["node_mult"])
+            if not len(nodes):
+                continue
+            for i in (pos_of[j] for j in ix):
+                if not np.isfinite(a[i]):
+                    continue
+                hit_l = nodes[(nodes >= lo[i]) & (nodes < c[i])]
+                if len(hit_l) and low_wick[i] >= p["wick"] * max(body[i], 1e-12):
+                    lvl = hit_l.min()
+                    above = nodes[nodes > c[i]]
+                    sig[i], stop[i] = 1.0, lvl - p["stop_atr"] * a[i]
+                    target[i] = (above.min() if len(above)
+                                 else c[i] + p["rr"] * (c[i] - stop[i]))
+                    continue
+                hit_s = nodes[(nodes <= h[i]) & (nodes > c[i])]
+                if (p["allow_short"] and len(hit_s)
+                        and up_wick[i] >= p["wick"] * max(body[i], 1e-12)):
+                    lvl = hit_s.max()
+                    below = nodes[nodes < c[i]]
+                    sig[i], stop[i] = -1.0, lvl + p["stop_atr"] * a[i]
+                    target[i] = (below.max() if len(below)
+                                 else c[i] - p["rr"] * (stop[i] - c[i]))
+        idx = bars.index
+        pos = _trade(bars, pd.Series(sig, index=idx), pd.Series(stop, index=idx),
+                     pd.Series(target, index=idx), flat=key != key.shift(1))
+        return ind.flat_before_close(pos, bars, p["calendar"], p["flat_bars"])
