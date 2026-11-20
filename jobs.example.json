@@ -1,0 +1,8 @@
+{"jobs": [
+  {"name": "crypto-1h", "type": "update", "provider": "coinbase",
+   "symbols": ["BTCUSDT", "ETHUSDT"], "timeframe": "1h",
+   "backfill_start": "2024-01-01", "every_minutes": 60},
+  {"name": "crypto-1d", "type": "update", "provider": "coinbase",
+   "symbols": ["BTCUSDT", "ETHUSDT"], "timeframe": "1d",
+   "backfill_start": "2021-01-01", "every_minutes": 1440}
+]}

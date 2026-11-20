@@ -40,7 +40,7 @@ On Windows use Task Scheduler with the same command.
 ]}
 ```
 
-Paper jobs only run with `APEX_TRADING_MODE=paper`; a halted account stays halted until a named person runs `apex paper-reset-kill`. Every step is incremental and idempotent, so stopping and restarting the scheduler (or running it next to cron) cannot duplicate bars or orders.
+On Windows, `start-scheduler.bat` runs `apex schedule --config jobs.json` from the APEX folder (creating `jobs.json` from `jobs.example.json` on first use; `jobs.json` is git-ignored). Paper jobs only run with `APEX_TRADING_MODE=paper`; a halted account stays halted until a named person runs `apex paper-reset-kill`. Every step is incremental and idempotent, so stopping and restarting the scheduler (or running it next to cron) cannot duplicate bars or orders.
 
 ### Paper trading (simulated only)
 

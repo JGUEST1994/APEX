@@ -87,6 +87,13 @@ To top data up later without re-downloading everything:
 apex update --provider coinbase --symbols BTCUSDT,ETHUSDT --timeframe 1h --backfill-start 2024-01-01
 ```
 
+**Keep prices up to date automatically:** double-click **`start-scheduler.bat`**. The first
+time, it copies `jobs.example.json` to `jobs.json` and stops so you can edit it (it starts
+with Bitcoin and Ether from Coinbase, hourly and daily). Run it again and leave the window
+open: it tops the data up on each job's timer. Close the window to stop. To include a
+practice account, add a job like `{"name": "practice", "type": "paper", "accounts":
+["sma-spy"], "every_minutes": 60}` and put `APEX_TRADING_MODE=paper` in `.env`.
+
 ## 3. Test one idea (a backtest)
 
 See which strategies exist with `apex strategies`, or the Strategy lab tab. Then:
@@ -148,8 +155,8 @@ the account goes flat and stays stopped until a named person resets it:
 apex paper-reset-kill --name sma-spy --actor "Jake"
 ```
 
-To run updates and paper accounts automatically on a timer, see "Built-in scheduler" in
-[DEPLOYMENT.md](DEPLOYMENT.md).
+To run updates and paper accounts automatically on a timer, use `start-scheduler.bat`
+(section 2), or see "Built-in scheduler" in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## 6. Research library
 
