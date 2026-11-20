@@ -27,6 +27,7 @@ from apex.db.models import (
     PaperPosition,
     PriceBar,
     ResearchDocument,
+    StrategyStatusChange,
     StrategyVersion,
 )
 from apex.db.models import Strategy as StrategyRow
@@ -261,6 +262,25 @@ def create_app(settings: Settings | None = None,
                  "status": status.get(k, {}).get("status", "experimental"),
                  "instruments": getattr(c, "legs", 1) or "2+"}
                 for k, c in sorted({**all_strategies(), **all_multi_strategies()}.items())]
+
+    @app.get("/strategies/{key}/history")
+    def strategy_history(key: str, s: Session = Depends(db)) -> list[dict]:
+        """Every recorded status change of a strategy, oldest first (read-only): who moved
+        it, when and why (tournament gates, a person's approval, a suspension)."""
+        from apex.strategies.multi import all_multi_strategies
+        from apex.strategies.registry import all_strategies
+
+        if key not in {**all_strategies(), **all_multi_strategies()}:
+            raise HTTPException(404, f"no strategy called {key!r}")
+        rows = s.execute(
+            select(StrategyStatusChange, StrategyVersion.version)
+            .join(StrategyVersion, StrategyVersion.id == StrategyStatusChange.strategy_version_id)
+            .join(StrategyRow, StrategyRow.id == StrategyVersion.strategy_id)
+            .where(StrategyRow.key == key)
+            .order_by(StrategyStatusChange.at, StrategyStatusChange.id))
+        return [{"at": ch.at.isoformat(), "version": ver, "from": ch.from_status,
+                 "to": ch.to_status, "by": ch.actor, "reason": ch.reason}
+                for ch, ver in rows]
 
     @app.get("/system/checks")
     def system_checks() -> list[dict]:

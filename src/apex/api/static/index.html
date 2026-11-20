@@ -41,7 +41,9 @@
   </section>
   <section id="strategies"><div class="card"><table id="strats"></table></div>
     <div class="card"><h3 id="sname">Select a strategy</h3><p id="sdesc"></p>
-      <table id="srules"></table><p class="muted">Try it on stored prices:</p>
+      <table id="srules"></table>
+      <h3 class="mt">Progress so far</h3><table id="shist"></table>
+      <p class="muted">Try it on stored prices:</p>
       <pre id="scmd" class="cmd"></pre></div></section>
   <section id="ideas"><div class="card"><p id="ideasum" class="muted"></p>
     <table id="ideatab"></table></div></section>
@@ -94,6 +96,7 @@ const EMPTY = {
   issues: "No problems recorded for this download.",
   runs: "No price data downloaded yet. Run apex ingest to fetch some.",
   strats: "No strategies registered.",
+  shist: "Not tested yet. apex tournament moves a strategy forward when it passes the tests; only a named person can approve one.",
   ideatab: "No trading ideas found.",
   lb: "No tournament results yet. Run apex tournament to rank strategies.",
   exps: "No backtests yet. Run apex backtest or apex validate.",
@@ -356,7 +359,7 @@ const LOAD = {
   async strategies() {
     const st = await get("/strategies");
     const open = (r) => {
-      $("sname").textContent = `${r.key}: ${r.name}`;
+      $("sname").textContent = `${r.key}: ${r.name}`; $("sname").dataset.key = r.key;
       $("sdesc").textContent = r.description;
       const p = r.default_params || {};
       table($("srules"), [["Rule", (x) => x[0]], ["Detail", (x) => x[1], "wrap"]], [
@@ -364,6 +367,14 @@ const LOAD = {
         ["Target", r.take_profit], ["Suits", `${(r.asset_classes || []).join(", ")} · ${r.timeframes.join(", ")}`],
         ["Default settings", Object.entries(p).map(([k, v]) => `${k}=${v}`).join(", ") || "none"],
         ["Trading idea", (r.ideas || []).join(", ") || "–"]]);
+      const STAGE = { experimental: "new", backtesting: "backtesting", validation: "passed the tournament",
+        paper_trading: "practice trading", approved: "approved by a person", suspended: "suspended", rejected: "rejected" };
+      const stage = (x) => x == null ? "created" : STAGE[x] || x;
+      const mine = () => $("sname").dataset.key === r.key;  // ignore answers for an earlier click
+      get(`/strategies/${encodeURIComponent(r.key)}/history`).then((h) => mine() && table($("shist"), [
+        ["When", (x) => x.at.slice(0, 16).replace("T", " ")], ["Version", (x) => x.version],
+        ["Change", (x) => `${stage(x.from)} → ${stage(x.to)}`], ["By", (x) => x.by],
+        ["Why", (x) => x.reason, "wrap"]], h)).catch(() => mine() && table($("shist"), [["", (x) => x]], []));
       // An example market each strategy suits, and a source that provides it.
       const EX = { equity: ["SPY", "QQQ,SPY", "alpaca"], crypto: ["BTCUSDT", "ETHUSDT,BTCUSDT", "coinbase"],
         futures: ["ES", "NQ,ES", "csv"], forex: ["EURUSD", "GBPUSD,EURUSD", "csv"] };

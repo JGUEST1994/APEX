@@ -46,7 +46,7 @@ you use it; press Ctrl+C there to stop it. The tabs are:
 |---|---|
 | Overview | Is everything running (a check-up list), and what data APEX has stored |
 | Markets | Price chart for each stored market |
-| Strategy lab | Every strategy APEX can test and how far through testing it is |
+| Strategy lab | Every strategy APEX can test and how far through testing it is; click one to see its rules and every step it has passed, who moved it and why |
 | Trading ideas | The 53 ideas from the APEX spec, and which ones have a strategy yet |
 | Tournament | Strategies ranked by how well they held up on data they had not seen |
 | Backtests | Every test APEX has run, so it can be repeated exactly |

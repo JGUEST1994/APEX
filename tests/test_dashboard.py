@@ -197,3 +197,28 @@ def test_backtest_equity_curve_is_replayed_exactly_and_read_only(db_url, session
 def test_link_buttons_keep_a_keyboard_focus_ring():
     css = (STATIC / "apex.css").read_text()
     assert css.index(".linkbtn:focus-visible") > css.index(".linkbtn { all: unset")
+
+
+def test_strategy_history_is_read_only_and_shows_who_moved_it(db_url, session):
+    from apex.backtest.experiments import ensure_strategy_version
+    from apex.strategies.base import StrategyStatus
+    from apex.strategies.lifecycle import transition
+
+    ver = ensure_strategy_version(session, all_strategies()["TF-SMA-001"]())
+    transition(session, ver, StrategyStatus.BACKTESTING, reason="first backtest")
+    transition(session, ver, StrategyStatus.VALIDATION, reason="passed every tournament gate")
+    session.commit()
+    engine = make_engine(db_url)
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                              make_session_factory(engine)))
+    h = c.get("/strategies/TF-SMA-001/history").json()
+    assert [(x["from"], x["to"], x["by"]) for x in h] == [
+        (None, "experimental", "system"), ("experimental", "backtesting", "system"),
+        ("backtesting", "validation", "system")]
+    assert h[-1]["reason"] == "passed every tournament gate" and h[0]["at"].endswith("+00:00")
+    assert c.get("/strategies/BO-DONCH-001/history").json() == []
+    assert c.get("/strategies/NOPE/history").status_code == 404
+    assert c.post("/strategies/TF-SMA-001/history").status_code == 405
+    page = c.get("/ui/").text
+    assert 'id="shist"' in page and "/history" in page
+    engine.dispose()
