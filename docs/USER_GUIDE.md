@@ -227,8 +227,9 @@ downloads free crypto prices (plus US stocks and forex if your Alpaca and Tiingo
 set) and saves the leaderboard and shortlist in `research-out/`. Daily US stocks come from
 Tiingo back to 2000 when its key is set. To run only some market groups, list them in
 `RESEARCH_GROUPS` (or the workflow's *groups* box), for example `stocks-1d fx-1h`; the
-groups are `crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h`. A market
-whose download fails is left out and the rest of its group still runs.
+groups are `crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h fx-30m`. A
+market whose download fails is left out and the rest of its group still runs. Tiingo's free
+plan allows about 50 requests an hour, so a run of every group pauses for about an hour once.
 
 Each result also shows what simply holding the same market made over the same unseen
 stretches, so you can see whether a strategy did better than buying and waiting.

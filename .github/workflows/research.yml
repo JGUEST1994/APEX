@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       groups:
-        description: "Market groups to run, space-separated (blank = all): crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h"
+        description: "Market groups to run, space-separated (blank = all): crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h fx-30m"
         required: false
         default: ""
 

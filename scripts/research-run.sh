@@ -6,7 +6,7 @@
 # leaderboard, the shortlist and the raw tournament output to OUT (default: research-out/).
 #
 # RESEARCH_GROUPS picks the groups (default: all of them, run in this order):
-#   crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h
+#   crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h fx-30m
 # Each group runs on the markets whose prices downloaded; a pair or basket needs every leg,
 # so one failed download no longer skips a whole group.
 #
@@ -14,13 +14,14 @@
 # buy volume). Daily US stocks come from Tiingo back to 2000 when APEX_TIINGO_API_KEY is set,
 # else from Alpaca, whose free feed reaches back to about 2020. Intraday stocks need
 # APEX_ALPACA_KEY_ID/SECRET; forex needs the Tiingo key. Tiingo's free plan allows about 50
-# requests an hour: daily stocks take one each, an hourly forex pair about 8 from FX_START,
-# and a download refused for that limit is tried once more an hour later.
+# requests an hour: daily stocks take one each, an hourly forex pair about 8 from FX_START, a
+# 30-minute pair about 16, and a download refused for that limit is tried once more an hour
+# later (so a run of every group waits about an hour once).
 # Used by .github/workflows/research.yml; also runs on a Mac or Linux machine.
 set -u
 OUT="${OUT:-research-out}"
 END="${END:-$(date -u +%Y-%m-01)}"
-ALL_GROUPS="crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h"
+ALL_GROUPS="crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h fx-30m"
 RESEARCH_GROUPS="${RESEARCH_GROUPS:-$ALL_GROUPS}"
 months_ago() { date -u -d "-$1 months" +%Y-%m-01 2>/dev/null || date -u -v-"$1"m +%Y-%m-01; }
 FLOW_START="${FLOW_START:-$(months_ago 6)}"       # 5-minute bars
@@ -132,6 +133,17 @@ if want fx-1h; then
     tour fx-1h tiingo 1h "$FX_START" 4000 1000 EURUSD GBPUSD USDJPY AUDUSD USDCAD GBPUSD/EURUSD
   else
     log "fx-1h skipped: no Tiingo key"
+  fi
+fi
+# 30-minute bars for the ideas built for them, among them the Asian range sweep (LIQ-ASIA-001),
+# which needs 5- to 30-minute prices. The two London-session majors only: each 30-minute pair
+# costs about 16 of Tiingo's ~50 requests an hour.
+if want fx-30m; then
+  if [ -n "${APEX_TIINGO_API_KEY:-}" ]; then
+    GOT=""; for s in EURUSD GBPUSD; do ingest_patiently tiingo $s 30m "$FX_START"; done
+    tour fx-30m tiingo 30m "$FX_START" 8000 2000 EURUSD GBPUSD
+  else
+    log "fx-30m skipped: no Tiingo key"
   fi
 fi
 
