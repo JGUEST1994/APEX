@@ -88,6 +88,8 @@ class PriceBar(Base):
     low: Mapped[float] = mapped_column(Float)
     close: Mapped[float] = mapped_column(Float)
     volume: Mapped[float] = mapped_column(Float, default=0.0)
+    # aggressive-buyer part of volume, where the source reports it (else NULL)
+    buy_volume: Mapped[float | None] = mapped_column(Float, nullable=True)
     ingestion_run_id: Mapped[int | None] = mapped_column(ForeignKey("ingestion_runs.id"))
 
 

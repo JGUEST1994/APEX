@@ -72,6 +72,11 @@ apex ingest --provider kraken   --symbol BTCUSDT --timeframe 1h --start 2024-01-
 Kraken only gives the most recent 720 bars, so use it for keeping data up to date rather
 than for long history. Coinbase and Binance can fetch long history.
 
+Binance also reports how much of each bar's volume came from buyers who were in a hurry
+(they bought at the asking price). APEX keeps that as "buy volume", and the order-flow
+strategy OF-DELTA-001 needs it, so use Binance (1m, 5m or 15m) for that strategy. Bars
+you downloaded before this was added don't have it; download a fresh date range to get it.
+
 **US stocks and ETFs:** sign up for a free Alpaca account, create API keys, and put them
 in the `.env` file in the APEX folder (never in the code, and never share that file):
 
@@ -231,6 +236,17 @@ says READY only after at least 30 days of new prices processed since the account
 created (old history replayed into a new account doesn't count), with the account still
 running, no kill-switch trips or halts, and practice trades matching the backtest.
 Otherwise it lists what is missing. It only reports; it never approves anything.
+
+When it says READY, and the strategy has passed the tournament (see section 4), you can
+approve it:
+
+```powershell
+apex strategy-approve --account sma-spy --by "Your Name" --reason "why you are happy with it"
+```
+
+APEX refuses if the record isn't READY, if the strategy hasn't passed the tournament, or if
+its code has changed since. Your name, the reason and the evidence go into the log.
+Approving a strategy does not switch on any real-money trading; APEX has none.
 
 On the dashboard's Practice trading tab, click an account's name to see how its simulated
 value moved, whether it matched the backtest, and its recent fills.

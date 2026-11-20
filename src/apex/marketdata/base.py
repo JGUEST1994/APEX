@@ -16,6 +16,10 @@ from apex.core.errors import ProviderError
 from apex.domain.market import InstrumentSpec, Timeframe
 
 BAR_COLUMNS = ["ts", "open", "high", "low", "close", "volume"]
+# Optional columns some providers supply. ``buy_volume`` is the part of ``volume`` that hit
+# the ask (aggressive buyers, e.g. Binance's taker-buy volume); ``volume - buy_volume`` is
+# aggressive selling. A frame carries an optional column only when its source supplies it.
+OPTIONAL_COLUMNS = ["buy_volume"]
 
 
 class MarketDataProvider(ABC):
@@ -60,9 +64,10 @@ def normalise_bars(df: pd.DataFrame) -> pd.DataFrame:
         raise ProviderError(f"bar data missing columns: {sorted(missing)}")
     if "volume" not in renamed.columns:
         renamed["volume"] = 0.0
-    out = renamed[BAR_COLUMNS].copy()
+    cols = BAR_COLUMNS + [c for c in OPTIONAL_COLUMNS if c in renamed.columns]
+    out = renamed[cols].copy()
     ts = pd.to_datetime(out["ts"], utc=False)
     out["ts"] = ts.dt.tz_localize("UTC") if ts.dt.tz is None else ts.dt.tz_convert("UTC")
-    for c in BAR_COLUMNS[1:]:
+    for c in cols[1:]:
         out[c] = pd.to_numeric(out[c], errors="coerce").astype("float64")
     return out.sort_values("ts", kind="stable").reset_index(drop=True)

@@ -160,7 +160,8 @@ HYPOTHESES: list[Hypothesis] = [
     # --- order flow
     H("H28", "Cumulative delta divergence", "order_flow", "futures,crypto", "1m,5m",
       "Price highs without delta confirmation fail.", "new high with lower cumulative delta",
-      "prior swing low", "new high + 1 tick", "1.5R", "range", data="ticks"),
+      "prior swing low", "new high + 1 tick", "1.5R", "range", data="ohlcv",
+      implemented="OF-DELTA-001"),
     H("H29", "Order book imbalance", "order_flow", "crypto,futures", "tick",
       "Top-of-book imbalance predicts the next price move.", "bid/ask size ratio > 3",
       "imbalance reverts", "2 ticks", "2 ticks", "any", data="l2"),
