@@ -230,7 +230,9 @@ apex backup
 It writes a dated copy such as `backups\apex-backup-20261120-071500.db`, checks the copy
 is readable, and never changes `apex.db`. Add `--keep 14` to keep only the newest 14
 copies, or `--folder D:\apex-backups` to put them on another drive. `start-scheduler.bat`
-also makes one every day (the `nightly-backup` job in `jobs.json`).
+also makes one every day (the `nightly-backup` job in `jobs.json`). `apex doctor` (and the
+Check-up card on the dashboard) warns when there is no backup in `backups` from the last
+week.
 
 To restore: close APEX, rename `apex.db` to something like `apex-old.db`, copy the backup
 you want into the APEX folder, rename it to `apex.db`, and run `apex db-upgrade` once.

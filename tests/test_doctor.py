@@ -75,3 +75,24 @@ def test_missing_sqlite_file_fails_without_creating_it(tmp_path, monkeypatch, ca
 def test_live_mode_cannot_even_be_configured(live):
     with pytest.raises(ValueError):
         Settings(_env_file=None, trading_mode=live)
+
+
+def test_backup_check_counts_age(tmp_path):
+    import os
+    from datetime import UTC, datetime, timedelta
+
+    from apex.doctor import _backup_check
+
+    folder = tmp_path / "backups"
+    assert _backup_check(folder).level == WARN
+    folder.mkdir()
+    f = folder / "apex-backup-20261101-000000.db"
+    f.write_bytes(b"")
+    (folder / "other.db").write_bytes(b"")
+    now = datetime.now(UTC)
+    c = _backup_check(folder, now)
+    assert c.level == OK and "1 in" in c.detail and "today" in c.detail
+    old = (now - timedelta(days=10)).timestamp()
+    os.utime(f, (old, old))
+    assert _backup_check(folder, now).level == WARN
+    assert "apex backup" in _backup_check(folder, now).detail
