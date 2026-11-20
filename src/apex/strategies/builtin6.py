@@ -57,3 +57,35 @@ class GapAndGo(Strategy):
         target = c + sig * p["rr"] * (c - stop).abs()
         pos = _trade(bars, sig, stop, target, flat=key != key.shift(1))
         return ind.flat_before_close(pos, bars, p["calendar"], p["flat_bars"])
+
+
+def anchor_segments(ts: pd.Series, anchors: list[str]) -> np.ndarray:
+    """For each bar, how many anchor dates are at or before it (0 = before the first)."""
+    days = np.sort(pd.to_datetime(pd.Series(anchors, dtype=object), utc=True)
+                   .dt.normalize().to_numpy())
+    return np.searchsorted(days, pd.to_datetime(ts, utc=True).to_numpy(), side="right")
+
+
+@register
+class EarningsAnchoredVwap(Strategy):
+    meta = _meta("VWAP-EARN-001", "Anchored VWAP from earnings", "vwap",
+                 "The volume-weighted average price since the last earnings release is the "
+                 "average cost of everyone who traded the news; reclaiming it from below "
+                 "shows buyers back in control.",
+                 "close crosses back above the VWAP anchored at the first session after the "
+                 "latest earnings release (`anchors`: dates from `apex earnings-dates`)",
+                 "close below the anchored VWAP", "anchored VWAP - `atr_mult` x ATR", "none",
+                 {"anchors": [], "atr_n": 14, "atr_mult": 1.0},
+                 tfs=(Timeframe.D1,), assets=(AssetClass.EQUITY,))
+
+    def target_position(self, bars, p):
+        h, lo, c, v = (bars[x] for x in ("high", "low", "close", "volume"))
+        seg = pd.Series(anchor_segments(bars["ts"], list(p["anchors"])), index=bars.index)
+        tp_v = ((h + lo + c) / 3.0) * v
+        avwap = tp_v.groupby(seg).cumsum() / v.groupby(seg).cumsum().replace(0.0, np.nan)
+        avwap = avwap.where(seg > 0)
+        above = c > avwap
+        was_below = (c.shift(1) <= avwap.shift(1)) & (seg == seg.shift(1))
+        sig = (above & was_below).astype(float)
+        stop = avwap - p["atr_mult"] * ind.atr(bars, int(p["atr_n"]))
+        return _trade(bars, sig, stop.fillna(-np.inf), exit_long=c < avwap)

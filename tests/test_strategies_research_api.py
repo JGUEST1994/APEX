@@ -35,6 +35,11 @@ _DATASETS = {  # symbol, timeframe, start, end, look-ahead cut, overnight gap vo
 }
 
 
+# Strategies that need event dates from outside the price data get some for these tests.
+_PARAMS = {"VWAP-EARN-001": {"anchors": [f"{y}-{m:02d}-05" for y in (2022, 2023, 2024)
+                                         for m in (1, 4, 7, 10)]}}
+
+
 @functools.cache
 def _bars(data: str):
     sym, tf, start, end, _, gap_vol = _DATASETS[data]
@@ -48,7 +53,7 @@ def test_strategies_have_no_lookahead(key, data):
     cut = _DATASETS[data][4]
     strat = all_strategies()[key]()
     bars = _bars(data).copy()
-    params = strat.params()
+    params = strat.params(_PARAMS.get(key))
     full = strat.target_position(bars, params)
     partial = strat.target_position(bars.iloc[:cut].copy(), params)
     assert len(full) == len(bars)
@@ -130,5 +135,6 @@ def test_every_strategy_trades_on_some_data(key):
 
     trades = 0
     for data, (sym, *_rest) in _DATASETS.items():
-        trades += run_backtest(_bars(data).copy(), all_strategies()[key](), by_symbol()[sym]).metrics["trades"]
+        trades += run_backtest(_bars(data).copy(), all_strategies()[key](), by_symbol()[sym],
+                               _PARAMS.get(key)).metrics["trades"]
     assert trades > 0
