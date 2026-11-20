@@ -168,7 +168,7 @@ HYPOTHESES: list[Hypothesis] = [
     H("H30", "Absorption at extremes", "order_flow", "futures", "1m",
       "Large passive volume at a level without price progress marks a reversal.",
       "volume > 3x average with < 1 tick progress", "10 minutes", "level +2 ticks", "2R", "range",
-      data="ticks"),
+      data="ohlcv", implemented="OF-ABSORB-001"),
     # --- liquidity sweep
     H("H31", "Prior-low sweep reversal", "liquidity_sweep", "forex,crypto,futures,equity",
       "15m,1h", "Stops below obvious lows are swept then price reverses.",

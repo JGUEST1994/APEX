@@ -72,7 +72,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H28 | Cumulative delta divergence | futures,crypto | 1m,5m | new high with lower cumulative delta | prior swing low | new high + 1 tick | ohlcv | OF-DELTA-001 |
 | H29 | Order book imbalance | crypto,futures | tick | bid/ask size ratio > 3 | imbalance reverts | 2 ticks | l2 | - |
-| H30 | Absorption at extremes | futures | 1m | volume > 3x average with < 1 tick progress | 10 minutes | level +2 ticks | ticks | - |
+| H30 | Absorption at extremes | futures | 1m | volume > 3x average with < 1 tick progress | 10 minutes | level +2 ticks | ohlcv | OF-ABSORB-001 |
 
 ## Liquidity Sweep (4)
 

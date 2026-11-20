@@ -39,7 +39,9 @@ _DATASETS = {  # symbol, timeframe, start, end, look-ahead cut, overnight gap vo
 
 # Strategies that need event dates from outside the price data get some for these tests.
 _PARAMS = {"VWAP-EARN-001": {"anchors": [f"{y}-{m:02d}-05" for y in (2022, 2023, 2024)
-                                         for m in (1, 4, 7, 10)]}}
+                                         for m in (1, 4, 7, 10)]},
+           # synthetic volume is uniform (never 3x its average), so ask for a smaller spike
+           "OF-ABSORB-001": {"vol_mult": 1.5, "progress_atr": 0.5}}
 
 
 @functools.cache

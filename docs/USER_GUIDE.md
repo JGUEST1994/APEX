@@ -74,7 +74,7 @@ than for long history. Coinbase and Binance can fetch long history.
 
 Binance also reports how much of each bar's volume came from buyers who were in a hurry
 (they bought at the asking price). APEX keeps that as "buy volume", and the order-flow
-strategy OF-DELTA-001 needs it, so use Binance (1m, 5m or 15m) for that strategy. Bars
+strategies OF-DELTA-001 and OF-ABSORB-001 need it, so use Binance (1m or 5m) for them. Bars
 you downloaded before this was added don't have it; download a fresh date range to get it.
 
 **US stocks and ETFs:** sign up for a free Alpaca account, create API keys, and put them

@@ -192,3 +192,44 @@ def test_cumulative_delta():
     b = _flow_bars(3)
     b["buy_volume"] = [60.0, np.nan, 30.0]
     assert cumulative_delta(b).tolist() == [20.0, 20.0, -20.0]
+
+
+def _absorb(i=30, side=-1):
+    """Bar ``i`` makes a new low (side -1) or high (+1) on 5x volume, aggressive flow in the
+    breaking direction, and closes where it opened."""
+    b = _flow_bars(50)
+    b.loc[i, "volume"] = 500.0
+    if side < 0:
+        b.loc[i, "low"], b.loc[i, "buy_volume"] = 99.0, 100.0  # 400 sold aggressively
+    else:
+        b.loc[i, "high"], b.loc[i, "buy_volume"] = 101.0, 400.0
+    return b
+
+
+def _run_absorb(bars, **over):
+    s = all_strategies()["OF-ABSORB-001"]()
+    return s.target_position(bars, s.params(over))
+
+
+def test_selling_absorbed_at_a_low_buys_then_times_out():
+    pos = _run_absorb(_absorb())
+    assert (pos.iloc[:30] == 0).all() and (pos.iloc[30:40] == 1.0).all()
+    assert pos.iloc[40] == 0.0  # max_bars=10
+
+
+def test_buying_absorbed_at_a_high_sells():
+    pos = _run_absorb(_absorb(side=1))
+    assert pos.iloc[30] == -1.0
+
+
+def test_absorption_needs_heavy_volume_a_stall_and_the_right_flow():
+    weak = _absorb()
+    weak.loc[30, "volume"], weak.loc[30, "buy_volume"] = 200.0, 50.0
+    assert (_run_absorb(weak) == 0).all()
+    moved = _absorb()
+    moved.loc[30, ["close", "low"]] = 99.2, 99.0  # price did give way: not absorption
+    assert (_run_absorb(moved) == 0).all()
+    buyers = _absorb()
+    buyers.loc[30, "buy_volume"] = 400.0  # buyers drove the bar at the low: nothing absorbed
+    assert (_run_absorb(buyers) == 0).all()
+    assert (_run_absorb(_absorb().drop(columns="buy_volume")) == 0).all()
