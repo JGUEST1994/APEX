@@ -16,8 +16,8 @@ def _dt(s: str) -> datetime:
     return d if d.tzinfo else d.replace(tzinfo=UTC)
 
 
-PROVIDERS = ["synthetic", "csv", "csv-cont", "csv-cont-ratio", "binance", "kraken", "coinbase",
-             "alpaca", "polygon"]
+PROVIDERS = ["synthetic", "csv", "csv-cont", "csv-cont-ratio", "dukascopy-csv", "binance",
+             "kraken", "coinbase", "alpaca", "polygon"]
 
 
 def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201
@@ -29,6 +29,10 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
         from apex.marketdata.providers.csv_file import CsvFileProvider
 
         return CsvFileProvider(Path(csv_root))
+    if name == "dukascopy-csv":
+        from apex.marketdata.providers.dukascopy_csv import DukascopyCsvProvider
+
+        return DukascopyCsvProvider(Path(csv_root))
     if name in ("csv-cont", "csv-cont-ratio"):
         from apex.marketdata.providers.continuous import ContinuousFuturesProvider
 
