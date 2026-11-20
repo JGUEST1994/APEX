@@ -10,7 +10,7 @@ Run `apex serve` and open `http://127.0.0.1:8000/docs` for the live OpenAPI refe
 | GET | `/ingestion-runs` | `limit` ≤ 500 | recent ingestion runs with `content_sha256` data versions |
 | GET | `/experiments` | `limit` ≤ 500 | backtest experiments with strategy key and version, params, data manifest (incl. data SHA-256), code version, metrics; all `simulated: true` |
 | GET | `/leaderboard` | `asset_class`, `symbol`, `timeframe`, `category` | latest walk-forward result per strategy/market ranked by robustness score, with gate pass/fail reasons and status; all `simulated: true` |
-| GET | `/strategies` | | registered strategies with metadata, current lifecycle status and `instruments` (1, 2, or `"2+"` for a basket) |
+| GET | `/strategies` | | registered strategies with metadata (description, `entry_rules`, `exit_rules`, `stop_loss`, `take_profit`, `asset_classes`, `default_params`, `ideas` = hypothesis ids), current lifecycle status and `instruments` (1, 2, or `"2+"` for a basket) |
 | GET | `/system/checks` | | the `apex doctor` check-up: list of `level` (OK/WARN/FAIL), `name`, `detail`; says whether keys are set, never their values |
 | GET | `/hypotheses` | | the strategy hypothesis bank (spec section 8): id, name, category, markets, timeframes, idea, entry/exit/stop/target, regime, `data` needed and `implemented` (strategy key or null) |
 | GET | `/datasets` | | stored bar datasets (symbol, timeframe, source) with counts and first/last bar |

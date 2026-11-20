@@ -196,5 +196,11 @@ svg#chart .dot { fill: var(--brand); stroke: var(--panel); stroke-width: 2; }
   main { padding: 20px 16px 40px; }
   #banner { font-size: 11px; letter-spacing: .03em; }
   svg#chart { height: 260px; }
+  td.wrap { min-width: 12em; }
+  #srules td:first-child { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.cmd { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--sunk);
+  border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; margin: 0;
+  white-space: pre-wrap; overflow-wrap: anywhere; }

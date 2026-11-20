@@ -169,9 +169,14 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/strategies")
     def strategies(s: Session = Depends(db)) -> list[dict]:
+        from apex.strategies.hypotheses import HYPOTHESES
         from apex.strategies.multi import all_multi_strategies
         from apex.strategies.registry import all_strategies
 
+        ideas: dict[str, list[str]] = {}
+        for h in HYPOTHESES:
+            if h.implemented:
+                ideas.setdefault(h.implemented, []).append(h.id)
         status = {}
         for row, ver in s.execute(select(StrategyRow, StrategyVersion).join(
                 StrategyVersion, StrategyVersion.strategy_id == StrategyRow.id)):
@@ -180,6 +185,10 @@ def create_app(settings: Settings | None = None,
                  "version": c.meta.version, "regimes": list(c.meta.regimes),
                  "timeframes": [t.value for t in c.meta.timeframes],
                  "description": c.meta.description,
+                 "entry_rules": c.meta.entry_rules, "exit_rules": c.meta.exit_rules,
+                 "stop_loss": c.meta.stop_loss, "take_profit": c.meta.take_profit,
+                 "asset_classes": [a.value for a in c.meta.asset_classes],
+                 "default_params": c.meta.default_params, "ideas": ideas.get(k, []),
                  "status": status.get(k, {}).get("status", "experimental"),
                  "instruments": getattr(c, "legs", 1) or "2+"}
                 for k, c in sorted({**all_strategies(), **all_multi_strategies()}.items())]
