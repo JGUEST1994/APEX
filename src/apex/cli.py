@@ -257,7 +257,9 @@ def main(argv: list[str] | None = None) -> int:
 
         from apex.api.app import create_app
 
-        uvicorn.run(create_app(settings), host=args.host, port=args.port)
+        # log_config=None: uvicorn's own loggers propagate to our redacting handler, so a
+        # token in a request line (e.g. /ui/?token=...) is never written to the log.
+        uvicorn.run(create_app(settings), host=args.host, port=args.port, log_config=None)
         return 0
 
     from apex.db.session import make_engine, make_session_factory, session_scope

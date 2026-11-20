@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -33,12 +34,46 @@ from apex.domain.market import Timeframe
 from apex.marketdata.repository import get_instrument, load_bars
 from apex.research.library import search
 
+TOKEN_COOKIE = "apex_token"
+OPEN_PATHS = ("/health",)  # container healthchecks need no token
+
+
+def _require_token(app: FastAPI, settings: Settings) -> None:
+    """When ``APEX_API_TOKEN`` is set, every request except /health needs it, as
+    ``Authorization: Bearer <token>`` or the cookie set by opening ``/ui/?token=<token>``."""
+    if settings.api_token is None or not settings.api_token.get_secret_value():
+        return
+    token = settings.api_token.get_secret_value().encode()
+
+    def ok(value: str | None) -> bool:
+        return value is not None and hmac.compare_digest(value.encode(), token)
+
+    @app.middleware("http")
+    async def check_token(request: Request, call_next):  # noqa: ANN001, ANN202
+        if request.url.path in OPEN_PATHS:
+            return await call_next(request)
+        given = request.query_params.get("token")
+        if request.url.path.startswith("/ui") and ok(given):
+            # Swap the token in the address bar for a cookie, so it is not left in history.
+            resp = RedirectResponse(request.url.path)
+            resp.set_cookie(TOKEN_COOKIE, given, httponly=True, samesite="strict",
+                            secure=request.url.scheme == "https")
+            return resp
+        auth = request.headers.get("authorization", "")
+        bearer = auth[7:] if auth.lower().startswith("bearer ") else None
+        if ok(bearer) or ok(request.cookies.get(TOKEN_COOKIE)):
+            return await call_next(request)
+        return PlainTextResponse("APEX needs its access token: open /ui/?token=<your token> "
+                                 "once in this browser, or send Authorization: Bearer.",
+                                 status_code=401)
+
 
 def create_app(settings: Settings | None = None,
                session_factory: sessionmaker[Session] | None = None) -> FastAPI:
     settings = settings or get_settings()
     factory = session_factory or make_session_factory(make_engine(settings.database_url))
     app = FastAPI(title="APEX API", version=__version__)
+    _require_token(app, settings)
 
     def db() -> Iterator[Session]:
         with factory() as s:

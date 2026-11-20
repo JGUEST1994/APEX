@@ -19,6 +19,7 @@ services:
       APEX_DATABASE_URL: postgresql+psycopg://apex:${APEX_DB_PASSWORD}@db:5432/apex
       APEX_TRADING_MODE: research
       APEX_LOG_JSON: "true"
+      APEX_API_TOKEN: ${APEX_API_TOKEN:-}   # optional; empty = no token
     ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       test: ["CMD", "python", "-c",
