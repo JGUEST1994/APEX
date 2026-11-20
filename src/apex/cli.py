@@ -237,6 +237,10 @@ def main(argv: list[str] | None = None) -> int:
                         "backups folder (safe while APEX is running)")
     bk.add_argument("--folder", default="backups", help="where to put the copy")
     bk.add_argument("--keep", type=int, help="keep only the newest N backups there")
+    qs = sub.add_parser("quickstart", help="first run: set up, download free daily prices "
+                        "and run one example backtest")
+    qs.add_argument("--provider", choices=PROVIDERS, default="coinbase")
+    qs.add_argument("--symbol", default="BTCUSDT")
     sv = sub.add_parser("serve", help="run the API server")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
@@ -257,6 +261,10 @@ def main(argv: list[str] | None = None) -> int:
         checks = run_checks(settings)
         print(render(checks))
         return 1 if any(c.level == FAIL for c in checks) else 0
+    if args.cmd == "quickstart":
+        from apex.quickstart import run as quickstart
+
+        return quickstart(settings, args.provider, args.symbol)
     if args.cmd == "backup":
         from apex.backup import BackupError
         from apex.backup import backup as do_backup

@@ -15,6 +15,17 @@ cd C:\path\to\APEX
 If you have not installed APEX yet, follow the quick start in [README.md](../README.md)
 first (it ends with `apex db-upgrade` and `apex seed-instruments`).
 
+**Fastest first run:** one command sets up the database, adds the markets, downloads about
+three years of free daily Bitcoin prices from Coinbase (no account needed) and runs one
+example backtest, so the dashboard has something to show:
+
+```powershell
+apex quickstart
+```
+
+It is safe to run again: it only downloads days that are missing. For another free market,
+add for example `--symbol ETHUSDT`.
+
 ## 1. Look at the dashboard
 
 The easy way: double-click **`start-apex.bat`** in the APEX folder. It switches on the

@@ -17,6 +17,7 @@ cp .env.example .env
 apex db-upgrade
 apex seed-instruments
 apex doctor           # read-only check-up: database, tables, keys set (never shown), data
+apex quickstart       # or all-in-one: set up, ~3 years of free daily BTC prices, one example backtest
 apex ingest --provider synthetic --symbol ES --timeframe 1h --start 2025-01-06 --end 2025-01-11
 apex backtest --strategy TF-SMA-001 --symbol ES --timeframe 1h --source synthetic --start 2025-01-06 --end 2025-01-11 --param fast=5 --param slow=20
 apex serve            # http://127.0.0.1:8000/docs
