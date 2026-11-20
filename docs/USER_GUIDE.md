@@ -237,6 +237,17 @@ created (old history replayed into a new account doesn't count), with the accoun
 running, no kill-switch trips or halts, and practice trades matching the backtest.
 Otherwise it lists what is missing. It only reports; it never approves anything.
 
+When it says READY, and the strategy has passed the tournament (see section 4), you can
+approve it:
+
+```powershell
+apex strategy-approve --account sma-spy --by "Your Name" --reason "why you are happy with it"
+```
+
+APEX refuses if the record isn't READY, if the strategy hasn't passed the tournament, or if
+its code has changed since. Your name, the reason and the evidence go into the log.
+Approving a strategy does not switch on any real-money trading; APEX has none.
+
 On the dashboard's Practice trading tab, click an account's name to see how its simulated
 value moved, whether it matched the backtest, and its recent fills.
 
