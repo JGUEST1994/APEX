@@ -152,18 +152,30 @@ def create_app(settings: Settings | None = None,
         return [{"kind": i.kind, "severity": i.severity,
                  "ts": i.ts.isoformat() if i.ts else None, "detail": i.detail} for i in rows]
 
-    @app.get("/experiments")
-    def experiments(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
+    def _experiments(s: Session, limit: int, exp_id: int | None = None) -> list[dict]:
         sv = StrategyVersion
-        rows = s.execute(select(Experiment, StrategyRow.key, sv.version)
-                         .join(sv, Experiment.strategy_version_id == sv.id)
-                         .join(StrategyRow, sv.strategy_id == StrategyRow.id)
-                         .order_by(Experiment.id.desc()).limit(limit))
+        q = (select(Experiment, StrategyRow.key, sv.version)
+             .join(sv, Experiment.strategy_version_id == sv.id)
+             .join(StrategyRow, sv.strategy_id == StrategyRow.id))
+        if exp_id is not None:
+            q = q.where(Experiment.id == exp_id)
+        rows = s.execute(q.order_by(Experiment.id.desc()).limit(limit))
         return [{"id": e.id, "strategy_version_id": e.strategy_version_id, "kind": e.kind,
                  "strategy": key, "strategy_version": ver, "simulated": True,
                  "params": e.params, "data_manifest": e.data_manifest,
                  "code_version": e.code_version, "metrics": e.metrics,
                  "created_at": e.created_at.isoformat()} for e, key, ver in rows]
+
+    @app.get("/experiments")
+    def experiments(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
+        return _experiments(s, limit)
+
+    @app.get("/experiments/{exp_id}")
+    def experiment(exp_id: int, s: Session = Depends(db)) -> dict:
+        found = _experiments(s, 1, exp_id)
+        if not found:
+            raise HTTPException(404, "experiment not found")
+        return found[0]
 
     @app.get("/experiments/{exp_id}/equity")
     def experiment_equity(exp_id: int, points: int = Query(600, ge=10, le=5000),

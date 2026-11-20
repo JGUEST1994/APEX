@@ -155,7 +155,8 @@ apex leaderboard
 Leave out `--strategies` to try every strategy that suits the market. Most ideas **fail**
 the gates, and that is the system working: the "Why not" column on the Tournament tab says
 which test each one missed (too few trades, not enough out-of-sample profit, too big a
-drawdown, and so on). Only strategies that pass move on towards paper trading.
+drawdown, and so on). Click a strategy's name there to see every figure from that run,
+explained. Only strategies that pass move on towards paper trading.
 
 ## 5. Practice (paper) trading
 
