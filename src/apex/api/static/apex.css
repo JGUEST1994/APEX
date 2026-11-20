@@ -211,3 +211,4 @@ svg.pchart .dot { fill: var(--brand); stroke: var(--panel); stroke-width: 2; }
 .cmd { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--sunk);
   border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; margin: 0;
   white-space: pre-wrap; overflow-wrap: anywhere; }
+.mt { margin-top: 1.25rem; }
