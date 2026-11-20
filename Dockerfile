@@ -1,4 +1,4 @@
-# APEX API/worker image. Not yet built or tested in CI (see docs/STATUS.md).
+# APEX API/worker image. Built and smoke-tested by the `docker` CI job.
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
