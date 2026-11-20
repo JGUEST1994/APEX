@@ -37,7 +37,10 @@
         <div class="tip" id="tip"></div></div>
     </div>
   </section>
-  <section id="strategies"><div class="card"><table id="strats"></table></div></section>
+  <section id="strategies"><div class="card"><table id="strats"></table></div>
+    <div class="card"><h3 id="sname">Select a strategy</h3><p id="sdesc"></p>
+      <table id="srules"></table><p class="muted">Try it on stored prices:</p>
+      <pre id="scmd" class="cmd"></pre></div></section>
   <section id="ideas"><div class="card"><p id="ideasum" class="muted"></p>
     <table id="ideatab"></table></div></section>
   <section id="leaderboard">
@@ -299,11 +302,30 @@ const LOAD = {
   },
   async strategies() {
     const st = await get("/strategies");
-    table($("strats"), [["Key", (r) => r.key], ["Name", (r) => r.name], ["Category", (r) => r.category],
+    const open = (r) => {
+      $("sname").textContent = `${r.key}: ${r.name}`;
+      $("sdesc").textContent = r.description;
+      const p = r.default_params || {};
+      table($("srules"), [["Rule", (x) => x[0]], ["Detail", (x) => x[1], "wrap"]], [
+        ["Enter", r.entry_rules], ["Exit", r.exit_rules], ["Stop loss", r.stop_loss],
+        ["Target", r.take_profit], ["Suits", `${(r.asset_classes || []).join(", ")} · ${r.timeframes.join(", ")}`],
+        ["Default settings", Object.entries(p).map(([k, v]) => `${k}=${v}`).join(", ") || "none"],
+        ["Trading idea", (r.ideas || []).join(", ") || "–"]]);
+      // An example market each strategy suits, and a source that provides it.
+      const EX = { equity: ["SPY", "QQQ,SPY", "alpaca"], crypto: ["BTCUSDT", "ETHUSDT,BTCUSDT", "coinbase"],
+        futures: ["ES", "NQ,ES", "csv"], forex: ["EURUSD", "GBPUSD,EURUSD", "csv"] };
+      const ac = (r.asset_classes || []).find((a) => EX[a]) || "equity";
+      const [one, two, src] = EX[ac], tf = r.timeframes[0];
+      $("scmd").textContent = r.instruments !== 1
+        ? `apex backtest-pair --strategy ${r.key} --symbols ${two} --timeframe ${tf} --source ${src} --start 2023-01-01 --end 2025-01-01`
+        : `apex backtest --strategy ${r.key} --symbol ${one} --timeframe ${tf} --source ${src} --start 2023-01-01 --end 2025-01-01`;
+    };
+    table($("strats"), [["Key", (r) => { const b = el("button", r.key, "linkbtn"); b.onclick = () => open(r); return b; }], ["Name", (r) => r.name], ["Category", (r) => r.category],
       ["Version", (r) => r.version],
       ["Markets", (r) => r.instruments === 1 ? "one" : r.instruments === "2+" ? "basket (2+)" : `${r.instruments} together`],
       ["Status", (r) => el("span", r.status, "tag")],
       ["Regimes", (r) => r.regimes.join(", ")], ["Timeframes", (r) => r.timeframes.join(", ")]], st);
+    if (st.length) open(st[0]);
   },
   async ideas() {
     const hs = await get("/hypotheses");
