@@ -26,12 +26,13 @@ class Check:
 
 
 def _migration_heads(url: str, engine) -> tuple[set[str], set[str]]:  # noqa: ANN001
+    logging.getLogger("alembic").setLevel(logging.WARNING)  # keep the report readable (set
+    # before importing alembic: its plugin setup logs at import time)
     from alembic.runtime.migration import MigrationContext
     from alembic.script import ScriptDirectory
 
     from apex.db.migrate import alembic_config
 
-    logging.getLogger("alembic").setLevel(logging.WARNING)  # keep the report readable
     heads = set(ScriptDirectory.from_config(alembic_config(url)).get_heads())
     with engine.connect() as conn:
         current = set(MigrationContext.configure(conn).get_current_heads())

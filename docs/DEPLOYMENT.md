@@ -58,6 +58,15 @@ apex paper-reset-kill --name sma-spy --actor jake
 
 Containers use `restart: unless-stopped`; the API applies migrations on start. When trading arrives (Phase 9) the engine will start in a halted, reconciling state and will not resume trading automatically if account state is uncertain.
 
-## Backups (planned Phase 13)
+## Backups
 
-Nightly `pg_dump -Fc` to encrypted off-site storage, with a periodic restore drill.
+SQLite installs: `apex backup [--folder backups] [--keep N]` copies the database with
+SQLite's online backup API (a consistent snapshot even while the API or scheduler writes),
+runs `PRAGMA integrity_check` on the copy, and only then names it
+`apex-backup-YYYYMMDD-HHMMSS.db` (UTC). `--keep` prunes older `apex-backup-*` files in that
+folder and nothing else. The scheduler accepts the same as a job:
+`{"type": "backup", "folder": "backups", "keep": 14, "every_minutes": 1440}` (runs after
+data and paper jobs; `jobs.example.json` includes it).
+
+PostgreSQL installs: `apex backup` refuses and points here. Use `pg_dump -Fc` from cron
+(planned Phase 13: encrypted off-site storage and a periodic restore drill).

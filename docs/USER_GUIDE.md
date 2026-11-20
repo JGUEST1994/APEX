@@ -203,6 +203,23 @@ apex export fills --name sma-spy --out C:\apex-exports\sma-spy-fills.csv
 Every results row has a `simulated` column set to true, as a reminder that none of it is
 real trading.
 
+## 9. Back up your data
+
+Everything APEX knows (prices, backtests, practice accounts) lives in one file, `apex.db`.
+To save a copy, run this in the APEX folder (it is safe while the dashboard is open):
+
+```powershell
+apex backup
+```
+
+It writes a dated copy such as `backups\apex-backup-20261120-071500.db`, checks the copy
+is readable, and never changes `apex.db`. Add `--keep 14` to keep only the newest 14
+copies, or `--folder D:\apex-backups` to put them on another drive. `start-scheduler.bat`
+also makes one every day (the `nightly-backup` job in `jobs.json`).
+
+To restore: close APEX, rename `apex.db` to something like `apex-old.db`, copy the backup
+you want into the APEX folder, rename it to `apex.db`, and run `apex db-upgrade` once.
+
 ## When something goes wrong
 
 Start with a check-up. It only reads, never changes anything, and never shows your keys:
