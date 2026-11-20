@@ -83,22 +83,29 @@ def evaluate(metrics: dict, gates: Gates, family_n: int) -> tuple[bool, list[str
     m["deflated_sharpe_family"] = dsr
     # Plain-English reasons (shown in the dashboard's "Why not" column); the technical
     # name follows in brackets.
-    pc = lambda x: f"{x:.0%}"  # noqa: E731
+    def pc(x: float, limit: float | None = None) -> str:
+        """Whole percent, or one decimal when rounding would make a miss look like the
+        limit itself (e.g. "94.8%, needs 95%" rather than "95%, needs 95%")."""
+        whole = f"{x:.0%}"
+        if limit is not None and x != limit and whole == f"{limit:.0%}":
+            return f"{x:.1%}"
+        return whole
+
     if oos_trades < gates.min_oos_trades:
         reasons.append(f"too few trades on unseen data: {oos_trades}, needs "
                        f"{gates.min_oos_trades} (OOS trades)")
     if dsr is None or dsr < gates.min_dsr:
-        got = "not measurable" if dsr is None else pc(dsr)
+        got = "not measurable" if dsr is None else pc(dsr, gates.min_dsr)
         reasons.append(f"could be luck: confidence the edge is real {got}, needs "
                        f"{pc(gates.min_dsr)} (deflated Sharpe)")
     pf = _num(m.get("pct_profitable_folds"))
     if pf is None or pf < gates.min_profitable_folds:
-        got = "not measurable" if pf is None else pc(pf)
+        got = "not measurable" if pf is None else pc(pf, gates.min_profitable_folds)
         reasons.append(f"not consistent: profitable in {got} of unseen stretches, needs "
                        f"{pc(gates.min_profitable_folds)} (profitable folds)")
     dd = _num(m.get("oos_max_drawdown"))
     if dd is None or dd < -gates.max_drawdown:
-        got = "not measurable" if dd is None else pc(dd)
+        got = "not measurable" if dd is None else pc(dd, -gates.max_drawdown)
         reasons.append(f"falls too far: worst drop on unseen data {got}, limit "
                        f"-{pc(gates.max_drawdown)} (OOS max drawdown)")
     pbo = _num(m.get("pbo"))
@@ -232,6 +239,8 @@ def leaderboard(session: Session, *, asset_class: str | None = None,
             "oos_max_drawdown": m.get("oos_max_drawdown"), "pbo": m.get("pbo"),
             "oos_trades": m.get("oos_trades"), "family_trials": fam,
             "pct_profitable_folds": m.get("pct_profitable_folds"),
+            "buy_hold_return": m.get("oos_buy_hold_return"),
+            "buy_hold_max_drawdown": m.get("oos_buy_hold_max_drawdown"),
             "fail_reasons": "; ".join(reasons), "simulated": True})
     df = pd.DataFrame(out)
     if df.empty:

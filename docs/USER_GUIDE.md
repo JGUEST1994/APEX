@@ -70,7 +70,9 @@ apex ingest --provider kraken   --symbol BTCUSDT --timeframe 1h --start 2024-01-
 ```
 
 Kraken only gives the most recent 720 bars, so use it for keeping data up to date rather
-than for long history. Coinbase and Binance can fetch long history.
+than for long history. Coinbase and Binance can fetch long history. Coinbase prices
+BTCUSDT and ETHUSDT from its US-dollar books (BTC-USD, ETH-USD), which go back to 2016;
+its Tether (USDT) books only started in 2021.
 
 Binance also reports how much of each bar's volume came from buyers who were in a hurry
 (they bought at the asking price). APEX keeps that as "buy volume", and the order-flow
@@ -90,6 +92,9 @@ Then:
 ```powershell
 apex ingest --provider alpaca --symbol SPY --timeframe 1d --start 2019-01-01 --end 2025-01-01
 ```
+
+Alpaca's free plan serves the IEX exchange's prices, which only reach back to about 2020.
+For longer daily stock history use Tiingo (below), which goes back decades.
 
 **US stocks and forex from Tiingo (free key):** sign up at tiingo.com, copy your API token
 from your account page and add it to `.env`:
@@ -217,7 +222,14 @@ explained. Only strategies that pass move on towards paper trading.
 To rank everything on real prices in one go, run `scripts/research-run.sh` (Mac or Linux),
 or on GitHub open the Actions tab, pick **research-run** and press **Run workflow**. It
 downloads free crypto prices (plus US stocks and forex if your Alpaca and Tiingo keys are
-set) and saves the leaderboard in `research-out/`.
+set) and saves the leaderboard and shortlist in `research-out/`. Daily US stocks come from
+Tiingo back to 2000 when its key is set. To run only some market groups, list them in
+`RESEARCH_GROUPS` (or the workflow's *groups* box), for example `stocks-1d fx-1h`; the
+groups are `crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h`. A market
+whose download fails is left out and the rest of its group still runs.
+
+Each result also shows what simply holding the same market made over the same unseen
+stretches, so you can see whether a strategy did better than buying and waiting.
 
 `apex shortlist` turns the latest results into a short, plain-English list: the strategies
 that passed every test (the ones worth a 30-day practice run), the nearest misses, and how

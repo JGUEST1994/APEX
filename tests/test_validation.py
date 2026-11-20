@@ -96,6 +96,17 @@ def test_walk_forward(daily):
     assert again.summary == s
 
 
+def test_walk_forward_reports_simply_holding_over_the_same_stretches(daily):
+    wf = walk_forward(daily, all_strategies()["TF-SMA-001"](), SPY, {"fast": [10], "slow": [50]},
+                      train_bars=750, test_bars=250)
+    close = daily["close"].to_numpy(float)
+    expected = np.prod([close[a + 249] / close[a] for a in range(750, 750 + 250 * len(wf.folds),
+                                                                     250)]) - 1
+    assert wf.summary["oos_buy_hold_return"] == pytest.approx(expected)
+    assert wf.buy_hold_returns.index.equals(wf.oos_returns.index)  # the same bars
+    assert -1 < wf.summary["oos_buy_hold_max_drawdown"] <= 0
+
+
 def test_walk_forward_too_short(daily):
     with pytest.raises(ValueError):
         walk_forward(daily.iloc[:100], all_strategies()["TF-SMA-001"](), SPY, {"fast": [10]},

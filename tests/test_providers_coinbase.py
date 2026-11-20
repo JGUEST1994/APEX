@@ -1,5 +1,6 @@
 """Coinbase adapter, tested with mocked HTTP (the sandbox cannot reach it)."""
 
+import dataclasses
 from datetime import datetime, timedelta
 
 import httpx
@@ -40,8 +41,8 @@ def test_coinbase_walks_300_candle_windows_and_sorts_oldest_first():
     client, calls = _client(_candles)
     p = CoinbaseSpotProvider(client=client, pause=0)
     df = p.fetch_bars(BTC, Timeframe.H1, utc(2025, 1, 1), utc(2025, 2, 1))  # 744 hours
-    assert coinbase_product(BTC) == "BTC-USDT"
-    assert calls[0].url.path == "/products/BTC-USDT/candles"
+    assert coinbase_product(BTC) == "BTC-USD"  # the USD book: history back to 2015
+    assert calls[0].url.path == "/products/BTC-USD/candles"
     assert calls[0].url.params["granularity"] == "3600"
     assert len(calls) == 3  # 300 + 300 + 144
     assert len(df) == 744 and df["ts"].is_monotonic_increasing and df["ts"].is_unique
@@ -72,3 +73,8 @@ def test_coinbase_reports_errors_and_scope():
     p = CoinbaseSpotProvider(client=client)
     assert not p.supports(SPY, Timeframe.D1) and not p.supports(BTC, Timeframe.M30)
     assert p.supports(BTC, Timeframe.M5)
+
+
+def test_coinbase_keeps_other_quotes():
+    eur = dataclasses.replace(BTC, symbol="BTCEUR", quote_currency="EUR")
+    assert coinbase_product(eur) == "BTC-EUR"

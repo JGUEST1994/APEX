@@ -180,6 +180,8 @@ class WalkForwardResult:
     n_trials: int
     trial_sharpes: list[float] = field(default_factory=list)
     summary: dict = field(default_factory=dict)
+    # simply holding the market over the same unseen stretches (single markets only)
+    buy_hold_returns: pd.Series | None = None
 
 
 def param_grid(grid: dict[str, list]) -> list[dict]:
@@ -232,7 +234,7 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
     combos = [strategy.params(c) for c in param_grid(grid)]
     bars = _prepare(bars, strategy)
     n, ts = _nrows(bars), _ts(bars)
-    folds, oos_parts, trial_sharpes = [], [], []
+    folds, oos_parts, trial_sharpes, hold_parts = [], [], [], []
     start = train_bars
     while start + test_bars <= n:
         tr_lo = 0 if anchored else start - train_bars
@@ -251,6 +253,10 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
         res, eq = _segment(bars, strategy, spec, best, cfg, start, start + test_bars,
                            max(warmup, start))  # full history before test is legitimate
         oos_parts.append(eq.pct_change().fillna(0.0))
+        if not isinstance(bars, dict):  # a benchmark for single markets: buy and hold
+            close = bars["close"].iloc[start:start + test_bars]
+            hold_parts.append(pd.Series(close.to_numpy(float), index=pd.DatetimeIndex(
+                ts.iloc[start:start + test_bars])).pct_change().fillna(0.0))
         folds.append(Fold(ts.iloc[tr_lo], ts.iloc[start],
                           ts.iloc[start + test_bars - 1], best, scored[best_i],
                           {k: res.metrics.get(k) for k in
@@ -260,7 +266,8 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
         raise ValueError("not enough bars for one train+test window")
     oos = pd.concat(oos_parts)
     wf = WalkForwardResult(folds, oos, n_trials=len(combos) * len(folds),
-                           trial_sharpes=trial_sharpes)
+                           trial_sharpes=trial_sharpes,
+                           buy_hold_returns=pd.concat(hold_parts) if hold_parts else None)
     wf.summary = summarise_walk_forward(wf)
     return wf
 
@@ -278,10 +285,15 @@ def summarise_walk_forward(wf: WalkForwardResult) -> dict:
     if len(wf.trial_sharpes) > 1 and ppy:
         var_pp = float(np.var(wf.trial_sharpes, ddof=1)) / ppy
     dsr = deflated_sharpe(oos, max(wf.n_trials, 1), var_pp)
+    hold = wf.buy_hold_returns
+    held = (1 + hold).cumprod() if hold is not None and len(hold) else None
     return {
         "folds": len(wf.folds), "n_trials": wf.n_trials,
         "oos_total_return": float(eq.iloc[-1] - 1) if len(eq) else None,
         "oos_max_drawdown": float((eq / eq.cummax() - 1).min()) if len(eq) else None,
+        "oos_buy_hold_return": float(held.iloc[-1] - 1) if held is not None else None,
+        "oos_buy_hold_max_drawdown": (float((held / held.cummax() - 1).min())
+                                      if held is not None else None),
         "pct_profitable_folds": float(np.mean([r > 0 for r in tr])),
         "mean_is_sharpe": float(np.mean(is_scores)) if is_scores else None,
         "mean_oos_sharpe": float(np.mean(oos_sharpes)) if oos_sharpes else None,

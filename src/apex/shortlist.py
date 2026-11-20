@@ -14,11 +14,23 @@ from collections import Counter
 
 import pandas as pd
 
+from apex.backtest.tournament import Gates
+
+_BAR = Gates().min_dsr  # the confidence a result needs to pass
+
 
 def _pc(x: object, signed: bool = False) -> str:
     if not isinstance(x, int | float) or not math.isfinite(x):
         return "n/a"
     return f"{x:+.0%}" if signed else f"{x:.0%}"
+
+
+def _conf(x: object) -> str:
+    """Confidence as a whole percent, or with one decimal when rounding would put it on the
+    other side of the bar (94.8% must not read as 95%)."""
+    if isinstance(x, int | float) and math.isfinite(x) and (x < _BAR) != (round(x, 2) < _BAR):
+        return f"{x:.1%}"
+    return _pc(x)
 
 
 def _n(k: int, one: str, many: str) -> str:
@@ -37,12 +49,16 @@ def _short(reason: str) -> str:
 def _line(r: pd.Series) -> str:
     folds = r.get("pct_profitable_folds")
     trades = int(r["oos_trades"]) if pd.notna(r.get("oos_trades")) else 0
-    parts = [f"confidence the edge is real {_pc(r.get('deflated_sharpe'))}",
+    parts = [f"confidence the edge is real {_conf(r.get('deflated_sharpe'))}",
              f"return on unseen data {_pc(r.get('oos_return'), signed=True)}",
              f"worst drop {_pc(r.get('oos_max_drawdown'))}",
              f"{trades} trades on unseen data"]
     if folds is not None and pd.notna(folds):
         parts.insert(1, f"profitable in {_pc(folds)} of unseen stretches")
+    held = r.get("buy_hold_return")
+    if held is not None and pd.notna(held):  # the benchmark: simply holding the market
+        parts.append(f"simply holding it over the same stretches: "
+                     f"{_pc(held, signed=True)}, worst drop {_pc(r.get('buy_hold_max_drawdown'))}")
     return f"**{r['strategy']}** on {r['symbol']} ({r['timeframe']}): " + ", ".join(parts)
 
 
@@ -88,7 +104,8 @@ def to_markdown(sl: dict) -> str:
         out += ["", "## Nearest misses (did not pass; for interest only, not for practice runs)"]
         out += [f"{i}. {s}" for i, s in enumerate(sl["near_misses"], 1)]
     if sl["why_failed"]:
-        out += ["", f"## Why the other {sl['n_failed']} failed (one result can fail several tests)"]
+        which = "the other " if sl["n_passed"] else "all "
+        out += ["", f"## Why {which}{sl['n_failed']} failed (one result can fail several tests)"]
         out += [f"- {k}: {v}" for k, v in sl["why_failed"].items()]
     out += ["", "Every figure is from simulated trading on data each strategy never saw while "
             "being tuned, after allowing for how many ideas were tried. Past results do not "

@@ -71,6 +71,16 @@ def test_gates():
     assert "(deflated Sharpe)" in text and "needs 95%" in text
 
 
+def test_a_near_miss_is_never_rounded_onto_the_limit():
+    _, reasons, _ = evaluate(_m(deflated_sharpe=0.9476, dsr_inputs=None,
+                                oos_max_drawdown=-0.2531, pct_profitable_folds=0.597),
+                             Gates(), 4)
+    text = " | ".join(reasons)
+    assert "confidence the edge is real 94.8%, needs 95%" in text
+    assert "worst drop on unseen data -25.3%, limit -25%" in text
+    assert "profitable in 59.7% of unseen stretches, needs 60%" in text
+
+
 def test_gate_reasons_when_figures_are_missing():
     ok, reasons, _ = evaluate(_m(deflated_sharpe=None, dsr_inputs=None,
                                  pct_profitable_folds=None, oos_max_drawdown=None),
