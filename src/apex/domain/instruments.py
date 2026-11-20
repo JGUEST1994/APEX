@@ -9,7 +9,12 @@ from __future__ import annotations
 from apex.domain.market import AssetClass, CostModel, InstrumentSpec
 
 _FX_COST = CostModel(spread_bps=0.6, slippage_bps=0.3, funding_bps_per_day=0.2)
-_EQ_COST = CostModel(commission_per_unit=0.005, spread_bps=1.0, slippage_bps=1.0)
+# $0.005 a share, capped at 2 bps of the trade (the fee on a $25 share). Long daily histories
+# are split-adjusted, so early prices look far lower than what traded (NVDA's 2002 prices
+# appear as about 12 cents), and an uncapped per-share fee on them would cost hundreds of bps
+# a trade. At today's prices (above $25) the cap never applies.
+_EQ_COST = CostModel(commission_per_unit=0.005, commission_max_bps=2.0, spread_bps=1.0,
+                     slippage_bps=1.0)
 _CRYPTO_COST = CostModel(commission_bps=10.0, spread_bps=1.0, slippage_bps=2.0)
 
 

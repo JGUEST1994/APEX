@@ -54,6 +54,7 @@ class CostModel:
     """Per-instrument transaction cost assumptions used by backtests and paper trading."""
 
     commission_per_unit: float = 0.0  # e.g. $ per contract or per share
+    commission_max_bps: float | None = None  # cap on the per-unit commission, bps of notional
     commission_bps: float = 0.0  # proportional commission, basis points of notional
     spread_bps: float = 0.0  # assumed half-spread paid on entry and exit
     slippage_bps: float = 0.0

@@ -71,8 +71,11 @@ class BacktestResult:
 def fill_cost(spec: InstrumentSpec, units: float, price: float, mult: float = 1.0) -> float:
     c = spec.costs
     notional = abs(units) * price * spec.contract_multiplier
+    per_unit = abs(units) * c.commission_per_unit
+    if c.commission_max_bps is not None:
+        per_unit = min(per_unit, notional * c.commission_max_bps / 1e4)
     bps = c.commission_bps + c.spread_bps + c.slippage_bps
-    return mult * (abs(units) * c.commission_per_unit + notional * bps / 1e4)
+    return mult * (per_unit + notional * bps / 1e4)
 
 
 def run_backtest(bars: pd.DataFrame, strategy: Strategy, spec: InstrumentSpec,

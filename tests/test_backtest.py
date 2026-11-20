@@ -99,6 +99,17 @@ def test_futures_multiplier_and_lot_rounding():
     assert fill_cost(es, 2, 5000) > 0
 
 
+def test_share_fee_is_capped_on_split_adjusted_prices():
+    nvda = by_symbol()["NVDA"]
+    # $100k of NVDA at a split-adjusted 2002 price of 12.5 cents: 800,000 "shares"
+    early = fill_cost(nvda, 800_000, 0.125)
+    assert early == pytest.approx(100_000 * (2.0 + 1.0 + 1.0) / 1e4)  # not $4,000 of fees
+    # at today's prices the per-share fee applies unchanged
+    assert fill_cost(nvda, 500, 200.0) == pytest.approx(500 * 0.005 + 100_000 * 2.0 / 1e4)
+    # the same trade costs the same share of its value whatever the split adjustment
+    assert fill_cost(nvda, 800_000, 0.125) == pytest.approx(fill_cost(nvda, 8_000, 12.5))
+
+
 def test_cost_multiplier_reduces_returns():
     bars = SyntheticProvider().fetch_bars(by_symbol()["BTCUSDT"], Timeframe.H1,
                                           utc(2024, 1, 1), utc(2024, 6, 1))
