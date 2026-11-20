@@ -185,6 +185,7 @@ def test_cli_and_api(db_url, monkeypatch, capsys):
     rows = client.get("/leaderboard").json()
     assert len(rows) == 2 and all(r["simulated"] for r in rows)
     assert all("pct_profitable_folds" in r for r in rows)
+    assert all(r["buy_hold_return"] is not None for r in rows)  # the dashboard's Just holding
     engine.dispose()
 
 

@@ -70,7 +70,9 @@ def test_backtest_detail_glossary_only_names_recorded_figures():
     validation = (STATIC.parent.parent / "backtest" / "validation.py").read_text()
     recorded |= set(re.findall(r'"([a-z_]+)":', validation))
     assert len(keys) >= 20 and keys <= recorded, keys - recorded
+    assert {"oos_buy_hold_return", "oos_buy_hold_max_drawdown"} <= keys
     assert 'id="xmetrics"' in html and '"wrap"' in html
+    assert '["Just holding", (r) => pct(r.buy_hold_return)' in html  # Tournament tab column
 
 
 def test_dashboard_never_injects_html():
