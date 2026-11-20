@@ -8,6 +8,7 @@ database. PostgreSQL installs use ``pg_dump`` instead (see docs/DEPLOYMENT.md).
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -52,8 +53,10 @@ def backup(database_url: str, folder: Path, keep: int | None = None,
         raise BackupError("the backup would overwrite the database itself")
     tmp = dest.with_suffix(".partial")
     try:
-        with sqlite3.connect(f"file:{src}?mode=ro", uri=True) as live, \
-                sqlite3.connect(tmp) as copy:
+        # closing(): sqlite3's own context manager only commits, it does not close,
+        # and Windows refuses to rename a file that is still open (WinError 32)
+        with closing(sqlite3.connect(f"file:{src}?mode=ro", uri=True)) as live, \
+                closing(sqlite3.connect(tmp)) as copy:
             live.backup(copy)
             ok = copy.execute("PRAGMA integrity_check").fetchone()[0]
         if ok != "ok":
