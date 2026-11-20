@@ -123,3 +123,56 @@ def hold_until(entry: pd.Series, exit_: pd.Series) -> pd.Series:
             state = float(np.sign(e[i]))
         out[i] = state
     return pd.Series(out, index=entry.index)
+
+
+def volume_profile(bars: pd.DataFrame, bins: int = 30, value_area: float = 0.7):
+    """Approximate volume-at-price for a block of bars: each bar's volume is spread evenly
+    over its high-low range (a bar with no range puts it all at its close).
+
+    This is a stand-in for a tick-built profile. Returns ``(poc, val, vah)``: the point of
+    control (centre of the busiest price bin) and the value area low/high (bins added
+    outward from the POC, the busier neighbour first, until ``value_area`` of the volume
+    is covered). NaNs if the block has no volume.
+    """
+    lo_px, hi_px = float(bars["low"].min()), float(bars["high"].max())
+    vol = bars["volume"].to_numpy(float)
+    if not np.isfinite(lo_px) or vol.sum() <= 0:
+        return np.nan, np.nan, np.nan
+    if hi_px <= lo_px:
+        return lo_px, lo_px, hi_px
+    edges = np.linspace(lo_px, hi_px, bins + 1)
+    h, low, c = (bars[x].to_numpy(float) for x in ("high", "low", "close"))
+    span = h - low
+    overlap = np.clip(np.minimum(h[:, None], edges[None, 1:])
+                      - np.maximum(low[:, None], edges[None, :-1]), 0, None)
+    share = np.where(span[:, None] > 0, overlap / np.where(span > 0, span, 1)[:, None], 0.0)
+    flat = span <= 0
+    if flat.any():
+        idx = np.clip(np.searchsorted(edges, c[flat], side="right") - 1, 0, bins - 1)
+        share[np.flatnonzero(flat), idx] = 1.0
+    prof = (share * vol[:, None]).sum(axis=0)
+    p = int(prof.argmax())
+    a, b, covered = p, p, prof[p]
+    target = value_area * prof.sum()
+    while covered < target and (a > 0 or b < bins - 1):
+        down = prof[a - 1] if a > 0 else -1.0
+        up = prof[b + 1] if b < bins - 1 else -1.0
+        if up >= down:
+            b += 1
+            covered += up
+        else:
+            a -= 1
+            covered += down
+    centre = (edges[:-1] + edges[1:]) / 2
+    return float(centre[p]), float(edges[a]), float(edges[b + 1])
+
+
+def prior_session_profile(bars: pd.DataFrame, calendar: str, bins: int = 30,
+                          value_area: float = 0.7) -> pd.DataFrame:
+    """Per bar, the previous complete session's ``poc``, ``val`` and ``vah`` (NaN in the
+    first session). Causal: a session's profile is only used from the next session on."""
+    key = session_keys(bars, calendar)
+    rows = {k: volume_profile(g, bins, value_area) for k, g in bars.groupby(key, sort=True)}
+    prof = pd.DataFrame.from_dict(rows, orient="index", columns=["poc", "val", "vah"])
+    prev = prof.shift(1)
+    return pd.DataFrame({c: key.map(prev[c]) for c in prev.columns}, index=bars.index)
