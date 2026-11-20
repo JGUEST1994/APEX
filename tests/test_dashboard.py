@@ -188,3 +188,8 @@ def test_backtest_equity_curve_is_replayed_exactly_and_read_only(db_url, session
     page = (STATIC / "index.html").read_text()
     assert "/equity`" in page and 'id="xchart"' in page
     engine.dispose()
+
+
+def test_link_buttons_keep_a_keyboard_focus_ring():
+    css = (STATIC / "apex.css").read_text()
+    assert css.index(".linkbtn:focus-visible") > css.index(".linkbtn { all: unset")
