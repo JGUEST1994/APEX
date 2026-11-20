@@ -226,15 +226,60 @@ def _segment(bars, strategy, spec, params, cfg, start_i, end_i, warmup):
     return res, eq
 
 
+def _signal(bars: Bars, strategy: Strategy, params: dict) -> pd.Series | pd.DataFrame:
+    """The strategy's signal over the whole history, worked out once.
+
+    Every strategy is causal: a signal never changes when later bars are added (the
+    look-ahead tests in tests/test_strategies_research_api.py and tests/test_validation_multi.py
+    check each one). So a window's slice of this equals what the strategy says when it is
+    given every bar up to the end of that window, and a walk-forward no longer has to replay
+    the whole history before each unseen window."""
+    if isinstance(strategy, MultiStrategy):
+        return strategy.target_weights({k: v.copy() for k, v in bars.items()}, params)
+    return strategy.target_position(bars.copy(), params)
+
+
+def _replay(strategy: Strategy, part: pd.Series | pd.DataFrame) -> Strategy:
+    """A stand-in for ``strategy`` that gives back an already worked-out signal."""
+    if isinstance(strategy, MultiStrategy):
+        class _ReplayMulti(MultiStrategy):
+            meta, legs = strategy.meta, strategy.legs
+
+            def target_weights(self, b, p):
+                return part
+
+        return _ReplayMulti()
+
+    class _Replay(Strategy):
+        meta = strategy.meta
+
+        def target_position(self, b, p):
+            return part
+
+    return _Replay()
+
+
+def _window(bars, strategy, spec, params, cfg, signal, start_i, end_i):
+    """Backtest rows [start_i:end_i] on the whole-history signal, flat on entry. Same result
+    as replaying every earlier bar with the strategy held flat, at a fraction of the cost."""
+    part = signal.iloc[start_i:end_i].reset_index(drop=True)
+    res = _run(_slice(bars, start_i, end_i), _replay(strategy, part), spec, params, cfg)
+    return res, res.equity
+
+
 def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
                  grid: dict[str, list], *, train_bars: int, test_bars: int,
                  warmup: int = 0, anchored: bool = False, objective: str = "sharpe",
                  config: BacktestConfig | None = None) -> WalkForwardResult:
+    """Walk-forward test. Each training window is backtested on its own (indicators warm up
+    from ``warmup`` earlier bars); each unseen window uses the strategy's signal given all
+    the history before it, so nothing it could not have known is used."""
     cfg = config or BacktestConfig()
     combos = [strategy.params(c) for c in param_grid(grid)]
     bars = _prepare(bars, strategy)
     n, ts = _nrows(bars), _ts(bars)
     folds, oos_parts, trial_sharpes, hold_parts = [], [], [], []
+    signals: dict[str, pd.Series | pd.DataFrame] = {}  # per settings, worked out once
     start = train_bars
     while start + test_bars <= n:
         tr_lo = 0 if anchored else start - train_bars
@@ -250,8 +295,11 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
                 trial_sharpes.append(s)
         best_i = int(np.argmax(scored))
         best = combos[best_i]
-        res, eq = _segment(bars, strategy, spec, best, cfg, start, start + test_bars,
-                           max(warmup, start))  # full history before test is legitimate
+        key = json.dumps(best, sort_keys=True, default=str)
+        if key not in signals:
+            signals[key] = _signal(bars, strategy, best)
+        res, eq = _window(bars, strategy, spec, best, cfg, signals[key], start,
+                          start + test_bars)
         oos_parts.append(eq.pct_change().fillna(0.0))
         if not isinstance(bars, dict):  # a benchmark for single markets: buy and hold
             close = bars["close"].iloc[start:start + test_bars]
