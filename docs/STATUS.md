@@ -59,7 +59,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 ## Known limitations
 
 - NYSE regular early closes (13:00 ET on 3 July and 24 December when Mon-Thu, and the day after Thanksgiving) are modelled, and so are one-off full closures since 2000 (`NYSE_SPECIAL_CLOSURES`: 9/11, Hurricane Sandy, presidential days of mourning up to Carter 2025-01-09); future one-offs must be added by hand. CME/FX holidays approximated (25 Dec, 1 Jan, CME Good Friday); other exchange holidays and early closes will show as gap warnings.
-- Research search scans all chunks in memory: fine for tens of thousands of chunks; move to PostgreSQL full-text + pgvector beyond that.
+- Research search scans chunks in memory up to 20,000 chunks. Beyond that, on PostgreSQL, a GIN full-text index (migration 0006) picks the best 2,000 keyword candidates first and only those are re-scored, so a chunk with no keyword match is not found and BM25 statistics come from the candidates. SQLite always scans in memory. pgvector-based semantic candidates are not used yet.
 - The default embedder is lexical (feature hashing). Install `sentence-transformers` with a local model for true semantic similarity.
 - Scanned PDFs (no text layer) are rejected: OCR not supported yet.
 - YouTube: APEX imports transcript files the operator obtained through an authorised route; it does not fetch from YouTube. An official-API fetcher (YouTube Data API captions for channels you own, or platform exports) is a later addition.

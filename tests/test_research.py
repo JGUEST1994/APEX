@@ -188,3 +188,20 @@ def test_research_api(db_url, session, tmp_path):
     assert client.get("/research/documents/9999").status_code == 404
     assert client.get("/research/search", params={"q": "vwap"}).json()[0]["title"] == "VWAP Notes"
     engine.dispose()
+
+
+def test_large_library_search_prefilters_in_postgres(session, tmp_path):
+    """Above ``scan_limit`` chunks, PostgreSQL picks keyword candidates with its full-text
+    index (migration 0006); other databases keep scanning in memory. Results agree."""
+    _corpus(session, tmp_path)
+    full = search(session, "opening range breakout")
+    forced = search(session, "opening range breakout", scan_limit=0)
+    assert forced and forced[0].title == full[0].title == "ORB"
+    if session.get_bind().dialect.name == "postgresql":
+        from sqlalchemy import text
+
+        assert search(session, "zzzzunmatched", scan_limit=0) == []  # no keyword candidate
+
+        idx = session.execute(text("SELECT 1 FROM pg_indexes WHERE indexname = "
+                                   "'ix_research_chunks_fts'")).first()
+        assert idx is not None
