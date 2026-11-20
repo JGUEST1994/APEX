@@ -30,7 +30,9 @@ class CsvFileProvider(MarketDataProvider):
         return self.path_for(spec, timeframe).is_file()
 
     def _fetch(self, spec, timeframe, start, end) -> pd.DataFrame:
-        path = self.path_for(spec, timeframe)
+        return self.read(self.path_for(spec, timeframe))
+
+    def read(self, path: Path) -> pd.DataFrame:
         try:
             df = pd.read_csv(path)
         except Exception as exc:  # pragma: no cover - passthrough

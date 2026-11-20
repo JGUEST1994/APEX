@@ -16,7 +16,8 @@ def _dt(s: str) -> datetime:
     return d if d.tzinfo else d.replace(tzinfo=UTC)
 
 
-PROVIDERS = ["synthetic", "csv", "binance", "kraken", "coinbase", "alpaca", "polygon"]
+PROVIDERS = ["synthetic", "csv", "csv-cont", "csv-cont-ratio", "binance", "kraken", "coinbase",
+             "alpaca", "polygon"]
 
 
 def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201
@@ -28,6 +29,11 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
         from apex.marketdata.providers.csv_file import CsvFileProvider
 
         return CsvFileProvider(Path(csv_root))
+    if name in ("csv-cont", "csv-cont-ratio"):
+        from apex.marketdata.providers.continuous import ContinuousFuturesProvider
+
+        return ContinuousFuturesProvider(Path(csv_root),
+                                         "ratio" if name.endswith("ratio") else "difference")
     if name == "binance":
         from apex.marketdata.providers.binance import BinanceSpotProvider
 
@@ -303,6 +309,9 @@ def main(argv: list[str] | None = None) -> int:
             r = ingest_bars(s, provider, spec, Timeframe(args.timeframe), args.start, args.end)
             print(f"run {r.run_id}: {r.status} received={r.received} stored={r.stored}"
                   + (f" issues={len(r.report.issues)}" if r.report else f" error={r.error}"))
+            for roll in getattr(provider, "last_rolls", []):
+                print(f"  rolled {roll.old} -> {roll.new} after {roll.ts:%Y-%m-%d %H:%M} UTC "
+                      f"({roll.reason}, gap {roll.gap:+g})")
             return 0 if r.status != "failed" else 1
         elif args.cmd == "update":
             from apex.domain.instruments import by_symbol
