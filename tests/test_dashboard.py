@@ -167,10 +167,16 @@ def test_backtest_equity_curve_is_replayed_exactly_and_read_only(db_url, session
                               make_session_factory(engine)))
     r = c.get(f"/experiments/{exp.id}/equity?points=50").json()
     assert r["available"] and r["matches_record"] and r["simulated"]
+    one = c.get(f"/experiments/{exp.id}").json()
+    assert one["id"] == exp.id and one["strategy"] == "TF-SMA-001" and one["simulated"]
+    assert one == c.get("/experiments").json()[0]
+    page_js = (STATIC / "index.html").read_text()
+    assert "r.experiment_id" in page_js and '"/experiments/" + id' in page_js
     assert len(r["equity"]) <= 51 and r["ts"][-1] == res.equity.index[-1].isoformat()
     assert r["equity"][-1] == round(float(res.equity.iloc[-1]), 2)
     assert session.scalar(select(func.count()).select_from(Experiment)) == 1  # nothing recorded
     assert c.get("/experiments/999/equity").status_code == 404
+    assert c.get("/experiments/999").status_code == 404
     # Changed prices: refuse rather than draw a different curve.
     from apex.db.models import PriceBar
 

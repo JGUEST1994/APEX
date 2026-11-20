@@ -82,7 +82,7 @@ const DESC = {
   markets: "Price history for each stored market. Hover the chart to read any bar.",
   strategies: "Every trading idea APEX can test, and how far through testing it has got.",
   ideas: "The bank of trading ideas from the APEX spec. Each one is a hypothesis to test, not a claim that it makes money.",
-  leaderboard: "Latest walk-forward result per strategy and market, ranked by robustness, not raw return. All figures are simulated.",
+  leaderboard: "Latest walk-forward result per strategy and market, ranked by robustness, not raw return. Click a strategy to see every figure from that run. All figures are simulated.",
   experiments: "Every historical test APEX has run, recorded so it can be repeated exactly. All figures are simulated.",
   paper: "Practice (paper) accounts trade on simulated fills only. The kill switch can only be reset from the command line by a named person.",
   research: "Search the notes, papers and transcripts you have imported.",
@@ -303,7 +303,7 @@ async function glance(ds) {
     g.appendChild(tile);
   });
 }
-let pendingDataset = null;
+let pendingDataset = null, pendingExp = null;
 const LOAD = {
   async overview() {
     const [h, runs, ds, st, ck] = await Promise.all([get("/health"), get("/ingestion-runs?limit=20"),
@@ -394,7 +394,9 @@ const LOAD = {
   },
   async leaderboard() {
     const lb = await get("/leaderboard");
-    table($("lb"), [["#", (r) => lb.indexOf(r) + 1], ["Strategy", (r) => r.strategy], ["Symbol", (r) => r.symbol],
+    table($("lb"), [["#", (r) => lb.indexOf(r) + 1], ["Strategy", (r) => { if (!r.experiment_id) return r.strategy;
+        const b = el("button", r.strategy, "linkbtn"); b.title = "See every figure from this run";
+        b.onclick = () => { pendingExp = r.experiment_id; location.hash = "#experiments"; }; return b; }], ["Symbol", (r) => r.symbol],
       ["TF", (r) => r.timeframe], ["Gates", (r) => el("span", r.passed_gates ? "pass" : "fail", r.passed_gates ? "pass" : "fail")],
       ["Score", (r) => fmt(r.score, 3), "num"], ["DSR (family)", (r) => fmt(r.deflated_sharpe, 3), "num"],
       ["PBO", (r) => fmt(r.pbo, 2), "num"], ["OOS return", (r) => pct(r.oos_return), "num"],
@@ -422,7 +424,11 @@ const LOAD = {
       ["Sharpe", (r) => fmt((r.metrics || {}).sharpe), "num"], ["Return", (r) => pct((r.metrics || {}).total_return), "num"],
       ["Max DD", (r) => pct((r.metrics || {}).max_drawdown), "num"], ["Trades", (r) => (r.metrics || {}).trades ?? "–", "num"],
       ["Code", (r) => (r.code_version || "").slice(0, 10)], ["", () => el("span", "SIMULATED", "tag sim")]], ex);
-    if (ex.length) open(ex[0]);
+    const openId = async (id) => { const r = ex.find((x) => x.id === id) || await get("/experiments/" + id);
+      open(r); $("xname").scrollIntoView({ block: "start" }); };
+    const pick = () => { const id = pendingExp; pendingExp = null; if (id !== null) openId(id).catch(console.error); return id !== null; };
+    window.addEventListener("hashchange", () => { if (location.hash === "#experiments") pick(); });
+    if (!pick() && ex.length) open(ex[0]);
   },
   async paper() {
     const accts = await get("/paper/accounts");
