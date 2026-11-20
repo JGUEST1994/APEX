@@ -123,10 +123,12 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
                    timeframe: Timeframe, source: str, start: datetime, end: datetime,
                    grids: dict[str, dict[str, list]] | None = None, train_bars: int,
                    test_bars: int, gates: Gates | None = None,
-                   promote: bool = True, regime_filter: bool = False) -> list[Entry]:
+                   promote: bool = True, regime_filter: bool = False,
+                   suited_only: bool = False) -> list[Entry]:
     """Validate and rank ``strategies``. With ``regime_filter`` every strategy that declares
     specific regimes also competes as a ``<KEY>+RF`` variant; both variants share one trial
-    family, so trying the filter counts against the deflated Sharpe of each."""
+    family, so trying the filter counts against the deflated Sharpe of each. With
+    ``suited_only`` a strategy is skipped on markets or timeframes it does not declare."""
     gates = gates or Gates()
     entries: list[Entry] = []
     if regime_filter:
@@ -142,6 +144,8 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
         for sym in symbols:
             if isinstance(strat, MultiStrategy) != ("/" in sym):
                 continue  # pairs ("A/B") go to multi-instrument strategies only
+            if suited_only and not suits(strat, sym, timeframe):
+                continue
             try:
                 exp = run_validation(session, strat, symbol=sym, timeframe=timeframe,
                                      source=source, start=start, end=end, grid=grid,
@@ -159,6 +163,20 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
                 _promote(session, exp.strategy_version_id, e)
     entries.sort(key=lambda e: (e.passed, e.score), reverse=True)
     return entries
+
+
+def suits(strat: Strategy, symbol: str, timeframe: Timeframe) -> bool:
+    """Does the strategy declare this timeframe and every leg's asset class? Symbols outside
+    the default universe are given the benefit of the doubt on asset class."""
+    from apex.domain.instruments import by_symbol
+
+    if timeframe not in strat.meta.timeframes:
+        return False
+    universe = by_symbol()
+    legs = [universe.get(s) for s in symbol.split("/")]
+    if isinstance(strat, MultiStrategy) and getattr(strat, "legs", None) not in (None, len(legs)):
+        return False
+    return all(spec is None or spec.asset_class in strat.meta.asset_classes for spec in legs)
 
 
 def _promote(session: Session, version_id: int, e: Entry) -> None:

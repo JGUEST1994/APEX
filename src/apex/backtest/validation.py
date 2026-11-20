@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import math
 from dataclasses import dataclass, field
 from statistics import NormalDist
@@ -303,7 +304,8 @@ def _ppy(index: pd.Index) -> float:
 
 def _param_stability(params: list[dict]) -> float:
     """Share of folds that chose the most common parameter set (1.0 = always the same)."""
-    keys = [tuple(sorted(p.items())) for p in params]
+    # JSON text, so list-valued settings (e.g. event dates) can be compared too
+    keys = [json.dumps(p, sort_keys=True, default=str) for p in params]
     return max(keys.count(k) for k in set(keys)) / len(keys) if keys else 0.0
 
 

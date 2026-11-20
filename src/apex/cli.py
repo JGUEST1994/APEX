@@ -185,6 +185,9 @@ def main(argv: list[str] | None = None) -> int:
     va.add_argument("--anchored", action="store_true")
     va.add_argument("--regime-filter", action="store_true")
     tn = sub.add_parser("tournament", help="validate many strategies and rank them")
+    tn.add_argument("--only-suited", action="store_true",
+                    help="skip strategies on markets or timeframes they are not meant for "
+                    "(always on with --strategies all)")
     tn.add_argument("--strategies", default="all", help="comma-separated keys or 'all'")
     tn.add_argument("--symbols", required=True,
                     help="comma-separated; pairs as A/B go to multi-instrument strategies")
@@ -467,7 +470,8 @@ def main(argv: list[str] | None = None) -> int:
                 s, [reg[k]() for k in keys], symbols=args.symbols.split(","),
                 timeframe=Timeframe(args.timeframe), source=args.source, start=args.start,
                 end=args.end, train_bars=args.train_bars, test_bars=args.test_bars,
-                promote=not args.no_promote, regime_filter=args.regime_filter)
+                promote=not args.no_promote, regime_filter=args.regime_filter,
+                suited_only=args.only_suited or args.strategies == "all")
             print("TOURNAMENT (SIMULATED, out-of-sample, trial-adjusted)")
             for e in entries:
                 verdict = "PASS" if e.passed else "fail"
