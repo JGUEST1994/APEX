@@ -266,7 +266,8 @@ apex doctor
 ```
 
 Each line says OK, WARN or FAIL, and a FAIL tells you which command fixes it (for example
-"run: apex db-upgrade").
+"run: apex db-upgrade"). It also warns when downloaded prices are more than a week out of
+date, or when there is no recent backup.
 
 - **`apex` is not recognised:** the environment is not switched on. Run
   `.venv\Scripts\activate` in the APEX folder first.

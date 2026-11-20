@@ -96,3 +96,28 @@ def test_backup_check_counts_age(tmp_path):
     os.utime(f, (old, old))
     assert _backup_check(folder, now).level == WARN
     assert "apex backup" in _backup_check(folder, now).detail
+
+
+def test_price_freshness_only_counts_sources_that_can_be_topped_up(db_url, session):
+    from datetime import UTC, datetime
+
+    from apex.db.models import PriceBar
+    from apex.domain.instruments import by_symbol
+    from apex.domain.market import Timeframe
+    from apex.marketdata.ingest import ingest_bars
+    from apex.marketdata.providers.synthetic import SyntheticProvider
+    from tests.conftest import utc
+
+    s = Settings(_env_file=None, database_url=db_url)
+    now = datetime(2024, 3, 10, tzinfo=UTC)
+    ingest_bars(session, SyntheticProvider(), by_symbol()["SPY"], Timeframe.D1,
+                utc(2024, 1, 1), utc(2024, 3, 1))
+    session.commit()
+    c = {x.name: x for x in run_checks(s, env_file=None, now=now)}["Price freshness"]
+    assert c.level == OK and "no downloaded" in c.detail  # synthetic never goes stale
+    session.query(PriceBar).update({PriceBar.source: "coinbase"})
+    session.commit()
+    c = {x.name: x for x in run_checks(s, env_file=None, now=now)}["Price freshness"]
+    assert c.level == WARN and "SPY 1d coinbase" in c.detail and "apex update" in c.detail
+    c = {x.name: x for x in run_checks(s, env_file=None, now=utc(2024, 3, 2))}["Price freshness"]
+    assert c.level == OK and "1 downloaded" in c.detail
