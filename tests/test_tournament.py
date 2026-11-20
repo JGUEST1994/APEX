@@ -158,6 +158,10 @@ def test_cli_and_api(db_url, monkeypatch, capsys):
         assert cli(["tournament", "--strategies", "NOPE", "--symbols", "SPY", "--source", "x",
                     "--start", "2018-01-01", "--end", "2025-01-01", "--train-bars", "1",
                     "--test-bars", "1"]) == 2
+        # crypto-only strategy on a stock: skipped, so no extra leaderboard row
+        assert cli(["tournament", "--strategies", "OF-DELTA-001", "--symbols", "SPY",
+                    "--source", "synthetic", "--start", "2018-01-01", "--end", "2025-01-01",
+                    "--train-bars", "500", "--test-bars", "250", "--only-suited"]) == 0
         assert cli(["leaderboard", "--symbol", "SPY"]) == 0
     finally:
         get_settings.cache_clear()
@@ -189,3 +193,25 @@ def test_regime_filtered_variants_share_trial_family(session):
     total = family_trials(session, "BO-DONCH-001") + family_trials(session, "BO-DONCH-001+RF")
     assert by_key["BO-DONCH-001+RF"].family_trials == total
     assert family_trials(session, "BO-DONCH-001+RF") > 0
+
+
+def test_param_stability_handles_list_settings():
+    from apex.backtest.validation import _param_stability
+
+    folds = [{"anchors": ["2024-01-05"], "atr_n": 14}, {"anchors": ["2024-01-05"], "atr_n": 14},
+             {"anchors": [], "atr_n": 14}]
+    assert _param_stability(folds) == pytest.approx(2 / 3)
+
+
+def test_only_suited_skips_markets_and_timeframes_a_strategy_is_not_for():
+    from apex.backtest.tournament import suits
+    from apex.strategies.multi import all_multi_strategies
+    from apex.strategies.registry import all_strategies
+
+    reg = all_strategies()
+    assert suits(reg["TF-SMA-001"](), "SPY", Timeframe.D1)
+    assert not suits(reg["OF-DELTA-001"](), "SPY", Timeframe.M5)  # crypto only
+    assert suits(reg["OF-DELTA-001"](), "BTCUSDT", Timeframe.M5)
+    assert not suits(reg["OF-DELTA-001"](), "BTCUSDT", Timeframe.D1)  # intraday only
+    pair = all_multi_strategies()["STAT-PAIR-001"]()
+    assert not suits(pair, "QQQ/SPY/IWM", pair.meta.timeframes[0])  # exactly two legs
