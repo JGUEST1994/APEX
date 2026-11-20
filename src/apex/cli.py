@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,13 @@ def _dt(s: str) -> datetime:
 
 PROVIDERS = ["synthetic", "csv", "csv-cont", "csv-cont-ratio", "dukascopy-csv", "binance",
              "kraken", "coinbase", "alpaca", "polygon", "tiingo"]
+
+
+def _param(v: str):  # noqa: ANN202
+    """A --param value: JSON, or @path to read the JSON from a file."""
+    if v.startswith("@"):
+        return json.loads(Path(v[1:]).read_text())
+    return json.loads(v)
 
 
 def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201
@@ -214,6 +222,11 @@ def main(argv: list[str] | None = None) -> int:
     pk = sub.add_parser("paper-reset-kill", help="human reset of a paper account kill switch")
     pk.add_argument("--name", required=True)
     pk.add_argument("--actor", required=True, help="your name (recorded in the audit log)")
+    ed = sub.add_parser("earnings-dates", help="download a US company's earnings-release "
+                        "dates from SEC EDGAR (free; needs APEX_SEC_USER_AGENT) for "
+                        "VWAP-EARN-001")
+    ed.add_argument("--symbol", required=True)
+    ed.add_argument("--out", default="data/events")
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
@@ -293,6 +306,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"backup not made: {exc}", file=sys.stderr)
             return 1
         print(f"backup saved: {dest} (checked OK)")
+        return 0
+    if args.cmd == "earnings-dates":
+        from apex.core.errors import ProviderError
+        from apex.marketdata.earnings import SecEarningsDates, anchor_dates
+
+        try:
+            rel = SecEarningsDates(settings.sec_user_agent).releases(args.symbol)
+        except ProviderError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        days = anchor_dates(rel)
+        out = Path(args.out) / f"{args.symbol.upper()}_earnings.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(days, indent=0) + "\n")
+        print(f"{len(days)} earnings releases for {args.symbol.upper()} "
+              f"({days[0] if days else '-'} to {days[-1] if days else '-'}) saved to {out}")
+        print(f"use them with: --strategy VWAP-EARN-001 --param anchors=@{out.as_posix()}")
         return 0
     if args.cmd == "hypotheses":
         from apex.strategies.hypotheses import to_markdown
@@ -388,7 +418,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(rep.mismatches.head(20).to_string(index=False))
             return 0 if rep.ok else 1
         elif args.cmd == "validate":
-            import json
 
             from apex.backtest.experiments import run_validation
             from apex.domain.market import Timeframe
@@ -445,7 +474,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{verdict:4} {e.score:6.3f} {e.strategy_key:14} {e.symbol:8} "
                       f"{e.timeframe:4} {'; '.join(e.reasons)[:110]}")
         elif args.cmd == "backtest-pair":
-            import json
 
             from apex.backtest.engine import BacktestConfig
             from apex.backtest.experiments import run_pair_experiment
@@ -460,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
             params = {}
             for kv in args.param:
                 k, _, v = kv.partition("=")
-                params[k] = json.loads(v)
+                params[k] = _param(v)
             exp, res = run_pair_experiment(
                 s, multi[args.strategy](), symbols=[x.strip() for x in args.symbols.split(",")],
                 timeframe=Timeframe(args.timeframe), source=args.source, start=args.start,
@@ -472,7 +500,6 @@ def main(argv: list[str] | None = None) -> int:
                 if k != "note":
                     print(f"  {k:24} {v}")
         elif args.cmd == "schedule":
-            import json
 
             from apex.db.session import make_engine, make_session_factory
             from apex.scheduler import Scheduler
@@ -610,7 +637,6 @@ def main(argv: list[str] | None = None) -> int:
                 legs = (f" [{cls.legs or '2+'} instruments]" if hasattr(cls, "legs") else "")
                 print(f"{key:14} v{m.version:7} {m.category:22} {m.name}{legs}")
         elif args.cmd == "backtest":
-            import json
 
             from apex.backtest.engine import BacktestConfig
             from apex.backtest.experiments import run_experiment
@@ -629,7 +655,7 @@ def main(argv: list[str] | None = None) -> int:
             params = {}
             for kv in args.param:
                 k, _, v = kv.partition("=")
-                params[k] = json.loads(v) if v not in ("",) else v
+                params[k] = _param(v) if v not in ("",) else v
             exp, res = run_experiment(
                 s, strat, symbol=args.symbol, timeframe=Timeframe(args.timeframe),
                 source=args.source, start=args.start, end=args.end, params=params,

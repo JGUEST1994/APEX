@@ -55,7 +55,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H21 | VWAP deviation reversion | equity,futures | 1m,5m | z(close-VWAP) < -2 | touch VWAP | z < -4 | ohlcv | VWAP-MR-001 |
 | H22 | VWAP trend pullback | equity,futures | 5m | price above VWAP all morning, touches VWAP | session close | close below VWAP - 1 ATR | ohlcv | VWAP-PB-001 |
-| H23 | Anchored VWAP from earnings | equity | 1d | reclaim of AVWAP | close below AVWAP | AVWAP - 1 ATR | multi | - |
+| H23 | Anchored VWAP from earnings | equity | 1d | reclaim of AVWAP | close below AVWAP | AVWAP - 1 ATR | multi | VWAP-EARN-001 |
 | H24 | VWAP band breakout | futures,crypto | 5m | two closes beyond 2-sigma band | close back inside 1-sigma | VWAP | ohlcv | VWAP-BAND-001 |
 
 ## Volume Profile (3)
