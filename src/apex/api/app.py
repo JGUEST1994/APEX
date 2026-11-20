@@ -356,6 +356,15 @@ def create_app(settings: Settings | None = None,
         except KeyError as exc:
             raise HTTPException(404, "paper account not found") from exc
 
+    @app.get("/paper/accounts/{name}/record")
+    def paper_record(name: str, s: Session = Depends(db)) -> dict:
+        from apex.paper_record import record
+
+        try:
+            return record(s, name)
+        except KeyError as exc:
+            raise HTTPException(404, "paper account not found") from exc
+
     # "Download for Excel": the same tables as `apex export`, as CSV attachments.
     def _csv(df, filename: str) -> Response:  # noqa: ANN001
         def cell(v):  # noqa: ANN001, ANN202 - stop Excel treating text as a formula

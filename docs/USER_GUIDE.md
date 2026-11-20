@@ -226,6 +226,12 @@ each `apex update`. `paper-compare` checks that the paper account behaved like a
 of the same strategy over the same bars. One account can trade several markets with shared
 cash: `--symbol SPY,QQQ,BTCUSDT`.
 
+Before you trust a strategy, it needs a practice record: `apex paper-record --name sma-spy`
+says READY only after at least 30 days of new prices processed since the account was
+created (old history replayed into a new account doesn't count), with the account still
+running, no kill-switch trips or halts, and practice trades matching the backtest.
+Otherwise it lists what is missing. It only reports; it never approves anything.
+
 On the dashboard's Practice trading tab, click an account's name to see how its simulated
 value moved, whether it matched the backtest, and its recent fills.
 

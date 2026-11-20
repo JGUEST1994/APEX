@@ -24,6 +24,7 @@ Run `apex serve` and open `http://127.0.0.1:8000/docs` for the live OpenAPI refe
 | GET | `/paper/accounts/{name}` | `limit` | one paper account plus its most recent orders and fills (newest first) |
 | GET | `/paper/accounts/{name}/equity` | `points` (10-5000, default 600) | simulated account value at each processed bar's close, rebuilt from the fill ledger (cash + units x close x multiplier; the last point equals the account value); empty before the first run; 404 for an unknown account |
 | GET | `/paper/accounts/{name}/consistency` | | paper-vs-backtest comparison over the bars the account processed: direction agreement, position changes followed/missed, fill price gap, `consistent`, notes |
+| GET | `/paper/accounts/{name}/record` | | the practice record: days since the account was created (forward days only), still running, kill-switch/halt events, consistency, `ready` and plain-English `reasons` (read-only) |
 | GET | `/ui/` | | read-only dashboard (`/` redirects here) |
 | GET | `/research/search` | `q`, `limit` ≤ 100 | hybrid hits `{document_id, title, chunk_ordinal, score, keyword_score, vector_score, snippet}` |
 | GET | `/research/documents` | `limit` ≤ 1000 | documents `{id, title, authors, source_type, published, subjects, imported_at}` |
