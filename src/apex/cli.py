@@ -180,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--once", action="store_true", help="run every job once and exit")
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
+    sub.add_parser("doctor", help="check this install: database, tables, keys, data, "
+                   "practice accounts (read-only)")
     sv = sub.add_parser("serve", help="run the API server")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
@@ -194,6 +196,12 @@ def main(argv: list[str] | None = None) -> int:
         upgrade(settings.database_url)
         print("database at head")
         return 0
+    if args.cmd == "doctor":
+        from apex.doctor import FAIL, render, run_checks
+
+        checks = run_checks(settings)
+        print(render(checks))
+        return 1 if any(c.level == FAIL for c in checks) else 0
     if args.cmd == "hypotheses":
         from apex.strategies.hypotheses import to_markdown
 

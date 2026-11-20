@@ -163,6 +163,15 @@ apex research-search "opening range breakout"
 
 ## When something goes wrong
 
+Start with a check-up. It only reads, never changes anything, and never shows your keys:
+
+```powershell
+apex doctor
+```
+
+Each line says OK, WARN or FAIL, and a FAIL tells you which command fixes it (for example
+"run: apex db-upgrade").
+
 - **`apex` is not recognised:** the environment is not switched on. Run
   `.venv\Scripts\activate` in the APEX folder first.
 - **"set APEX_ALPACA_KEY_ID ...":** the Alpaca keys are missing from `.env`.
