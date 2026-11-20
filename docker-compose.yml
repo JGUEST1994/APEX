@@ -1,5 +1,5 @@
 # Local/VPS stack: PostgreSQL 16 with pgvector + APEX API.
-# Not yet verified end-to-end (no Docker daemon in the build environment); see docs/STATUS.md.
+# Built and started on every CI run (the `docker` job checks /health and /ui/).
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -20,6 +20,11 @@ services:
       APEX_TRADING_MODE: research
       APEX_LOG_JSON: "true"
     ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      retries: 30
     depends_on:
       db:
         condition: service_healthy

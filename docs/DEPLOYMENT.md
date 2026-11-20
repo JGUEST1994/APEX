@@ -1,6 +1,6 @@
 # Deployment
 
-Phase 1 status: the local install (venv + SQLite or PostgreSQL) is tested. The Docker files are written but **not yet verified** because the build environment had no Docker daemon. Treat them as a starting point.
+Status: the local install (venv + SQLite or PostgreSQL) is tested, and the Docker stack is built and started on every CI run (the `docker` job checks that migrations ran, `/health` reaches the database in research mode and `/ui/` is served). Use `docker compose up -d --build --wait` to block until the API is healthy.
 
 ## Local (Windows or Linux)
 

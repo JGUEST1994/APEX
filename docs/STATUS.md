@@ -48,9 +48,10 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 - Strategy batch 4 (`strategies/builtin4.py`): MR-ASIA-001 (H15, fade an unusually wide Asia-session move at the London open toward the Asia midpoint, out by 10:00 UTC), LIQ-ASIA-001 (H32, fade the first run through an Asia extreme that closes back inside, toward the other edge), LIQ-EQH-001 (H34, fade a raid on two swing highs/lows within 0.1 ATR), MS-CHOCH-001 (H36, first close through the last swing low after higher highs and lows; mirror), MTF-ORB-001 (H46, opening-range breakout only in the direction of the previous close vs its 10-session SMA, flat before the close), MTF-WKENG-001 (H47, daily engulfing bar at the prior week's high/low), SC-MICRO-001 (H51, first 1-2 bar pullback holding the 9 EMA in a run, 1:1 target).
 - Strategy batch 5 (`strategies/builtin5.py`): MOM-52WH-001 (H09, buy within 2% of the 252-bar high, 10% trailing stop), VP-VA80-001 (H25, open outside the prior value area then two closes back inside -> trade to the far edge), VP-POC-001 (H26, more than 1 ATR from the prior session's point of control on below-average volume -> trade back to it), VP-HVN-001 (H27, a long-wick rejection of one of the prior session's high-volume nodes -> trade to the next node). `indicators.volume_profile` / `prior_session_profile` approximate volume-at-price by spreading each bar's volume over its range; the hypotheses call for tick data, so treat these as a first look. 48 of 53 hypotheses now have code. Not coded yet: H20 gap-and-go (synthetic data has no overnight gaps to test it on), H23 (needs earnings dates), H28-H30 (need tick/order-book data).
 
+- Docker: the image builds and `docker compose up` (PostgreSQL 16 + pgvector, API) runs migrations and serves `/health` (database reachable, research mode, no live trading) and `/ui/`. A `docker` CI job checks this on every PR; the API container has a healthcheck so `docker compose up --wait` waits for it. Verified locally 2026-11-20 too.
+
 ## Written but not verified
 
-- `Dockerfile` and `docker-compose.yml` (no Docker daemon in the build environment).
 - `BinanceSpotProvider` and `AlpacaStocksProvider` against the real endpoints (sandbox network blocks them; logic tested with mocked HTTP).
 
 ## Known limitations
