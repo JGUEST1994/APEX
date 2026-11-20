@@ -309,6 +309,7 @@ meaning next to each. The main ones:
 | Profit factor | Money made on winners divided by money lost on losers. Above 1 means net profit. |
 | Costs paid | Commission, spread, slippage and funding charged in the test. |
 | Unseen-data return / Sharpe | How the strategy did on the stretches of history it was not tuned on (tournament and `apex validate` only). This matters far more than the plain backtest. |
+| Just holding the market | What simply buying and holding the market made over the same unseen stretches (single markets only; the Tournament tab's **Just holding** column). A strategy should beat it, or come close with smaller drops. |
 | Kept after tuning | Unseen Sharpe as a share of tuning Sharpe. Low means the tuning mostly fitted noise. |
 | Luck-adjusted confidence (deflated Sharpe) | Chance the edge is real after allowing for how many variations were tried. The tournament wants 95%. |
 | Overfitting risk (PBO) | Chance the best-looking settings are just the luckiest. The tournament wants 50% or less. |

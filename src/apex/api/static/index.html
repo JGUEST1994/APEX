@@ -137,6 +137,8 @@ const GLOSSARY = {
   pct_positive_months: ["Winning months", "pct", "Share of calendar months that ended up."],
   oos_total_return: ["Unseen-data return", "pct", "Return on the stretches of history the strategy was not tuned on."],
   oos_max_drawdown: ["Unseen-data worst drop", "pct", "Worst drop on the unseen stretches."],
+  oos_buy_hold_return: ["Just holding the market", "pct", "What simply buying and holding the market made over the same unseen stretches. A strategy should beat it, or come close with smaller drops."],
+  oos_buy_hold_max_drawdown: ["Just holding: worst drop", "pct", "Worst drop from simply holding the market over the same unseen stretches."],
   mean_oos_sharpe: ["Unseen-data Sharpe", "num", "Average Sharpe on the unseen stretches."],
   mean_is_sharpe: ["Tuning-data Sharpe", "num", "Average Sharpe on the stretches used for tuning (expect this to look better)."],
   walk_forward_efficiency: ["Kept after tuning", "pct", "Unseen Sharpe as a share of tuning Sharpe. Low means the tuning mostly fitted noise."],
@@ -412,7 +414,8 @@ const LOAD = {
       ["TF", (r) => r.timeframe], ["Gates", (r) => el("span", r.passed_gates ? "pass" : "fail", r.passed_gates ? "pass" : "fail")],
       ["Score", (r) => fmt(r.score, 3), "num"], ["DSR (family)", (r) => fmt(r.deflated_sharpe, 3), "num"],
       ["PBO", (r) => fmt(r.pbo, 2), "num"], ["OOS return", (r) => pct(r.oos_return), "num"],
-      ["Max DD", (r) => pct(r.oos_max_drawdown), "num"], ["Status", (r) => el("span", r.status, "tag")],
+      ["Max DD", (r) => pct(r.oos_max_drawdown), "num"],
+      ["Just holding", (r) => pct(r.buy_hold_return), "num"], ["Status", (r) => el("span", r.status, "tag")],
       ["Why not", (r) => r.fail_reasons || "", "wrap"]], lb);
   },
   async experiments() {
