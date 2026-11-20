@@ -217,6 +217,11 @@ def main(argv: list[str] | None = None) -> int:
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
+    sa = sub.add_parser("strategy-approve", help="a named person approves the strategy a "
+                        "practice account runs, only if its practice record is READY")
+    sa.add_argument("--account", required=True, help="practice account with a READY record")
+    sa.add_argument("--by", required=True, help="your name (recorded in the audit log)")
+    sa.add_argument("--reason", default="")
     pr = sub.add_parser("paper-record", help="is this practice account's record long and "
                         "clean enough to consider approving its strategy? (read-only)")
     pr.add_argument("--name", required=True)
@@ -492,6 +497,19 @@ def main(argv: list[str] | None = None) -> int:
             for k, v in rep.items():
                 print(f"{k:24} {v}")
             return 0 if rep.get("consistent") else 4
+        elif args.cmd == "strategy-approve":
+            from apex.approval import ApprovalRefused, approve
+
+            try:
+                ver = approve(s, args.account, by=args.by, reason=args.reason)
+            except (ApprovalRefused, PermissionError, KeyError) as exc:
+                print(f"not approved: {exc}", file=sys.stderr)
+                return 4
+            s.commit()
+            print(f"approved by {args.by}: strategy version {ver.version} "
+                  f"(id {ver.id}); recorded in the audit log. This enables no real-money "
+                  "trading.")
+            return 0
         elif args.cmd == "paper-record":
             from apex.paper_record import record
 
