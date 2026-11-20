@@ -188,3 +188,47 @@ def run_validation(session: Session, strategy: Strategy, *, symbol: str, timefra
     session.add(exp)
     session.flush()
     return exp
+
+
+class ReplayError(ValueError):
+    """The experiment cannot be redrawn exactly (wrong kind, code or data changed)."""
+
+
+def replay_experiment(session: Session, exp: Experiment) -> BacktestResult:
+    """Re-run a recorded backtest exactly: same strategy version, parameters, costs and
+    stored bars (checked against the recorded data hash). Read-only: records nothing."""
+    from apex.backtest.portfolio import run_portfolio_backtest
+    from apex.strategies.multi import all_multi_strategies
+    from apex.strategies.registry import all_strategies
+
+    if exp.kind != "backtest":
+        raise ReplayError("only plain backtests can be redrawn")
+    ver = session.get(StrategyVersion, exp.strategy_version_id)
+    key = session.get(StrategyRow, ver.strategy_id).key
+    base = key.removesuffix("+RF")
+    cls = {**all_strategies(), **all_multi_strategies()}.get(base)
+    if cls is None:
+        raise ReplayError(f"strategy {key} is no longer registered")
+    strategy = cls()
+    if key.endswith("+RF"):
+        from apex.regime.filtered import RegimeFiltered
+
+        strategy = RegimeFiltered(strategy)
+    code_sha = hashlib.sha256(strategy.source_code().encode()).hexdigest()
+    if strategy.meta.version != ver.version or code_sha != ver.code_sha256:
+        raise ReplayError(f"{key} has changed since this backtest (it ran v{ver.version}); "
+                          "run it again to see a chart")
+    m = exp.data_manifest or {}
+    tf = Timeframe(m["timeframe"])
+    start, end = datetime.fromisoformat(m["start"]), datetime.fromisoformat(m["end"])
+    cfg = BacktestConfig(**(m.get("config") or {}))
+    if "symbols" in m:
+        bars, specs, hashes = _load_legs(session, m["symbols"], tf, m["source"], start, end)
+        if _combined_sha(hashes, m["symbols"]) != m.get("data_sha256"):
+            raise ReplayError("the stored prices have changed since this backtest")
+        return run_portfolio_backtest(bars, strategy, specs, exp.params, cfg)
+    inst = get_instrument(session, m["symbol"], m.get("venue"))
+    bars = load_bars(session, inst.id, tf, m["source"], start, end)
+    if len(bars) < 2 or frame_sha256(bars) != m.get("data_sha256"):
+        raise ReplayError("the stored prices have changed since this backtest")
+    return run_backtest(bars, strategy, to_spec(inst), exp.params, cfg)

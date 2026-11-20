@@ -35,7 +35,7 @@
         <span class="muted" id="dsinfo"></span>
         <a class="dl" id="dsdl" hidden download>Download these prices for Excel</a></div>
       <div class="quote" id="quote"></div>
-      <div class="chart-wrap"><svg id="chart" role="img" aria-label="Close price chart"></svg>
+      <div class="chart-wrap"><svg id="chart" class="pchart" role="img" aria-label="Close price chart"></svg>
         <div class="tip" id="tip"></div></div>
     </div>
   </section>
@@ -52,6 +52,9 @@
   <section id="experiments"><div class="card"><p class="dlrow"><a class="dl" href="/export/experiments.csv" download>Download all backtests for Excel</a></p>
     <table id="exps"></table></div>
     <div class="card"><h3 id="xname">Select a backtest</h3><p id="xinfo" class="muted"></p>
+      <div id="xcurve" hidden><p class="muted" id="xcurvenote"></p>
+        <div class="chart-wrap"><svg id="xchart" class="pchart" role="img" aria-label="Simulated account value over the backtest"></svg>
+          <div class="tip" id="xtip"></div></div></div>
       <table id="xmetrics"></table></div></section>
   <section id="paper">
     <div class="card"><table id="paccts"></table></div>
@@ -200,8 +203,8 @@ function niceTicks(lo, hi, n) {
   return out;
 }
 const priceFmt = (v, span) => v.toFixed(span < 2 ? 4 : span < 50 ? 2 : span < 5000 ? 1 : 0);
-function chart(svg, xs, ys) {
-  svg.replaceChildren(); const tip = $("tip"); tip.style.display = "none";
+function chart(svg, xs, ys, tip = $("tip")) {
+  svg.replaceChildren(); tip.style.display = "none";
   if (ys.length < 2) return;
   const W = svg.clientWidth || 800, H = svg.clientHeight || 340;
   const L = 8, R = 64, T = 12, B = 26;
@@ -210,7 +213,7 @@ function chart(svg, xs, ys) {
   const span = hi - lo;
   const X = (i) => L + (W - L - R) * i / (ys.length - 1);
   const Y = (v) => T + (H - T - B) * (1 - (v - lo) / span);
-  const defs = svgEl("defs"); const g = svgEl("linearGradient", { id: "areaFill", x1: 0, y1: 0, x2: 0, y2: 1 });
+  const defs = svgEl("defs"); const gid = svg.id + "Fill"; const g = svgEl("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
   g.appendChild(svgEl("stop", { offset: "0", "stop-color": "var(--brand)", "stop-opacity": ".18" }));
   g.appendChild(svgEl("stop", { offset: "1", "stop-color": "var(--brand)", "stop-opacity": "0" }));
   defs.appendChild(g); svg.appendChild(defs);
@@ -225,7 +228,7 @@ function chart(svg, xs, ys) {
     svg.appendChild(svgEl("text", { class: "axis", x: X(i), y: H - 8, "text-anchor": anchor }, xs[i].slice(0, 10)));
   }
   const pts = ys.map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1));
-  svg.appendChild(svgEl("path", { class: "area", d: "M" + pts.join("L") + `L${X(ys.length - 1)},${H - B}L${L},${H - B}Z` }));
+  svg.appendChild(svgEl("path", { class: "area", fill: `url(#${gid})`, d: "M" + pts.join("L") + `L${X(ys.length - 1)},${H - B}L${L},${H - B}Z` }));
   svg.appendChild(svgEl("path", { class: "line", d: "M" + pts.join("L") }));
   const last = ys[ys.length - 1], ly = Y(last);
   svg.appendChild(svgEl("line", { class: "lastline", x1: L, x2: W - R, y1: ly, y2: ly }));
@@ -248,6 +251,19 @@ function chart(svg, xs, ys) {
   svg.onpointermove = move; svg.onpointerdown = move;
   svg.onpointerleave = () => { xh.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
     tip.style.display = "none"; };
+}
+// Account value over a recorded backtest, re-run exactly by the API (read-only).
+let curveFor = null;
+async function curve(r) {
+  curveFor = r.id; const box = $("xcurve"), note = $("xcurvenote");
+  if (r.kind !== "backtest") { box.hidden = true; return; }
+  const c = await get(`/experiments/${r.id}/equity`);
+  if (curveFor !== r.id) return;  // another backtest was opened meanwhile
+  box.hidden = false;
+  if (!c.available) { note.textContent = "No chart: " + c.reason + "."; $("xchart").replaceChildren(); return; }
+  note.textContent = `Simulated account value, starting from ${Math.round(c.initial_capital).toLocaleString("en-GB")}. Hover to read any day.` +
+    (c.matches_record ? "" : " (Differs from the recorded result: the code or data may have changed.)");
+  chart($("xchart"), c.ts, c.equity, $("xtip"));
 }
 function quote(d, ys) {
   const q = $("quote"); q.replaceChildren(); if (!ys.length) return;
@@ -393,6 +409,7 @@ const LOAD = {
       const show = (k, v) => GLOSSARY[k][1] === "pct" ? pct(v) : GLOSSARY[k][1] === "int" ? (v ?? "–") : fmt(v);
       const rows = Object.keys(GLOSSARY).filter((k) => typeof met[k] === "number")
         .map((k) => ({ k, label: GLOSSARY[k][0], v: show(k, met[k]), mean: GLOSSARY[k][2] }));
+      curve(r).catch((e) => { $("xcurve").hidden = true; console.error(e); });
       table($("xmetrics"), [["Measure", (x) => x.label], ["Value", (x) => x.v, "num"],
         ["What it means", (x) => x.mean, "wrap"]], rows);
     };

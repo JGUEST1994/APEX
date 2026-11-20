@@ -129,7 +129,8 @@ apex backtest --strategy TF-SMA-001 --symbol SPY --timeframe 1d --source alpaca 
 ```
 
 `--source` must match the provider you downloaded the data with. The result prints in the
-window and is saved to the Backtests tab. Change a setting with `--param`, for example
+window and is saved to the Backtests tab, where clicking its number shows a chart of the
+simulated account value and every figure explained. Change a setting with `--param`, for example
 `--param fast=10 --param slow=50`. A good-looking backtest on its own proves very little;
 the next step is the real test.
 

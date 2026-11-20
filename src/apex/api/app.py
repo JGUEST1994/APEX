@@ -153,6 +153,36 @@ def create_app(settings: Settings | None = None,
                  "code_version": e.code_version, "metrics": e.metrics,
                  "created_at": e.created_at.isoformat()} for e, key, ver in rows]
 
+    @app.get("/experiments/{exp_id}/equity")
+    def experiment_equity(exp_id: int, points: int = Query(600, ge=10, le=5000),
+                          s: Session = Depends(db)) -> dict:
+        """Re-run a recorded backtest exactly (read-only) and return its account value over
+        time, thinned to about ``points`` points. ``available`` is false, with a plain
+        reason, when it cannot be redrawn exactly."""
+        from apex.backtest.experiments import ReplayError, replay_experiment
+
+        exp = s.get(Experiment, exp_id)
+        if exp is None:
+            raise HTTPException(404, "experiment not found")
+        try:
+            res = replay_experiment(s, exp)
+        except (ReplayError, UnknownInstrumentError) as exc:
+            return {"id": exp_id, "available": False, "reason": str(exc), "simulated": True}
+        finally:
+            s.rollback()  # never keep anything from the replay
+        eq = res.equity
+        step = max(1, -(-len(eq) // points))
+        keep = list(range(0, len(eq), step))
+        if keep[-1] != len(eq) - 1:
+            keep.append(len(eq) - 1)
+        stored = (exp.metrics or {}).get("total_return")
+        total = float(eq.iloc[-1] / eq.iloc[0] - 1) if len(eq) else None
+        return {"id": exp_id, "available": True, "simulated": True,
+                "initial_capital": res.config.initial_capital,
+                "matches_record": stored is None or total is None or abs(stored - total) < 1e-4,
+                "ts": [eq.index[i].isoformat() for i in keep],
+                "equity": [round(float(eq.iloc[i]), 2) for i in keep]}
+
     @app.get("/leaderboard")
     def get_leaderboard(asset_class: str | None = None, symbol: str | None = None,
                         timeframe: str | None = None, category: str | None = None,

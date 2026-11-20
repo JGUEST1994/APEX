@@ -148,3 +148,37 @@ def test_ingestion_runs_show_market_and_findings(db_url, session):
     assert c.get("/ingestion-runs/999999/issues").status_code == 404
     html = (STATIC / "index.html").read_text()
     assert '`/ingestion-runs/' in html and "ISSUE_TEXT" in html and 'id="issues"' in html
+
+
+def test_backtest_equity_curve_is_replayed_exactly_and_read_only(db_url, session):
+    from sqlalchemy import func, select
+
+    from apex.backtest.experiments import run_experiment
+    from apex.db.models import Experiment
+
+    ingest_bars(session, SyntheticProvider(), by_symbol()["SPY"], Timeframe.D1,
+                utc(2023, 1, 1), utc(2024, 6, 1))
+    exp, res = run_experiment(session, all_strategies()["TF-SMA-001"](), symbol="SPY",
+                              timeframe=Timeframe.D1, source="synthetic",
+                              start=utc(2023, 1, 1), end=utc(2024, 6, 1))
+    session.commit()
+    engine = make_engine(db_url)
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                              make_session_factory(engine)))
+    r = c.get(f"/experiments/{exp.id}/equity?points=50").json()
+    assert r["available"] and r["matches_record"] and r["simulated"]
+    assert len(r["equity"]) <= 51 and r["ts"][-1] == res.equity.index[-1].isoformat()
+    assert r["equity"][-1] == round(float(res.equity.iloc[-1]), 2)
+    assert session.scalar(select(func.count()).select_from(Experiment)) == 1  # nothing recorded
+    assert c.get("/experiments/999/equity").status_code == 404
+    # Changed prices: refuse rather than draw a different curve.
+    from apex.db.models import PriceBar
+
+    bar = session.scalars(select(PriceBar).order_by(PriceBar.ts.desc())).first()
+    bar.close = bar.close * 1.5
+    session.commit()
+    r = c.get(f"/experiments/{exp.id}/equity").json()
+    assert not r["available"] and "prices have changed" in r["reason"]
+    page = (STATIC / "index.html").read_text()
+    assert "/equity`" in page and 'id="xchart"' in page
+    engine.dispose()
