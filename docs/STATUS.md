@@ -16,7 +16,7 @@ Update this file at the end of every working session so work can continue from a
 
 ## Implemented and tested
 
-Tests last run: 2026-11-20, `ruff check` clean, **694 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
+Tests last run: 2026-11-20, `ruff check` clean, **696 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
 
 - `apex.core`: env config, live trading impossible to enable, secret redaction in logs, injectable clock.
 - `apex.domain`: Bar, Timeframe, InstrumentSpec, CostModel; 22-instrument default universe (FX majors, US ETFs/stocks, BTC/ETH, ES/MES/NQ/MNQ).
@@ -68,6 +68,7 @@ Tests last run: 2026-11-20, `ruff check` clean, **694 passed**, with database te
 
 ## Written but not verified
 
+- Mac launchers `start-apex.command` (first run creates `.venv` with Python >= 3.11 and installs APEX; then `db-upgrade`, opens the dashboard, `caffeinate -i apex serve`) and `start-scheduler.command` (`caffeinate -i apex schedule --config jobs.json`), plus `docs/MAC_SETUP.md` (Jake will run APEX always-on on his Mac, decided 2026-11-20): written in a Linux sandbox, syntax-checked and tested for LF endings, the executable bit and real commands, but not yet run on a Mac.
 - `start-scheduler.bat` (double-click: creates `jobs.json` from `jobs.example.json` on first run, then `apex schedule --config jobs.json`): written in a Linux sandbox, not yet run on Windows. A test checks CRLF endings and that every `apex` command in both launchers exists.
 - `start-apex.bat` (double-click launcher for Windows: activates `.venv`, runs `apex db-upgrade`, opens the dashboard, runs `apex serve`): written in a Linux sandbox, not yet run on Windows.
 - `BinanceSpotProvider` and `AlpacaStocksProvider` against the real endpoints (sandbox network blocks them; logic tested with mocked HTTP).
