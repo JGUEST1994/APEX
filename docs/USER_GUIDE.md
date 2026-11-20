@@ -203,9 +203,11 @@ found for that period; bars before the first date simply don't trade.
 
 ## 4. Rank ideas fairly (the tournament)
 
-The tournament runs each strategy through **walk-forward testing**: it tunes on one stretch
-of history, then scores the strategy on the next stretch it has never seen, and repeats.
-It also corrects for having tried many ideas (so luck is not mistaken for skill).
+The tournament runs each strategy through **walk-forward testing** with its standard
+settings, fixed in advance, so nothing is tuned to the prices: history is cut into
+stretches, and the strategy is scored on each stretch using only what came before it. It
+also corrects for having tried many ideas and markets (so luck is not mistaken for skill),
+judging that on all the unseen history, so more history helps a real edge show through.
 
 ```powershell
 apex tournament --strategies TF-SMA-001,BO-DONCH-001,MR-RSI2-001 --symbols SPY,QQQ --timeframe 1d --source alpaca --start 2015-01-01 --end 2025-01-01 --train-bars 500 --test-bars 125
