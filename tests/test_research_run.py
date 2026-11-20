@@ -86,6 +86,15 @@ def test_forex_waits_out_the_hourly_limit_once_then_runs_every_pair(tmp_path):
                                       "GBPUSD/EURUSD"]
 
 
+def test_thirty_minute_forex_tests_the_ideas_built_for_it(tmp_path):
+    out = _run(tmp_path, "fx-30m", APEX_TIINGO_API_KEY="k")
+    assert "prices ok: tiingo EURUSD 30m from 2022-06-01" in out
+    assert _symbols(out, "fx-30m") == ["EURUSD", "GBPUSD"]
+    assert "--source tiingo --timeframe 30m" in out and "--train-bars 8000" in out
+    assert "tournament fx-1h" not in out
+    assert "fx-30m skipped: no Tiingo key" in _run(tmp_path, "fx-30m")
+
+
 def test_nothing_downloaded_skips_the_tournament_and_missing_keys_skip_groups(tmp_path):
     out = _run(tmp_path, "crypto-5m fx-1h stocks-15m", FAIL="BTCUSDT ETHUSDT")
     assert "tournament crypto-5m skipped: no prices" in out and "TOURNAMENT" not in out
