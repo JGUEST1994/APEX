@@ -161,7 +161,27 @@ apex research-import C:\notes\my-notes.md --licence-note "my own notes"
 apex research-search "opening range breakout"
 ```
 
-## 7. Save results for Excel
+## 7. What the numbers mean
+
+Click a backtest's number on the Backtests tab to see all its figures with a one-line
+meaning next to each. The main ones:
+
+| Figure | Plain English |
+|---|---|
+| Total return | Gain or loss over the whole test. |
+| Yearly growth | The steady yearly rate that would give the same total return. |
+| Sharpe ratio | Return per unit of ups and downs. Above 1 is decent, but on its own it says nothing about luck. |
+| Worst drop (max drawdown) | Largest fall from a high point before recovering. |
+| Trades | Completed round trips. Under about 100 means the result could easily be luck. |
+| Win rate | Share of trades that made money. |
+| Profit factor | Money made on winners divided by money lost on losers. Above 1 means net profit. |
+| Costs paid | Commission, spread, slippage and funding charged in the test. |
+| Unseen-data return / Sharpe | How the strategy did on the stretches of history it was not tuned on (tournament and `apex validate` only). This matters far more than the plain backtest. |
+| Kept after tuning | Unseen Sharpe as a share of tuning Sharpe. Low means the tuning mostly fitted noise. |
+| Luck-adjusted confidence (deflated Sharpe) | Chance the edge is real after allowing for how many variations were tried. The tournament wants 95%. |
+| Overfitting risk (PBO) | Chance the best-looking settings are just the luckiest. The tournament wants 50% or less. |
+
+## 8. Save results for Excel
 
 Any of these writes a CSV file you can open in Excel. It will not overwrite a file that
 already exists unless you add `--force`.

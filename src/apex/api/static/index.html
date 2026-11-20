@@ -43,7 +43,9 @@
   <section id="leaderboard">
     <div class="card"><table id="lb"></table></div>
   </section>
-  <section id="experiments"><div class="card"><table id="exps"></table></div></section>
+  <section id="experiments"><div class="card"><table id="exps"></table></div>
+    <div class="card"><h3 id="xname">Select a backtest</h3><p id="xinfo" class="muted"></p>
+      <table id="xmetrics"></table></div></section>
   <section id="paper">
     <div class="card"><table id="paccts"></table></div>
     <div class="card"><h3 id="pname">Select an account</h3>
@@ -78,6 +80,7 @@ const EMPTY = {
   ideatab: "No trading ideas found.",
   lb: "No tournament results yet. Run apex tournament to rank strategies.",
   exps: "No backtests yet. Run apex backtest or apex validate.",
+  xmetrics: "No figures recorded for this run.",
   paccts: "No practice accounts yet. Create one with apex paper-create (paper mode only).",
   pfills: "No simulated fills for this account yet.",
   hits: "No matches. Try a broader term, or import files with apex research-import.",
@@ -94,6 +97,35 @@ function el(tag, text, cls) {
   if (cls) e.className = cls;
   return e;
 }
+// Plain-English meaning of each recorded figure: [label, format, meaning]. Same wording as
+// "What the numbers mean" in docs/USER_GUIDE.md.
+const GLOSSARY = {
+  total_return: ["Total return", "pct", "Gain or loss over the whole test."],
+  cagr: ["Yearly growth", "pct", "The steady yearly rate that would give the same total return."],
+  sharpe: ["Sharpe ratio", "num", "Return per unit of ups and downs. Above 1 is decent, but on its own it says nothing about luck."],
+  sortino: ["Sortino ratio", "num", "Like Sharpe, but only counts the downs."],
+  max_drawdown: ["Worst drop", "pct", "Largest fall from a high point before recovering."],
+  calmar: ["Calmar ratio", "num", "Yearly growth divided by the worst drop."],
+  ann_volatility: ["Volatility", "pct", "How much the account value swings in a typical year."],
+  trades: ["Trades", "int", "Completed round trips. Under about 100 means the result could easily be luck."],
+  win_rate: ["Win rate", "pct", "Share of trades that made money."],
+  profit_factor: ["Profit factor", "num", "Money made on winners divided by money lost on losers. Above 1 means net profit."],
+  expectancy: ["Average trade", "num", "Average profit or loss per trade, in account currency."],
+  max_consecutive_losses: ["Longest losing streak", "int", "Most losing trades in a row."],
+  exposure: ["Time in the market", "pct", "Share of bars with a position open."],
+  total_costs: ["Costs paid", "num", "Commission, spread, slippage and funding charged in the test."],
+  pct_positive_months: ["Winning months", "pct", "Share of calendar months that ended up."],
+  oos_total_return: ["Unseen-data return", "pct", "Return on the stretches of history the strategy was not tuned on."],
+  oos_max_drawdown: ["Unseen-data worst drop", "pct", "Worst drop on the unseen stretches."],
+  mean_oos_sharpe: ["Unseen-data Sharpe", "num", "Average Sharpe on the unseen stretches."],
+  mean_is_sharpe: ["Tuning-data Sharpe", "num", "Average Sharpe on the stretches used for tuning (expect this to look better)."],
+  walk_forward_efficiency: ["Kept after tuning", "pct", "Unseen Sharpe as a share of tuning Sharpe. Low means the tuning mostly fitted noise."],
+  pct_profitable_folds: ["Profitable stretches", "pct", "Share of unseen stretches that made money."],
+  deflated_sharpe: ["Luck-adjusted confidence", "pct", "Chance the edge is real after allowing for how many variations were tried. The tournament wants 95%."],
+  pbo: ["Overfitting risk", "pct", "Chance the best-looking settings are just the luckiest. The tournament wants 50% or less."],
+  folds: ["Stretches tested", "int", "Number of tune-then-test rounds."],
+  n_trials: ["Variations tried", "int", "Parameter combinations tried; more tries make luck more likely."],
+};
 const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? "–"
   : (typeof v === "number" ? v.toFixed(d) : String(v));
 const pct = (v) => (v === null || v === undefined) ? "–" : (100 * v).toFixed(1) + "%";
@@ -297,11 +329,25 @@ const LOAD = {
   },
   async experiments() {
     const ex = await get("/experiments?limit=100");
-    table($("exps"), [["ID", (r) => r.id], ["Kind", (r) => r.kind], ["Strategy", (r) => r.strategy || "–"],
+    const open = (r) => {
+      const m = r.data_manifest || {}, met = r.metrics || {};
+      $("xname").textContent = `Backtest ${r.id}: ${r.strategy || "?"} on ${m.symbol || "?"} ${m.timeframe || ""}`;
+      const params = Object.entries(r.params || {}).filter(([, v]) => typeof v !== "object")
+        .map(([k, v]) => `${k}=${v}`).join(", ");
+      $("xinfo").textContent = `${r.kind} · data ${m.source || "?"} ${(m.start || "").slice(0, 10)} to ` +
+        `${(m.end || "").slice(0, 10)} · settings: ${params || "defaults"} · simulated, not real trading`;
+      const show = (k, v) => GLOSSARY[k][1] === "pct" ? pct(v) : GLOSSARY[k][1] === "int" ? (v ?? "–") : fmt(v);
+      const rows = Object.keys(GLOSSARY).filter((k) => typeof met[k] === "number")
+        .map((k) => ({ k, label: GLOSSARY[k][0], v: show(k, met[k]), mean: GLOSSARY[k][2] }));
+      table($("xmetrics"), [["Measure", (x) => x.label], ["Value", (x) => x.v, "num"],
+        ["What it means", (x) => x.mean, "wrap"]], rows);
+    };
+    table($("exps"), [["ID", (r) => { const b = el("button", String(r.id), "linkbtn"); b.onclick = () => open(r); return b; }], ["Kind", (r) => r.kind], ["Strategy", (r) => r.strategy || "–"],
       ["Symbol", (r) => (r.data_manifest || {}).symbol], ["TF", (r) => (r.data_manifest || {}).timeframe],
       ["Sharpe", (r) => fmt((r.metrics || {}).sharpe), "num"], ["Return", (r) => pct((r.metrics || {}).total_return), "num"],
       ["Max DD", (r) => pct((r.metrics || {}).max_drawdown), "num"], ["Trades", (r) => (r.metrics || {}).trades ?? "–", "num"],
       ["Code", (r) => (r.code_version || "").slice(0, 10)], ["", () => el("span", "SIMULATED", "tag sim")]], ex);
+    if (ex.length) open(ex[0]);
   },
   async paper() {
     const accts = await get("/paper/accounts");
