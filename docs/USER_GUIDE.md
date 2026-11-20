@@ -1,0 +1,167 @@
+# APEX user guide (Windows, plain English)
+
+This guide walks through using APEX day to day on a Windows PC: getting prices, testing a
+trading idea, ranking ideas against each other, and running a practice (paper) account.
+Every figure APEX shows is **simulated**. There is no real-money trading in this release.
+
+All commands go in **PowerShell**, inside the APEX folder, after switching on the project's
+Python environment:
+
+```powershell
+cd C:\path\to\APEX
+.venv\Scripts\activate
+```
+
+If you have not installed APEX yet, follow the quick start in [README.md](../README.md)
+first (it ends with `apex db-upgrade` and `apex seed-instruments`).
+
+## 1. Look at the dashboard
+
+```powershell
+apex serve
+```
+
+Open <http://127.0.0.1:8000/ui/> in your browser. Leave the PowerShell window open while
+you use it; press Ctrl+C there to stop it. The tabs are:
+
+| Tab | What it shows |
+|---|---|
+| Overview | Is everything running, and what data APEX has stored |
+| Markets | Price chart for each stored market |
+| Strategy lab | Every strategy APEX can test and how far through testing it is |
+| Trading ideas | The 53 ideas from the APEX spec, and which ones have a strategy yet |
+| Tournament | Strategies ranked by how well they held up on data they had not seen |
+| Backtests | Every test APEX has run, so it can be repeated exactly |
+| Practice trading | Paper accounts, their trades and how closely they match a backtest |
+| Research | Search the notes and papers you have imported |
+
+The dashboard only reads. Everything below is done from PowerShell (open a second window
+for it while `apex serve` is running).
+
+## 2. Get some prices
+
+APEX stores prices ("bars") per market, timeframe and source. You choose the source with
+`--provider`.
+
+**Free, no account needed (crypto):**
+
+```powershell
+apex ingest --provider coinbase --symbol BTCUSDT --timeframe 1h --start 2024-01-01 --end 2024-07-01
+apex ingest --provider binance  --symbol ETHUSDT --timeframe 1d --start 2021-01-01 --end 2025-01-01
+apex ingest --provider kraken   --symbol BTCUSDT --timeframe 1h --start 2024-01-01 --end 2024-02-01
+```
+
+Kraken only gives the most recent 720 bars, so use it for keeping data up to date rather
+than for long history. Coinbase and Binance can fetch long history.
+
+**US stocks and ETFs:** sign up for a free Alpaca account, create API keys, and put them
+in the `.env` file in the APEX folder (never in the code, and never share that file):
+
+```
+APEX_ALPACA_KEY_ID=your-key-id
+APEX_ALPACA_SECRET_KEY=your-secret
+```
+
+Then:
+
+```powershell
+apex ingest --provider alpaca --symbol SPY --timeframe 1d --start 2019-01-01 --end 2025-01-01
+```
+
+**Your own files:** save a CSV as `data\csv\<SYMBOL>_<timeframe>.csv` (for example
+`data\csv\EURUSD_1h.csv`) and use `--provider csv`.
+
+**Made-up practice data** (useful for learning the commands; it means nothing about real
+markets): `--provider synthetic`.
+
+To top data up later without re-downloading everything:
+
+```powershell
+apex update --provider coinbase --symbols BTCUSDT,ETHUSDT --timeframe 1h --backfill-start 2024-01-01
+```
+
+## 3. Test one idea (a backtest)
+
+See which strategies exist with `apex strategies`, or the Strategy lab tab. Then:
+
+```powershell
+apex backtest --strategy TF-SMA-001 --symbol SPY --timeframe 1d --source alpaca --start 2019-01-01 --end 2025-01-01
+```
+
+`--source` must match the provider you downloaded the data with. The result prints in the
+window and is saved to the Backtests tab. Change a setting with `--param`, for example
+`--param fast=10 --param slow=50`. A good-looking backtest on its own proves very little;
+the next step is the real test.
+
+**Strategies that trade two or more markets together** (pairs, baskets, cross-asset) use
+`backtest-pair`:
+
+```powershell
+apex backtest-pair --strategy STAT-PAIR-001 --symbols QQQ,SPY --timeframe 1d --source alpaca --start 2019-01-01 --end 2025-01-01
+```
+
+## 4. Rank ideas fairly (the tournament)
+
+The tournament runs each strategy through **walk-forward testing**: it tunes on one stretch
+of history, then scores the strategy on the next stretch it has never seen, and repeats.
+It also corrects for having tried many ideas (so luck is not mistaken for skill).
+
+```powershell
+apex tournament --strategies TF-SMA-001,BO-DONCH-001,MR-RSI2-001 --symbols SPY,QQQ --timeframe 1d --source alpaca --start 2015-01-01 --end 2025-01-01 --train-bars 500 --test-bars 125
+apex leaderboard
+```
+
+Leave out `--strategies` to try every strategy that suits the market. Most ideas **fail**
+the gates, and that is the system working: the "Why not" column on the Tournament tab says
+which test each one missed (too few trades, not enough out-of-sample profit, too big a
+drawdown, and so on). Only strategies that pass move on towards paper trading.
+
+## 5. Practice (paper) trading
+
+Paper accounts trade on simulated fills, with the same risk limits and emergency stop
+("kill switch") a real account would have. They need paper mode switched on for the
+command:
+
+```powershell
+$env:APEX_TRADING_MODE = "paper"
+apex paper-create --name sma-spy --strategy TF-SMA-001 --symbol SPY --timeframe 1d --source alpaca
+apex paper-run --name sma-spy
+apex paper-compare --name sma-spy
+```
+
+`paper-run` processes any stored bars the account has not seen yet, so run it again after
+each `apex update`. `paper-compare` checks that the paper account behaved like a backtest
+of the same strategy over the same bars. One account can trade several markets with shared
+cash: `--symbol SPY,QQQ,BTCUSDT`.
+
+If the kill switch trips (too big a loss, a losing streak, or a reconciliation problem),
+the account goes flat and stays stopped until a named person resets it:
+
+```powershell
+apex paper-reset-kill --name sma-spy --actor "Jake"
+```
+
+To run updates and paper accounts automatically on a timer, see "Built-in scheduler" in
+[DEPLOYMENT.md](DEPLOYMENT.md).
+
+## 6. Research library
+
+Import notes, papers or transcripts you have the right to use (the licence note is
+required so APEX records where each document came from), then search them:
+
+```powershell
+apex research-import C:\notes\my-notes.md --licence-note "my own notes"
+apex research-search "opening range breakout"
+```
+
+## When something goes wrong
+
+- **`apex` is not recognised:** the environment is not switched on. Run
+  `.venv\Scripts\activate` in the APEX folder first.
+- **"set APEX_ALPACA_KEY_ID ...":** the Alpaca keys are missing from `.env`.
+- **"paper commands need APEX_TRADING_MODE=paper":** run
+  `$env:APEX_TRADING_MODE = "paper"` in that PowerShell window first.
+- **A backtest says there are no bars:** check that `--source`, `--symbol` and
+  `--timeframe` match what you ingested (the Overview tab lists stored data).
+- **New features from GitHub:** your copy is a ZIP download, so download the latest ZIP,
+  copy your `.env` and `apex.db` into the new folder, and run `apex db-upgrade` once.

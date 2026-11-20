@@ -6,7 +6,7 @@ Standalone quantitative research and (eventually) trading platform for FX, US st
 
 **Safety:** this release supports `research` and `paper` modes only. There is no live/real-money mode, and configuration refuses to enable one.
 
-**Where things stand:** see [`docs/STATUS.md`](docs/STATUS.md). Design documents are in [`docs/design/`](docs/design/).
+**Where things stand:** see [`docs/STATUS.md`](docs/STATUS.md). **How to use it (Windows, plain English):** [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Design documents are in [`docs/design/`](docs/design/).
 
 ## Quick start (single machine, SQLite)
 
