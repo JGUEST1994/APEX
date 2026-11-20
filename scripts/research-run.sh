@@ -75,5 +75,7 @@ fi
 
 apex export leaderboard --out "$OUT/leaderboard.csv" --force >>"$OUT/run.log" 2>&1
 apex leaderboard >"$OUT/leaderboard.txt" 2>&1
+apex shortlist --top 8 >"$OUT/shortlist.md" 2>&1
 echo "----- leaderboard.csv"; cat "$OUT/leaderboard.csv"; echo "----- end"
+echo "----- shortlist.md"; cat "$OUT/shortlist.md"; echo "----- end"
 log "done"
