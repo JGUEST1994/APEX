@@ -157,6 +157,10 @@ input, select {
   background: var(--bg); color: var(--ink); max-width: 100%;
 }
 input:focus, select:focus { border-color: var(--brand); outline: none; box-shadow: 0 0 0 3px var(--brand-soft); }
+.dl { color: var(--brand); font-weight: 600; text-decoration: underline; text-underline-offset: 3px;
+      text-decoration-thickness: 1px; }
+.dl[hidden] { display: none; }
+.dlrow { margin: 0 0 10px; text-align: right; }
 .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .search { width: min(480px, 100%); }
 
