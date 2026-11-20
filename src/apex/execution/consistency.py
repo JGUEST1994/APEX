@@ -68,6 +68,10 @@ def compare(session: Session, name: str) -> dict:
                  "symbols": syms, "simulated": True}
     if acc.last_bar_ts is None:
         return out | {"bars": 0, "consistent": None, "notes": ["account has not run yet"]}
+    if acc.strategy_key not in all_strategies():  # multi-instrument strategy
+        return out | {"consistent": None,
+                      "notes": ["the paper-vs-backtest report does not cover "
+                                "multi-instrument strategies yet"]}
     fills = session.scalars(select(PaperFill).where(PaperFill.account_id == acc.id)
                             .order_by(PaperFill.id)).all()
     per = {s: _one(session, acc, s, [f for f in fills if f.symbol == s]) for s in syms}

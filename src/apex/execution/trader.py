@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 
 from apex.domain.market import InstrumentSpec
@@ -20,6 +21,7 @@ from apex.risk.correlation import correlation_clusters
 from apex.risk.service import AccountState, OrderIntent, RiskService
 from apex.strategies import indicators as ind
 from apex.strategies.base import Strategy
+from apex.strategies.multi import MultiStrategy, align
 
 
 @dataclass
@@ -35,13 +37,23 @@ class PaperTrader:
     Each instrument gets its own signal from its own bar history; sizing, the risk checks
     and the kill switch see the whole account. With several instruments, the correlated-
     exposure limit is fed with groups computed from trailing returns of the bars seen so far.
+
+    A ``MultiStrategy`` (pairs, baskets, cross-asset) instead gets the aligned histories of
+    all its legs, in the order the instruments were given, and returns a target weight per
+    leg (signed notional / equity). It only trades at timestamps where every leg has a bar;
+    each leg's order then goes through the same sizing caps, risk checks and kill switch.
     """
 
     def __init__(self, strategy: Strategy, spec: InstrumentSpec | list[InstrumentSpec],
                  risk: RiskService, initial_capital: float = 100_000.0,
                  params: dict | None = None, stop_atr: float = 2.0, history: int = 600,
-                 account: str = "", corr_window: int = 120) -> None:
+                 account: str = "", corr_window: int = 120,
+                 rebalance_band: float = 0.1) -> None:
         specs = spec if isinstance(spec, list) else [spec]
+        self.multi = isinstance(strategy, MultiStrategy)
+        if self.multi:
+            strategy.check_legs(len(specs))
+        self.legs = [s.symbol for s in specs]
         self.specs = {s.symbol: s for s in specs}
         self.spec = specs[0]  # the primary instrument (single-instrument accounts)
         self.strategy, self.risk, self.account = strategy, risk, account
@@ -49,6 +61,7 @@ class PaperTrader:
         self.broker = PaperBroker(dict(self.specs))
         self.pf = Portfolio(cash=initial_capital)
         self.stop_atr, self.history, self.corr_window = stop_atr, history, corr_window
+        self.rebalance_band = rebalance_band  # multi: skip leg changes under this fraction
         self.hist: dict[str, list[dict]] = {s: [] for s in self.specs}
         self.events: list[Event] = []
         self.peak = self.day_start = initial_capital
@@ -142,9 +155,39 @@ class PaperTrader:
         self.risk.monitor(acct, ts)
         if self.risk.kill.engaged and not was:
             self.events.append(Event(ts, "kill_switch", {"reason": self.risk.kill.reason}))
-        for sym in syms:
-            self._trade(sym, bars[sym], acct, ts, data_stale)
+        if self.multi:
+            if set(syms) == set(self.legs):  # a leg's market is closed: hold
+                self._trade_multi(bars, acct, ts, data_stale)
+        else:
+            for sym in syms:
+                self._trade(sym, bars[sym], acct, ts, data_stale)
         return fills
+
+    def _stop_dist(self, df: pd.DataFrame, close: float) -> float:
+        atr = ind.atr(df, 14).iloc[-1]
+        return self.stop_atr * (atr if atr == atr else close * 0.02)
+
+    def _trade_multi(self, bars: dict[str, dict], acct: AccountState, ts: datetime,
+                     data_stale: bool) -> None:
+        frames = align({s: pd.DataFrame(self.hist[s]) for s in self.legs})
+        if len(frames[self.legs[0]]) == 0 or frames[self.legs[0]]["ts"].iloc[-1] != ts:
+            return
+        w = self.strategy.target_weights(frames, self.params).iloc[-1]
+        for sym in self.legs:
+            spec, bar = self.specs[sym], bars[sym]
+            weight = 0.0 if self.risk.kill.engaged else float(np.nan_to_num(w.get(sym, 0.0)))
+            stop_dist = self._stop_dist(frames[sym], bar["close"])
+            m = spec.contract_multiplier
+            target_units = weight * acct.equity / (bar["close"] * m)
+            # the same caps as single-instrument sizing, applied to the leg's weight
+            cap = abs(self._size(spec, 1.0, bar["close"], stop_dist, acct.equity))
+            units = min(abs(target_units), cap)
+            want = math.copysign(math.floor(units / spec.lot_size) * spec.lot_size, weight)
+            have = self.pf.units.get(sym, 0.0)
+            if (have and want and (have > 0) == (want > 0)
+                    and abs(want - have) <= self.rebalance_band * abs(have)):
+                continue  # drift inside the band: no order (stateless, so restart-safe)
+            self._rebalance(sym, bar, want, stop_dist, acct, ts, data_stale)
 
     def _trade(self, sym: str, bar: dict, acct: AccountState, ts: datetime,
                data_stale: bool) -> None:
@@ -153,9 +196,13 @@ class PaperTrader:
         target = float(self.strategy.target_position(df, self.params).iloc[-1])
         if self.risk.kill.engaged:
             target = 0.0  # flatten; the risk service only lets reducing orders through
-        atr = ind.atr(df, 14).iloc[-1]
-        stop_dist = self.stop_atr * (atr if atr == atr else bar["close"] * 0.02)
+        stop_dist = self._stop_dist(df, bar["close"])
         want = self._size(spec, target, bar["close"], stop_dist, acct.equity)
+        self._rebalance(sym, bar, want, stop_dist, acct, ts, data_stale)
+
+    def _rebalance(self, sym: str, bar: dict, want: float, stop_dist: float,
+                   acct: AccountState, ts: datetime, data_stale: bool) -> None:
+        spec = self.specs[sym]
         have = self.pf.units.get(sym, 0.0)
         qty = want - have
         if abs(qty) < spec.lot_size / 2:

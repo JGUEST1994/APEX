@@ -25,6 +25,8 @@ from apex.execution.trader import PaperTrader
 from apex.marketdata.repository import get_instrument, load_bars, to_spec
 from apex.risk.limits import RiskLimits  # noqa: F401  (re-exported for callers)
 from apex.risk.service import KillSwitch, RiskService
+from apex.strategies.base import Strategy
+from apex.strategies.multi import all_multi_strategies
 from apex.strategies.registry import all_strategies
 
 TOL = 1e-6
@@ -34,16 +36,25 @@ class AccountHalted(RuntimeError):
     pass
 
 
+def strategy_class(key: str) -> type[Strategy]:
+    """Single- or multi-instrument strategy class by key."""
+    reg = {**all_strategies(), **all_multi_strategies()}
+    if key not in reg:
+        raise KeyError(f"unknown strategy {key}")
+    return reg[key]
+
+
 def create_account(session: Session, name: str, *, strategy_key: str, symbol: str | list[str],
                    timeframe: str, source: str, capital: float = 100_000.0,
                    params: dict | None = None, limits: RiskLimits | None = None,
                    actor: str = "system") -> PaperAccount:
-    if strategy_key not in all_strategies():
-        raise KeyError(f"unknown strategy {strategy_key}")
-    all_strategies()[strategy_key]().params(params)  # validates parameter names
+    cls = strategy_class(strategy_key)
+    cls().params(params)  # validates parameter names
     symbols = [symbol] if isinstance(symbol, str) else list(dict.fromkeys(symbol))
     if not symbols:
         raise ValueError("at least one symbol is required")
+    if hasattr(cls, "check_legs"):
+        cls.check_legs(len(symbols))  # multi-instrument: legs in the order given
     for sym in symbols:
         get_instrument(session, sym)
     acc = PaperAccount(name=name, strategy_key=strategy_key, params=params or {},
@@ -104,7 +115,7 @@ def load_trader(session: Session, acc: PaperAccount, now: datetime) -> PaperTrad
     specs = _specs(session, acc)
     kill = KillSwitch(acc.kill_engaged, acc.kill_reason, acc.kill_at, acc.kill_by)
     risk = RiskService(RiskLimits(**acc.limits), TradingMode.PAPER, kill)
-    t = PaperTrader(all_strategies()[acc.strategy_key](), list(specs.values()), risk,
+    t = PaperTrader(strategy_class(acc.strategy_key)(), list(specs.values()), risk,
                     initial_capital=acc.initial_capital, params=acc.params,
                     account=acc.name)
     t.pf.cash, t.pf.realised = acc.cash, acc.realised
