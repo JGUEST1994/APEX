@@ -9,9 +9,11 @@ from __future__ import annotations
 import logging
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import func, select, text
+from sqlalchemy.engine import make_url
 
 from apex.core.config import Settings
 
@@ -39,7 +41,22 @@ def _migration_heads(url: str, engine) -> tuple[set[str], set[str]]:  # noqa: AN
     return current, heads
 
 
-def run_checks(settings: Settings, env_file: Path | None = Path(".env")) -> list[Check]:
+def _backup_check(folder: Path, now: datetime | None = None) -> Check:
+    from apex.backup import PREFIX
+
+    files = sorted(folder.glob(f"{PREFIX}*.db")) if folder.is_dir() else []
+    if not files:
+        return Check(WARN, "Backups", f"none in {folder}; run: apex backup")
+    newest = max(f.stat().st_mtime for f in files)
+    age = (now or datetime.now(UTC)) - datetime.fromtimestamp(newest, UTC)
+    days = age.total_seconds() / 86400
+    when = "today" if days < 1 else f"{int(days)} day(s) ago"
+    return (Check(OK, "Backups", f"{len(files)} in {folder}, newest {when}") if days <= 7 else
+            Check(WARN, "Backups", f"newest is {int(days)} days old; run: apex backup"))
+
+
+def run_checks(settings: Settings, env_file: Path | None = Path(".env"),
+               backup_folder: Path = Path("backups")) -> list[Check]:
     from apex.db.models import IngestionRun, Instrument, PaperAccount, PriceBar
     from apex.db.session import make_engine, make_session_factory
 
@@ -65,6 +82,9 @@ def run_checks(settings: Settings, env_file: Path | None = Path(".env")) -> list
                      "not set (fine while APEX stays on this computer)"))
     out.append(Check(OK, "External AI", "off" if settings.ai_provider == "none"
                      else f"on ({settings.ai_provider})"))
+
+    if make_url(settings.database_url).get_backend_name() == "sqlite":
+        out.append(_backup_check(backup_folder))
 
     engine = make_engine(settings.database_url)
     if engine.url.get_backend_name() == "sqlite" and engine.url.database not in (None, "",

@@ -58,7 +58,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 - Dashboard Strategy lab: click a strategy's key to see how it trades (entry, exit, stop, target, markets and timeframes it suits, default settings, the trading idea it codes) and a ready-to-copy `apex backtest` command for a market it suits. `/strategies` now returns those rule fields and the hypothesis ids.
 - Dashboard Backtests tab: click a run's ID to see every recorded figure with a plain-English label and one-line meaning (`GLOSSARY` in `index.html`, same wording as "What the numbers mean" in `docs/USER_GUIDE.md`), plus its data range and settings. A test keeps the glossary limited to figures APEX actually records.
 - Docker: the image builds and `docker compose up` (PostgreSQL 16 + pgvector, API) runs migrations and serves `/health` (database reachable, research mode, no live trading) and `/ui/`. A `docker` CI job checks this on every PR; the API container has a healthcheck so `docker compose up --wait` waits for it. Verified locally 2026-11-20 too.
-- `apex backup` (SQLite online backup + integrity check into `backups/`, optional `--keep N`) and a `backup` scheduler job (in `jobs.example.json`, daily, keep 14); PostgreSQL still needs `pg_dump`. Restore steps in USER_GUIDE section 9.
+- `apex backup` (SQLite online backup + integrity check into `backups/`, optional `--keep N`) and a `backup` scheduler job (in `jobs.example.json`, daily, keep 14); PostgreSQL still needs `pg_dump`. Restore steps in USER_GUIDE section 9. `apex doctor` warns (SQLite only) when `backups/` has no APEX backup from the last 7 days.
 
 ## Written but not verified
 
