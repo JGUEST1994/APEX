@@ -3,7 +3,9 @@
 ``GET /products/{BASE-QUOTE}/candles`` returns at most 300 candles per request, newest
 first, as ``[time, low, high, open, close, volume]``. This adapter walks forward in
 300-candle windows, so unlike Kraken it can backfill long history (slowly: be gentle with
-the public rate limit). Coinbase has no 30-minute candles.
+the public rate limit). Coinbase has no 30-minute candles. USDT-quoted symbols (BTCUSDT)
+use Coinbase's US-dollar book (BTC-USD), which has the long history; see
+:func:`coinbase_product`.
 """
 
 from __future__ import annotations
@@ -24,9 +26,12 @@ _PAGE = 300
 
 
 def coinbase_product(spec: InstrumentSpec) -> str:
+    """Coinbase product id. A Tether (USDT) quote maps to the US-dollar book: Coinbase's USD
+    books are its deep ones and go back to 2015-16, while its USDT pairs only began in 2021.
+    USDT has tracked the dollar closely, so for research the USD price stands in for it."""
     quote = spec.quote_currency or "USD"
     base = spec.base_currency or spec.symbol.removesuffix(quote)
-    return f"{base}-{quote}"
+    return f"{base}-{'USD' if quote == 'USDT' else quote}"
 
 
 class CoinbaseSpotProvider(MarketDataProvider):

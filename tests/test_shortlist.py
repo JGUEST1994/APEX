@@ -54,3 +54,14 @@ def test_a_result_that_never_traded_is_not_a_near_miss():
 
 def test_empty_leaderboard():
     assert "No tournament results yet" in to_markdown(shortlist(pd.DataFrame()))
+
+
+def test_a_near_miss_is_not_rounded_up_to_the_bar_and_shows_simply_holding():
+    row = _row("N", "NVDA", False, dsr=0.9476, reasons=LUCK) | {
+        "buy_hold_return": 8.25, "buy_hold_max_drawdown": -0.37}
+    line = shortlist(pd.DataFrame([row]))["near_misses"][0]
+    assert "confidence the edge is real 94.8%" in line
+    assert "simply holding it over the same stretches: +825%, worst drop -37%" in line
+    pair = shortlist(pd.DataFrame([_row("P", "MSFT/AAPL", False, dsr=0.99, reasons=FEW)
+                                   | {"buy_hold_return": None}]))["near_misses"][0]
+    assert "confidence the edge is real 99%" in pair and "simply holding" not in pair

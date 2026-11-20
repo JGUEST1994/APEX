@@ -2,9 +2,15 @@ name: research-run
 # Ranks every built strategy on real, free price data. Research only: nothing is traded,
 # no account is touched. Start it by hand (Actions tab -> research-run -> Run workflow).
 # Optional repository secrets: APEX_ALPACA_KEY_ID + APEX_ALPACA_SECRET_KEY (US stocks),
-# APEX_TIINGO_API_KEY (forex). Without them only crypto is ranked.
+# APEX_TIINGO_API_KEY (daily US stocks back to 2000, and forex). Without them only crypto is
+# ranked. Results print to the job log and are kept as the research-results artifact.
 on:
   workflow_dispatch:
+    inputs:
+      groups:
+        description: "Market groups to run, space-separated (blank = all): crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -26,6 +32,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -e .
       - run: scripts/research-run.sh
+        env:  # passed as data, never pasted into the command; blank means every group
+          RESEARCH_GROUPS: ${{ inputs.groups }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:

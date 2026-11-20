@@ -30,9 +30,9 @@ Real data (all free; paid sources such as Databento are deliberately not built y
 
 | `--provider` | Markets | Key |
 |---|---|---|
-| `coinbase`, `kraken`, `binance` | crypto (Binance also gives buy volume, used by the order-flow strategy) | none |
-| `alpaca`, `polygon` | US stocks/ETFs | free account key |
-| `tiingo` | US stocks/ETFs (daily), forex (1m-1h) | free account key |
+| `coinbase`, `kraken`, `binance` | crypto (Coinbase: US-dollar books back to 2016; Binance also gives buy volume, used by the order-flow strategies) | none |
+| `alpaca`, `polygon` | US stocks/ETFs (Alpaca's free feed reaches back to about 2020) | free account key |
+| `tiingo` | US stocks/ETFs (daily, decades of history), forex (1m-1h) | free account key |
 | `dukascopy-csv` | forex files you export by hand from Dukascopy (their terms forbid automated downloads) | none |
 | `csv`, `csv-cont` | your own CSV files; futures contracts stitched into one series | none |
 
