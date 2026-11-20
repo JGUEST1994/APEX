@@ -154,7 +154,8 @@ HYPOTHESES: list[Hypothesis] = [
       "range", data="ticks", implemented="VP-POC-001"),
     H("H27", "Low-volume node rejection", "volume_profile", "futures", "5m",
       "Low-volume nodes act as fast-move zones; rejection at high-volume nodes.",
-      "rejection candle at HVN", "next LVN", "beyond HVN", "next HVN", "any", data="ticks"),
+      "rejection candle at HVN", "next LVN", "beyond HVN", "next HVN", "any", data="ticks",
+      implemented="VP-HVN-001"),
     # --- order flow
     H("H28", "Cumulative delta divergence", "order_flow", "futures,crypto", "1m,5m",
       "Price highs without delta confirmation fail.", "new high with lower cumulative delta",

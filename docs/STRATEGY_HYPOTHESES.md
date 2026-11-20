@@ -64,7 +64,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 |---|---|---|---|---|---|---|---|---|
 | H25 | Value area 80% rule | futures | 30m | two 30m closes inside prior value area | opposite value area edge | outside value area | ticks | VP-VA80-001 |
 | H26 | Point of control magnet | futures,equity | 5m | price > 1 ATR from POC with declining volume | touch POC | 1 ATR further | ticks | VP-POC-001 |
-| H27 | Low-volume node rejection | futures | 5m | rejection candle at HVN | next LVN | beyond HVN | ticks | - |
+| H27 | Low-volume node rejection | futures | 5m | rejection candle at HVN | next LVN | beyond HVN | ticks | VP-HVN-001 |
 
 ## Order Flow (3)
 

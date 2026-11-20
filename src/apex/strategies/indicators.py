@@ -134,23 +134,11 @@ def volume_profile(bars: pd.DataFrame, bins: int = 30, value_area: float = 0.7):
     outward from the POC, the busier neighbour first, until ``value_area`` of the volume
     is covered). NaNs if the block has no volume.
     """
-    lo_px, hi_px = float(bars["low"].min()), float(bars["high"].max())
-    vol = bars["volume"].to_numpy(float)
-    if not np.isfinite(lo_px) or vol.sum() <= 0:
+    edges, prof = profile_bins(bars, bins)
+    if prof is None:
         return np.nan, np.nan, np.nan
-    if hi_px <= lo_px:
-        return lo_px, lo_px, hi_px
-    edges = np.linspace(lo_px, hi_px, bins + 1)
-    h, low, c = (bars[x].to_numpy(float) for x in ("high", "low", "close"))
-    span = h - low
-    overlap = np.clip(np.minimum(h[:, None], edges[None, 1:])
-                      - np.maximum(low[:, None], edges[None, :-1]), 0, None)
-    share = np.where(span[:, None] > 0, overlap / np.where(span > 0, span, 1)[:, None], 0.0)
-    flat = span <= 0
-    if flat.any():
-        idx = np.clip(np.searchsorted(edges, c[flat], side="right") - 1, 0, bins - 1)
-        share[np.flatnonzero(flat), idx] = 1.0
-    prof = (share * vol[:, None]).sum(axis=0)
+    if len(prof) == 0:
+        return edges[0], edges[0], edges[0]
     p = int(prof.argmax())
     a, b, covered = p, p, prof[p]
     target = value_area * prof.sum()
@@ -167,6 +155,28 @@ def volume_profile(bars: pd.DataFrame, bins: int = 30, value_area: float = 0.7):
     return float(centre[p]), float(edges[a]), float(edges[b + 1])
 
 
+def profile_bins(bars: pd.DataFrame, bins: int = 30):
+    """Bar-approximated volume-at-price: ``(edges, volume per bin)``. ``(nan edges, None)``
+    with no volume; ``([price], [])`` when the block has no price range."""
+    lo_px, hi_px = float(bars["low"].min()), float(bars["high"].max())
+    vol = bars["volume"].to_numpy(float)
+    if not np.isfinite(lo_px) or vol.sum() <= 0:
+        return np.array([np.nan]), None
+    if hi_px <= lo_px:
+        return np.array([lo_px]), np.array([])
+    edges = np.linspace(lo_px, hi_px, bins + 1)
+    h, low, c = (bars[x].to_numpy(float) for x in ("high", "low", "close"))
+    span = h - low
+    overlap = np.clip(np.minimum(h[:, None], edges[None, 1:])
+                      - np.maximum(low[:, None], edges[None, :-1]), 0, None)
+    share = np.where(span[:, None] > 0, overlap / np.where(span > 0, span, 1)[:, None], 0.0)
+    flat = span <= 0
+    if flat.any():
+        idx = np.clip(np.searchsorted(edges, c[flat], side="right") - 1, 0, bins - 1)
+        share[np.flatnonzero(flat), idx] = 1.0
+    return edges, (share * vol[:, None]).sum(axis=0)
+
+
 def prior_session_profile(bars: pd.DataFrame, calendar: str, bins: int = 30,
                           value_area: float = 0.7) -> pd.DataFrame:
     """Per bar, the previous complete session's ``poc``, ``val`` and ``vah`` (NaN in the
@@ -176,3 +186,15 @@ def prior_session_profile(bars: pd.DataFrame, calendar: str, bins: int = 30,
     prof = pd.DataFrame.from_dict(rows, orient="index", columns=["poc", "val", "vah"])
     prev = prof.shift(1)
     return pd.DataFrame({c: key.map(prev[c]) for c in prev.columns}, index=bars.index)
+
+
+def high_volume_nodes(bars: pd.DataFrame, bins: int = 30, mult: float = 1.5) -> np.ndarray:
+    """Price levels (bin centres) of high-volume nodes: local peaks of the bar-approximated
+    profile holding at least ``mult`` x the average bin's volume. Sorted ascending."""
+    edges, prof = profile_bins(bars, bins)
+    if prof is None or len(prof) < 3:
+        return np.array([])
+    padded = np.concatenate([[-np.inf], prof, [-np.inf]])
+    peak = (prof >= padded[:-2]) & (prof > padded[2:])
+    centre = (edges[:-1] + edges[1:]) / 2
+    return centre[peak & (prof >= mult * prof.mean())]
