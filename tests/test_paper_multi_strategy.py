@@ -152,7 +152,28 @@ def test_multi_strategy_account_persists_and_restarts_identically(seeded):
     assert fa and fa == fb
     assert store.reconcile(s, a) == []
     rep = compare(s, "straight")
-    assert rep["consistent"] is None and "multi-instrument" in rep["notes"][0]
+    assert rep["consistent"] is True, rep["notes"]
+    assert set(rep["per_symbol"]) == {"SPY", "QQQ", "AAPL"}
+    assert rep["direction_agreement"] >= 0.95 and rep["max_fill_price_gap_bps"] <= 1.0
+    assert "backtested together" in " ".join(rep["notes"])
+
+
+def test_pairs_report_agrees_and_spots_a_wrong_fill(seeded):
+    s = seeded
+    store.create_account(s, "pair", strategy_key="STAT-PAIR-001", symbol=["QQQ", "SPY"],
+                         timeframe="1d", source="synthetic")
+    s.commit()
+    store.run_account(s, "pair", now=NOW)
+    rep = compare(s, "pair")
+    assert rep["paper_changes"] > 0 and rep["consistent"] is True, rep["notes"]
+    acc = s.scalar(select(PaperAccount).where(PaperAccount.name == "pair"))
+    fill = s.scalars(select(PaperFill).where(PaperFill.account_id == acc.id)
+                     .order_by(PaperFill.id)).first()
+    fill.price *= 1.01  # a paper fill 100 bps away from the bar open
+    s.flush()
+    bad = compare(s, "pair")
+    assert bad["consistent"] is False and bad["max_fill_price_gap_bps"] > 99
+    assert any("fill price gap" in n for n in bad["notes"])
 
 
 def test_create_checks_the_leg_count(seeded):
