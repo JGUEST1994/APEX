@@ -26,6 +26,8 @@ tour() {  # name source timeframe symbols start train test
   apex tournament --strategies all --only-suited --no-promote --source "$2" --timeframe "$3" \
     --symbols "$4" --start "$5" --end "$END" --train-bars "$6" --test-bars "$7" \
     >"$OUT/tournament-$1.txt" 2>>"$OUT/run.log" || log "tournament $1 FAILED"
+  # also print it, so the results can be read from the job log as soon as each one finishes
+  echo "----- tournament-$1.txt"; cat "$OUT/tournament-$1.txt"; echo "----- end"
 }
 
 apex db-upgrade >/dev/null 2>&1
@@ -73,4 +75,5 @@ fi
 
 apex export leaderboard --out "$OUT/leaderboard.csv" --force >>"$OUT/run.log" 2>&1
 apex leaderboard >"$OUT/leaderboard.txt" 2>&1
+echo "----- leaderboard.csv"; cat "$OUT/leaderboard.csv"; echo "----- end"
 log "done"
