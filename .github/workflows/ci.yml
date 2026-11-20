@@ -28,6 +28,18 @@ jobs:
       - run: ruff check src tests
       - run: pytest
 
+  test-windows:
+    # Jake runs APEX on Windows; GitHub's Windows runners have no PostgreSQL service,
+    # so this job runs the suite on SQLite only (the PostgreSQL tests skip themselves)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev,server]"
+      - run: pytest
+
   audit:
     runs-on: ubuntu-latest
     steps:
