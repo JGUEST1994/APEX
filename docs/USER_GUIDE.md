@@ -17,11 +17,18 @@ first (it ends with `apex db-upgrade` and `apex seed-instruments`).
 
 ## 1. Look at the dashboard
 
+The easy way: double-click **`start-apex.bat`** in the APEX folder. It switches on the
+environment, brings the database up to date and opens the dashboard in your browser after
+a few seconds (refresh the page if it opened too early). Close the black window to stop
+APEX.
+
+Or from PowerShell:
+
 ```powershell
 apex serve
 ```
 
-Open <http://127.0.0.1:8000/ui/> in your browser. Leave the PowerShell window open while
+Then open <http://127.0.0.1:8000/ui/> in your browser. Leave the PowerShell window open while
 you use it; press Ctrl+C there to stop it. The tabs are:
 
 | Tab | What it shows |
