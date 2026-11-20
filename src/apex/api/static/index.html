@@ -37,6 +37,8 @@
     </div>
   </section>
   <section id="strategies"><div class="card"><table id="strats"></table></div></section>
+  <section id="ideas"><div class="card"><p id="ideasum" class="muted"></p>
+    <table id="ideatab"></table></div></section>
   <section id="leaderboard">
     <div class="card"><table id="lb"></table></div>
   </section>
@@ -56,11 +58,12 @@
 <script>
 "use strict";
 const TABS = [["overview","Overview"],["markets","Markets"],["strategies","Strategy lab"],
-  ["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["research","Research"]];
+  ["ideas","Trading ideas"],["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["research","Research"]];
 const DESC = {
   overview: "Is everything running, and what has APEX collected so far.",
   markets: "Price history for each stored market. Hover the chart to read any bar.",
   strategies: "Every trading idea APEX can test, and how far through testing it has got.",
+  ideas: "The bank of trading ideas from the APEX spec. Each one is a hypothesis to test, not a claim that it makes money.",
   leaderboard: "Latest walk-forward result per strategy and market, ranked by robustness, not raw return. All figures are simulated.",
   experiments: "Every historical test APEX has run, recorded so it can be repeated exactly. All figures are simulated.",
   paper: "Practice (paper) accounts trade on simulated fills only. The kill switch can only be reset from the command line by a named person.",
@@ -70,6 +73,7 @@ const DESC = {
 const EMPTY = {
   runs: "No price data downloaded yet. Run apex ingest to fetch some.",
   strats: "No strategies registered.",
+  ideatab: "No trading ideas found.",
   lb: "No tournament results yet. Run apex tournament to rank strategies.",
   exps: "No backtests yet. Run apex backtest or apex validate.",
   paccts: "No practice accounts yet. Create one with apex paper-create (paper mode only).",
@@ -263,6 +267,19 @@ const LOAD = {
       ["Markets", (r) => r.instruments === 1 ? "one" : r.instruments === "2+" ? "basket (2+)" : `${r.instruments} together`],
       ["Status", (r) => el("span", r.status, "tag")],
       ["Regimes", (r) => r.regimes.join(", ")], ["Timeframes", (r) => r.timeframes.join(", ")]], st);
+  },
+  async ideas() {
+    const hs = await get("/hypotheses");
+    const done = hs.filter((h) => h.implemented).length;
+    $("ideasum").textContent = `${done} of ${hs.length} ideas have a strategy you can backtest.`;
+    const DATA = { ticks: "needs tick data", l2: "needs order-book data", multi: "several markets",
+      ohlcv: "price bars" };
+    table($("ideatab"), [["ID", (r) => r.id],
+      ["Idea", (r) => { const d = el("div"); d.append(el("b", r.name), el("div", r.idea, "muted"));
+        return d; }, "wrap"],
+      ["Markets", (r) => r.markets.split(",").join(", ")], ["Data", (r) => DATA[r.data] || r.data],
+      ["Strategy", (r) => r.implemented ? el("span", r.implemented, "tag")
+        : el("span", "not built yet", "muted")]], hs);
   },
   async leaderboard() {
     const lb = await get("/leaderboard");
