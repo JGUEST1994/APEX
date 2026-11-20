@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -16,6 +17,7 @@ from apex import __version__
 from apex.core.config import Settings, get_settings
 from apex.core.errors import UnknownInstrumentError
 from apex.db.models import (
+    DataQualityIssue,
     Experiment,
     IngestionRun,
     Instrument,
@@ -33,12 +35,59 @@ from apex.domain.market import Timeframe
 from apex.marketdata.repository import get_instrument, load_bars
 from apex.research.library import search
 
+TOKEN_COOKIE = "apex_token"
+OPEN_PATHS = ("/health",)  # container healthchecks need no token
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")  # Excel would run these as formulas
+
+
+def _require_token(app: FastAPI, settings: Settings) -> None:
+    """When ``APEX_API_TOKEN`` is set, every request except /health needs it, as
+    ``Authorization: Bearer <token>`` or the cookie set by opening ``/ui/?token=<token>``."""
+    if settings.api_token is None or not settings.api_token.get_secret_value():
+        return
+    token = settings.api_token.get_secret_value().encode()
+
+    def ok(value: str | None) -> bool:
+        return value is not None and hmac.compare_digest(value.encode(), token)
+
+    @app.middleware("http")
+    async def check_token(request: Request, call_next):  # noqa: ANN001, ANN202
+        if request.url.path in OPEN_PATHS:
+            return await call_next(request)
+        given = request.query_params.get("token")
+        if request.url.path.startswith("/ui") and ok(given):
+            # Swap the token in the address bar for a cookie, so it is not left in history.
+            resp = RedirectResponse(request.url.path)
+            resp.set_cookie(TOKEN_COOKIE, given, httponly=True, samesite="strict",
+                            secure=request.url.scheme == "https")
+            return resp
+        auth = request.headers.get("authorization", "")
+        bearer = auth[7:] if auth.lower().startswith("bearer ") else None
+        if ok(bearer) or ok(request.cookies.get(TOKEN_COOKIE)):
+            return await call_next(request)
+        return PlainTextResponse("APEX needs its access token: open /ui/?token=<your token> "
+                                 "once in this browser, or send Authorization: Bearer.",
+                                 status_code=401)
+
+
+def _thin(series, points: int) -> tuple[list[str], list[float]]:  # noqa: ANN001
+    """About ``points`` evenly spaced values of a time series, always keeping the last."""
+    if series.empty:
+        return [], []
+    step = max(1, -(-len(series) // points))
+    keep = list(range(0, len(series), step))
+    if keep[-1] != len(series) - 1:
+        keep.append(len(series) - 1)
+    return ([series.index[i].isoformat() for i in keep],
+            [round(float(series.iloc[i]), 2) for i in keep])
+
 
 def create_app(settings: Settings | None = None,
                session_factory: sessionmaker[Session] | None = None) -> FastAPI:
     settings = settings or get_settings()
     factory = session_factory or make_session_factory(make_engine(settings.database_url))
     app = FastAPI(title="APEX API", version=__version__)
+    _require_token(app, settings)
 
     def db() -> Iterator[Session]:
         with factory() as s:
@@ -80,24 +129,79 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/ingestion-runs")
     def runs(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
-        rows = s.scalars(select(IngestionRun).order_by(IngestionRun.id.desc()).limit(limit))
+        n_issues = (select(DataQualityIssue.run_id, func.count().label("n"))
+                    .group_by(DataQualityIssue.run_id).subquery())
+        rows = s.execute(select(IngestionRun, Instrument.symbol, n_issues.c.n)
+                         .join(Instrument, Instrument.id == IngestionRun.instrument_id)
+                         .outerjoin(n_issues, n_issues.c.run_id == IngestionRun.id)
+                         .order_by(IngestionRun.id.desc()).limit(limit))
         return [{"id": r.id, "source": r.source, "instrument_id": r.instrument_id,
-                 "timeframe": r.timeframe, "status": r.status, "rows_received": r.rows_received,
-                 "rows_stored": r.rows_stored, "content_sha256": r.content_sha256,
-                 "started_at": r.started_at.isoformat()} for r in rows]
+                 "symbol": sym, "timeframe": r.timeframe, "status": r.status,
+                 "rows_received": r.rows_received, "rows_stored": r.rows_stored,
+                 "content_sha256": r.content_sha256, "issues": n or 0, "error": r.error,
+                 "started_at": r.started_at.isoformat()} for r, sym, n in rows]
 
-    @app.get("/experiments")
-    def experiments(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
+    @app.get("/ingestion-runs/{run_id}/issues")
+    def run_issues(run_id: int, limit: int = Query(200, le=5000),
+                   s: Session = Depends(db)) -> list[dict]:
+        """Data-quality findings recorded for one download (gaps, spikes, bad rows...)."""
+        if s.get(IngestionRun, run_id) is None:
+            raise HTTPException(404, "ingestion run not found")
+        rows = s.scalars(select(DataQualityIssue).where(DataQualityIssue.run_id == run_id)
+                         .order_by(DataQualityIssue.id).limit(limit))
+        return [{"kind": i.kind, "severity": i.severity,
+                 "ts": i.ts.isoformat() if i.ts else None, "detail": i.detail} for i in rows]
+
+    def _experiments(s: Session, limit: int, exp_id: int | None = None) -> list[dict]:
         sv = StrategyVersion
-        rows = s.execute(select(Experiment, StrategyRow.key, sv.version)
-                         .join(sv, Experiment.strategy_version_id == sv.id)
-                         .join(StrategyRow, sv.strategy_id == StrategyRow.id)
-                         .order_by(Experiment.id.desc()).limit(limit))
+        q = (select(Experiment, StrategyRow.key, sv.version)
+             .join(sv, Experiment.strategy_version_id == sv.id)
+             .join(StrategyRow, sv.strategy_id == StrategyRow.id))
+        if exp_id is not None:
+            q = q.where(Experiment.id == exp_id)
+        rows = s.execute(q.order_by(Experiment.id.desc()).limit(limit))
         return [{"id": e.id, "strategy_version_id": e.strategy_version_id, "kind": e.kind,
                  "strategy": key, "strategy_version": ver, "simulated": True,
                  "params": e.params, "data_manifest": e.data_manifest,
                  "code_version": e.code_version, "metrics": e.metrics,
                  "created_at": e.created_at.isoformat()} for e, key, ver in rows]
+
+    @app.get("/experiments")
+    def experiments(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
+        return _experiments(s, limit)
+
+    @app.get("/experiments/{exp_id}")
+    def experiment(exp_id: int, s: Session = Depends(db)) -> dict:
+        found = _experiments(s, 1, exp_id)
+        if not found:
+            raise HTTPException(404, "experiment not found")
+        return found[0]
+
+    @app.get("/experiments/{exp_id}/equity")
+    def experiment_equity(exp_id: int, points: int = Query(600, ge=10, le=5000),
+                          s: Session = Depends(db)) -> dict:
+        """Re-run a recorded backtest exactly (read-only) and return its account value over
+        time, thinned to about ``points`` points. ``available`` is false, with a plain
+        reason, when it cannot be redrawn exactly."""
+        from apex.backtest.experiments import ReplayError, replay_experiment
+
+        exp = s.get(Experiment, exp_id)
+        if exp is None:
+            raise HTTPException(404, "experiment not found")
+        try:
+            res = replay_experiment(s, exp)
+        except (ReplayError, UnknownInstrumentError) as exc:
+            return {"id": exp_id, "available": False, "reason": str(exc), "simulated": True}
+        finally:
+            s.rollback()  # never keep anything from the replay
+        eq = res.equity
+        ts, vals = _thin(eq, points)
+        stored = (exp.metrics or {}).get("total_return")
+        total = float(eq.iloc[-1] / eq.iloc[0] - 1) if len(eq) else None
+        return {"id": exp_id, "available": True, "simulated": True,
+                "initial_capital": res.config.initial_capital,
+                "matches_record": stored is None or total is None or abs(stored - total) < 1e-4,
+                "ts": ts, "equity": vals}
 
     @app.get("/leaderboard")
     def get_leaderboard(asset_class: str | None = None, symbol: str | None = None,
@@ -134,9 +238,14 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/strategies")
     def strategies(s: Session = Depends(db)) -> list[dict]:
+        from apex.strategies.hypotheses import HYPOTHESES
         from apex.strategies.multi import all_multi_strategies
         from apex.strategies.registry import all_strategies
 
+        ideas: dict[str, list[str]] = {}
+        for h in HYPOTHESES:
+            if h.implemented:
+                ideas.setdefault(h.implemented, []).append(h.id)
         status = {}
         for row, ver in s.execute(select(StrategyRow, StrategyVersion).join(
                 StrategyVersion, StrategyVersion.strategy_id == StrategyRow.id)):
@@ -145,9 +254,32 @@ def create_app(settings: Settings | None = None,
                  "version": c.meta.version, "regimes": list(c.meta.regimes),
                  "timeframes": [t.value for t in c.meta.timeframes],
                  "description": c.meta.description,
+                 "entry_rules": c.meta.entry_rules, "exit_rules": c.meta.exit_rules,
+                 "stop_loss": c.meta.stop_loss, "take_profit": c.meta.take_profit,
+                 "asset_classes": [a.value for a in c.meta.asset_classes],
+                 "default_params": c.meta.default_params, "ideas": ideas.get(k, []),
                  "status": status.get(k, {}).get("status", "experimental"),
                  "instruments": getattr(c, "legs", 1) or "2+"}
                 for k, c in sorted({**all_strategies(), **all_multi_strategies()}.items())]
+
+    @app.get("/system/checks")
+    def system_checks() -> list[dict]:
+        """The `apex doctor` check-up (read-only; says whether keys are set, never their
+        values)."""
+        from dataclasses import asdict
+
+        from apex.doctor import run_checks
+
+        return [asdict(c) for c in run_checks(settings)]
+
+    @app.get("/hypotheses")
+    def hypotheses() -> list[dict]:
+        """The strategy hypothesis bank (spec section 8) and which strategy codes each."""
+        from dataclasses import asdict
+
+        from apex.strategies.hypotheses import HYPOTHESES
+
+        return [asdict(h) for h in HYPOTHESES]
 
     @app.get("/datasets")
     def datasets(s: Session = Depends(db)) -> list[dict]:
@@ -201,6 +333,20 @@ def create_app(settings: Settings | None = None,
                           "signal_ts": o.signal_ts.isoformat()} for o in orders]
         return out
 
+    @app.get("/paper/accounts/{name}/equity")
+    def paper_equity(name: str, points: int = Query(600, ge=10, le=5000),
+                     s: Session = Depends(db)) -> dict:
+        """Simulated account value at each processed bar, rebuilt from the fill ledger and
+        thinned to about ``points`` points."""
+        from apex.paper_history import equity_history
+
+        try:
+            eq = equity_history(s, name)
+        except KeyError as exc:
+            raise HTTPException(404, "paper account not found") from exc
+        ts, vals = _thin(eq, points)
+        return {"account": name, "simulated": True, "ts": ts, "equity": vals}
+
     @app.get("/paper/accounts/{name}/consistency")
     def paper_consistency(name: str, s: Session = Depends(db)) -> dict:
         from apex.execution.consistency import compare
@@ -209,6 +355,51 @@ def create_app(settings: Settings | None = None,
             return compare(s, name)
         except KeyError as exc:
             raise HTTPException(404, "paper account not found") from exc
+
+    # "Download for Excel": the same tables as `apex export`, as CSV attachments.
+    def _csv(df, filename: str) -> Response:  # noqa: ANN001
+        def cell(v):  # noqa: ANN001, ANN202 - stop Excel treating text as a formula
+            return "'" + v if isinstance(v, str) and v[:1] in FORMULA_START else v
+
+        body = df.astype(object).map(cell).to_csv(index=False) if not df.empty else (
+            ",".join(map(str, df.columns)) + "\n")
+        return Response(body, media_type="text/csv; charset=utf-8", headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'})
+
+    @app.get("/export/experiments.csv")
+    def export_experiments(s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        return _csv(export.experiments(s), "apex-backtests.csv")
+
+    @app.get("/export/leaderboard.csv")
+    def export_leaderboard(s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        return _csv(export.leaderboard(s), "apex-tournament.csv")
+
+    @app.get("/export/bars.csv")
+    def export_bars(symbol: str, timeframe: Timeframe, source: str,
+                    s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        try:
+            df = export.bars(s, symbol, timeframe.value, source)
+        except UnknownInstrumentError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        safe = "".join(c if c.isalnum() else "-" for c in f"{symbol}-{timeframe.value}-{source}")
+        return _csv(df, f"apex-prices-{safe}.csv")
+
+    @app.get("/export/fills.csv")
+    def export_fills(name: str, s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        try:
+            df = export.fills(s, name)
+        except LookupError as exc:
+            raise HTTPException(404, "paper account not found") from exc
+        safe = "".join(c if c.isalnum() else "-" for c in name)
+        return _csv(df, f"apex-practice-fills-{safe}.csv")
 
     static = Path(__file__).parent / "static"
     app.mount("/ui", StaticFiles(directory=static, html=True), name="ui")

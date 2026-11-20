@@ -1,6 +1,6 @@
 # Deployment
 
-Phase 1 status: the local install (venv + SQLite or PostgreSQL) is tested. The Docker files are written but **not yet verified** because the build environment had no Docker daemon. Treat them as a starting point.
+Status: the local install (venv + SQLite or PostgreSQL) is tested, and the Docker stack is built and started on every CI run (the `docker` job checks that migrations ran, `/health` reaches the database in research mode and `/ui/` is served). Use `docker compose up -d --build --wait` to block until the API is healthy.
 
 ## Local (Windows or Linux)
 
@@ -14,7 +14,7 @@ docker compose up -d --build
 curl http://127.0.0.1:8000/health
 ```
 
-The API is published on `127.0.0.1` only. Expose it remotely through a TLS reverse proxy or VPN, never directly.
+The API is published on `127.0.0.1` only. Expose it remotely through a TLS reverse proxy or VPN, never directly, and set `APEX_API_TOKEN` (in `.env`) when you do: every request except `/health` then needs `Authorization: Bearer <token>`, or the cookie a browser gets by opening `/ui/?token=<token>` once (the token is swapped for an HttpOnly, SameSite=Strict cookie and removed from the address bar; access logs show it as `token=***`). The token is a single shared secret, not user accounts.
 
 ## Scheduled data updates
 
@@ -40,7 +40,7 @@ On Windows use Task Scheduler with the same command.
 ]}
 ```
 
-Paper jobs only run with `APEX_TRADING_MODE=paper`; a halted account stays halted until a named person runs `apex paper-reset-kill`. Every step is incremental and idempotent, so stopping and restarting the scheduler (or running it next to cron) cannot duplicate bars or orders.
+On Windows, `start-scheduler.bat` runs `apex schedule --config jobs.json` from the APEX folder (creating `jobs.json` from `jobs.example.json` on first use; `jobs.json` is git-ignored). Paper jobs only run with `APEX_TRADING_MODE=paper`; a halted account stays halted until a named person runs `apex paper-reset-kill`. Every step is incremental and idempotent, so stopping and restarting the scheduler (or running it next to cron) cannot duplicate bars or orders.
 
 ### Paper trading (simulated only)
 
@@ -58,6 +58,15 @@ apex paper-reset-kill --name sma-spy --actor jake
 
 Containers use `restart: unless-stopped`; the API applies migrations on start. When trading arrives (Phase 9) the engine will start in a halted, reconciling state and will not resume trading automatically if account state is uncertain.
 
-## Backups (planned Phase 13)
+## Backups
 
-Nightly `pg_dump -Fc` to encrypted off-site storage, with a periodic restore drill.
+SQLite installs: `apex backup [--folder backups] [--keep N]` copies the database with
+SQLite's online backup API (a consistent snapshot even while the API or scheduler writes),
+runs `PRAGMA integrity_check` on the copy, and only then names it
+`apex-backup-YYYYMMDD-HHMMSS.db` (UTC). `--keep` prunes older `apex-backup-*` files in that
+folder and nothing else. The scheduler accepts the same as a job:
+`{"type": "backup", "folder": "backups", "keep": 14, "every_minutes": 1440}` (runs after
+data and paper jobs; `jobs.example.json` includes it).
+
+PostgreSQL installs: `apex backup` refuses and points here. Use `pg_dump -Fc` from cron
+(planned Phase 13: encrypted off-site storage and a periodic restore drill).

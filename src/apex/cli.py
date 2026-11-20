@@ -16,7 +16,8 @@ def _dt(s: str) -> datetime:
     return d if d.tzinfo else d.replace(tzinfo=UTC)
 
 
-PROVIDERS = ["synthetic", "csv", "binance", "kraken", "alpaca", "polygon"]
+PROVIDERS = ["synthetic", "csv", "csv-cont", "csv-cont-ratio", "binance", "kraken", "coinbase",
+             "alpaca", "polygon"]
 
 
 def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201
@@ -28,6 +29,11 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
         from apex.marketdata.providers.csv_file import CsvFileProvider
 
         return CsvFileProvider(Path(csv_root))
+    if name in ("csv-cont", "csv-cont-ratio"):
+        from apex.marketdata.providers.continuous import ContinuousFuturesProvider
+
+        return ContinuousFuturesProvider(Path(csv_root),
+                                         "ratio" if name.endswith("ratio") else "difference")
     if name == "binance":
         from apex.marketdata.providers.binance import BinanceSpotProvider
 
@@ -44,6 +50,10 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
         from apex.marketdata.providers.kraken import KrakenSpotProvider
 
         return KrakenSpotProvider()
+    if name == "coinbase":
+        from apex.marketdata.providers.coinbase import CoinbaseSpotProvider
+
+        return CoinbaseSpotProvider()
     if name == "polygon":
         from apex.marketdata.providers.polygon import PolygonStocksProvider
 
@@ -51,6 +61,43 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
             raise SystemExit("set APEX_POLYGON_API_KEY")
         return PolygonStocksProvider(settings.polygon_api_key.get_secret_value())
     raise SystemExit(f"unknown provider {name}")
+
+
+def _export(s, args) -> int:  # noqa: ANN001
+    from pathlib import Path
+
+    from apex import export
+
+    out = Path(args.out)
+    if out.exists() and not args.force:
+        print(f"{out} already exists; use --force to overwrite it", file=sys.stderr)
+        return 2
+    if args.what == "bars":
+        if not (args.symbol and args.timeframe and args.source):
+            print("bars needs --symbol, --timeframe and --source", file=sys.stderr)
+            return 2
+        from apex.core.errors import UnknownInstrumentError
+
+        try:
+            df = export.bars(s, args.symbol, args.timeframe, args.source)
+        except (UnknownInstrumentError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    elif args.what == "fills":
+        if not args.name:
+            print("fills needs --name (the practice account)", file=sys.stderr)
+            return 2
+        try:
+            df = export.fills(s, args.name)
+        except LookupError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    else:
+        df = getattr(export, args.what)(s)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, index=False)
+    print(f"{len(df)} row(s) written to {out}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -176,6 +223,24 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--once", action="store_true", help="run every job once and exit")
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
+    ex = sub.add_parser("export", help="save results as a CSV file (opens in Excel)")
+    ex.add_argument("what", choices=["experiments", "leaderboard", "bars", "fills"])
+    ex.add_argument("--out", required=True, help="CSV file to write")
+    ex.add_argument("--force", action="store_true", help="overwrite the file if it exists")
+    ex.add_argument("--symbol")
+    ex.add_argument("--timeframe")
+    ex.add_argument("--source")
+    ex.add_argument("--name", help="practice account (for fills)")
+    sub.add_parser("doctor", help="check this install: database, tables, keys, data, "
+                   "practice accounts (read-only)")
+    bk = sub.add_parser("backup", help="copy the SQLite database to a dated file in a "
+                        "backups folder (safe while APEX is running)")
+    bk.add_argument("--folder", default="backups", help="where to put the copy")
+    bk.add_argument("--keep", type=int, help="keep only the newest N backups there")
+    qs = sub.add_parser("quickstart", help="first run: set up, download free daily prices "
+                        "and run one example backtest")
+    qs.add_argument("--provider", choices=PROVIDERS, default="coinbase")
+    qs.add_argument("--symbol", default="BTCUSDT")
     sv = sub.add_parser("serve", help="run the API server")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
@@ -190,6 +255,27 @@ def main(argv: list[str] | None = None) -> int:
         upgrade(settings.database_url)
         print("database at head")
         return 0
+    if args.cmd == "doctor":
+        from apex.doctor import FAIL, render, run_checks
+
+        checks = run_checks(settings)
+        print(render(checks))
+        return 1 if any(c.level == FAIL for c in checks) else 0
+    if args.cmd == "quickstart":
+        from apex.quickstart import run as quickstart
+
+        return quickstart(settings, args.provider, args.symbol)
+    if args.cmd == "backup":
+        from apex.backup import BackupError
+        from apex.backup import backup as do_backup
+
+        try:
+            dest = do_backup(settings.database_url, Path(args.folder), keep=args.keep)
+        except BackupError as exc:
+            print(f"backup not made: {exc}", file=sys.stderr)
+            return 1
+        print(f"backup saved: {dest} (checked OK)")
+        return 0
     if args.cmd == "hypotheses":
         from apex.strategies.hypotheses import to_markdown
 
@@ -200,13 +286,17 @@ def main(argv: list[str] | None = None) -> int:
 
         from apex.api.app import create_app
 
-        uvicorn.run(create_app(settings), host=args.host, port=args.port)
+        # log_config=None: uvicorn's own loggers propagate to our redacting handler, so a
+        # token in a request line (e.g. /ui/?token=...) is never written to the log.
+        uvicorn.run(create_app(settings), host=args.host, port=args.port, log_config=None)
         return 0
 
     from apex.db.session import make_engine, make_session_factory, session_scope
 
     factory = make_session_factory(make_engine(settings.database_url))
     with session_scope(factory) as s:
+        if args.cmd == "export":
+            return _export(s, args)
         if args.cmd == "seed-instruments":
             from apex.domain.instruments import DEFAULT_UNIVERSE
             from apex.marketdata.repository import upsert_instrument
@@ -227,6 +317,9 @@ def main(argv: list[str] | None = None) -> int:
             r = ingest_bars(s, provider, spec, Timeframe(args.timeframe), args.start, args.end)
             print(f"run {r.run_id}: {r.status} received={r.received} stored={r.stored}"
                   + (f" issues={len(r.report.issues)}" if r.report else f" error={r.error}"))
+            for roll in getattr(provider, "last_rolls", []):
+                print(f"  rolled {roll.old} -> {roll.new} after {roll.ts:%Y-%m-%d %H:%M} UTC "
+                      f"({roll.reason}, gap {roll.gap:+g})")
             return 0 if r.status != "failed" else 1
         elif args.cmd == "update":
             from apex.domain.instruments import by_symbol

@@ -98,3 +98,22 @@ def test_cli_schedule_once(db_url, monkeypatch, tmp_path, capsys):
     finally:
         get_settings.cache_clear()
     assert '"status": "ok"' in capsys.readouterr().out
+
+
+def test_backup_job_runs_last_and_postgres_fails_softly(tmp_path):
+    import sqlite3
+
+    with sqlite3.connect(tmp_path / "apex.db") as c:
+        c.execute("CREATE TABLE t (x)")
+    jobs = parse_jobs({"jobs": [
+        {"name": "bk", "type": "backup", "folder": str(tmp_path / "b"), "keep": 2},
+        {"name": "data", "type": "update", "provider": "synthetic", "symbols": ["SPY"],
+         "backfill_start": "2021-01-01"},
+    ]})
+    sched = Scheduler(jobs, Settings(_env_file=None,
+                                     database_url=f"sqlite:///{tmp_path / 'apex.db'}"), None)
+    assert [j.name for j in sched.due(T0)] == ["data", "bk"]
+    assert sched._backup(jobs[0], T0)["file"].endswith("apex-backup-20230101-000000.db")
+    pg = Scheduler(jobs, Settings(_env_file=None, database_url="postgresql+psycopg://x/y"), None)
+    with pytest.raises(Exception, match="pg_dump"):
+        pg._backup(jobs[0], T0)
