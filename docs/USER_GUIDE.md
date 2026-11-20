@@ -86,6 +86,25 @@ Then:
 apex ingest --provider alpaca --symbol SPY --timeframe 1d --start 2019-01-01 --end 2025-01-01
 ```
 
+**US stocks and forex from Tiingo (free key):** sign up at tiingo.com, copy your API token
+from your account page and add it to `.env`:
+
+```
+APEX_TIINGO_API_KEY=your-token
+```
+
+Then, for daily stock prices (adjusted for splits and dividends) or hourly forex:
+
+```powershell
+apex ingest --provider tiingo --symbol SPY --timeframe 1d --start 2015-01-01 --end 2025-01-01
+apex ingest --provider tiingo --symbol EURUSD --timeframe 1h --start 2021-01-01 --end 2025-01-01
+```
+
+The free plan allows about 50 requests an hour and 1,000 a day, which is plenty for daily
+prices; long minute-by-minute forex downloads may need spreading over a few hours. The data
+is for your own use only; don't share it. For daily forex, download 1h and use
+`apex resample`.
+
 **Your own files:** save a CSV as `data\csv\<SYMBOL>_<timeframe>.csv` (for example
 `data\csv\EURUSD_1h.csv`) and use `--provider csv`.
 

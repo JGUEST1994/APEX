@@ -1,5 +1,7 @@
 """`apex doctor`: read-only install check."""
 
+import re
+
 import pytest
 from pydantic import SecretStr
 
@@ -49,7 +51,7 @@ def test_seeded_data_halted_account_and_secrets_never_printed(db_url, session):
     assert lv["Practice accounts"] == WARN
     text = render(checks)
     assert "acct-1" in text and "paper-reset-kill" in text
-    assert "sekrit" not in text and "Alpaca keys (US stocks)  set" in text
+    assert "sekrit" not in text and re.search(r"Alpaca keys \(US stocks\) +set", text)
 
 
 def test_out_of_date_tables_fail(db_url):

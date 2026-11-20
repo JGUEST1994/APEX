@@ -28,6 +28,8 @@ def test_secret_settings_not_in_repr(monkeypatch):
     ("api_key=abc123 other", "abc123"),
     ("password: 'hunter2'", "hunter2"),
     ("Authorization=Bearer-xyz", "Bearer-xyz"),
+    ("Authorization: Token tiingo-secret", "tiingo-secret"),
+    ("authorization: Bearer abc.def", "abc.def"),
     ("postgresql://apex:s3cret@db:5432/apex", "s3cret"),
 ])
 def test_redact(raw, leak):
