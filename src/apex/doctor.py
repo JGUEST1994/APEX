@@ -55,11 +55,43 @@ def _backup_check(folder: Path, now: datetime | None = None) -> Check:
             Check(WARN, "Backups", f"newest is {int(days)} days old; run: apex backup"))
 
 
+LIVE_SOURCES = ("alpaca", "polygon", "coinbase", "binance", "kraken")  # can be topped up
+STALE_DAYS = 7
+
+
+def _freshness(s, now: datetime) -> Check:  # noqa: ANN001
+    """Datasets from sources that `apex update` can top up, whose newest bar is old."""
+    from apex.db.models import Instrument, PriceBar
+
+    rows = s.execute(select(Instrument.symbol, PriceBar.timeframe, PriceBar.source,
+                            func.max(PriceBar.ts))
+                     .join(Instrument, Instrument.id == PriceBar.instrument_id)
+                     .where(PriceBar.source.in_(LIVE_SOURCES))
+                     .group_by(Instrument.symbol, PriceBar.timeframe, PriceBar.source)).all()
+    if not rows:
+        return Check(OK, "Price freshness", "no downloaded datasets to keep up to date")
+    old = []
+    for sym, tf, src, last in rows:
+        last = last if last.tzinfo else last.replace(tzinfo=UTC)
+        days = (now - last).total_seconds() / 86400
+        if days > STALE_DAYS:
+            old.append((days, f"{sym} {tf} {src} ({int(days)} days)"))
+    if not old:
+        return Check(OK, "Price freshness", f"{len(rows)} downloaded dataset(s), all updated "
+                     f"within {STALE_DAYS} days")
+    names = [n for _, n in sorted(old, reverse=True)[:3]] + (["..."] if len(old) > 3 else [])
+    return Check(WARN, "Price freshness", f"{len(old)} of {len(rows)} downloaded dataset(s) "
+                 f"more than {STALE_DAYS} days behind: {', '.join(names)}; run apex update "
+                 "or start-scheduler.bat")
+
+
 def run_checks(settings: Settings, env_file: Path | None = Path(".env"),
-               backup_folder: Path = Path("backups")) -> list[Check]:
+               backup_folder: Path = Path("backups"),
+               now: datetime | None = None) -> list[Check]:
     from apex.db.models import IngestionRun, Instrument, PaperAccount, PriceBar
     from apex.db.session import make_engine, make_session_factory
 
+    now = now or datetime.now(UTC)
     out: list[Check] = []
     py = sys.version_info
     out.append(Check(OK if py >= (3, 11) else FAIL, "Python",
@@ -118,6 +150,7 @@ def run_checks(settings: Settings, env_file: Path | None = Path(".env"),
             out.append(Check(OK, "Stored prices", f"{len(sets)} dataset(s)") if sets else
                        Check(WARN, "Stored prices", "none yet; see 'Get some prices' in "
                              "docs/USER_GUIDE.md"))
+            out.append(_freshness(s, now))
             last = s.scalars(select(IngestionRun).order_by(IngestionRun.id.desc())
                              .limit(1)).first()
             if last is not None and last.status == "failed":
