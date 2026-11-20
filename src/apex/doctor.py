@@ -59,6 +59,9 @@ def run_checks(settings: Settings, env_file: Path | None = Path(".env")) -> list
         have = all(getattr(settings, k) is not None for k in keys)
         out.append(Check(OK, label, "set" if have else
                          "not set (only needed for that data source)"))
+    tok = settings.api_token is not None and bool(settings.api_token.get_secret_value())
+    out.append(Check(OK, "Dashboard token", "required" if tok else
+                     "not set (fine while APEX stays on this computer)"))
     out.append(Check(OK, "External AI", "off" if settings.ai_provider == "none"
                      else f"on ({settings.ai_provider})"))
 

@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     alpaca_feed: str = "iex"
     polygon_api_key: SecretStr | None = None
 
+    # Optional access token for the API and dashboard. Unset = no token (keep it on localhost).
+    api_token: SecretStr | None = None
+
     # Optional external AI; "none" means fully disabled. Core never depends on it.
     ai_provider: str = "none"
     ai_api_key: SecretStr | None = None

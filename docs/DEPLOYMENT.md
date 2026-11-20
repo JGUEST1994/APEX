@@ -14,7 +14,7 @@ docker compose up -d --build
 curl http://127.0.0.1:8000/health
 ```
 
-The API is published on `127.0.0.1` only. Expose it remotely through a TLS reverse proxy or VPN, never directly.
+The API is published on `127.0.0.1` only. Expose it remotely through a TLS reverse proxy or VPN, never directly, and set `APEX_API_TOKEN` (in `.env`) when you do: every request except `/health` then needs `Authorization: Bearer <token>`, or the cookie a browser gets by opening `/ui/?token=<token>` once (the token is swapped for an HttpOnly, SameSite=Strict cookie and removed from the address bar; access logs show it as `token=***`). The token is a single shared secret, not user accounts.
 
 ## Scheduled data updates
 
