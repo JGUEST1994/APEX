@@ -57,6 +57,43 @@ def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN
     raise SystemExit(f"unknown provider {name}")
 
 
+def _export(s, args) -> int:  # noqa: ANN001
+    from pathlib import Path
+
+    from apex import export
+
+    out = Path(args.out)
+    if out.exists() and not args.force:
+        print(f"{out} already exists; use --force to overwrite it", file=sys.stderr)
+        return 2
+    if args.what == "bars":
+        if not (args.symbol and args.timeframe and args.source):
+            print("bars needs --symbol, --timeframe and --source", file=sys.stderr)
+            return 2
+        from apex.core.errors import UnknownInstrumentError
+
+        try:
+            df = export.bars(s, args.symbol, args.timeframe, args.source)
+        except (UnknownInstrumentError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    elif args.what == "fills":
+        if not args.name:
+            print("fills needs --name (the practice account)", file=sys.stderr)
+            return 2
+        try:
+            df = export.fills(s, args.name)
+        except LookupError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    else:
+        df = getattr(export, args.what)(s)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, index=False)
+    print(f"{len(df)} row(s) written to {out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="apex")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -180,6 +217,14 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--once", action="store_true", help="run every job once and exit")
     sub.add_parser("strategies", help="list registered strategies")
     sub.add_parser("hypotheses", help="print the strategy hypothesis bank as Markdown")
+    ex = sub.add_parser("export", help="save results as a CSV file (opens in Excel)")
+    ex.add_argument("what", choices=["experiments", "leaderboard", "bars", "fills"])
+    ex.add_argument("--out", required=True, help="CSV file to write")
+    ex.add_argument("--force", action="store_true", help="overwrite the file if it exists")
+    ex.add_argument("--symbol")
+    ex.add_argument("--timeframe")
+    ex.add_argument("--source")
+    ex.add_argument("--name", help="practice account (for fills)")
     sub.add_parser("doctor", help="check this install: database, tables, keys, data, "
                    "practice accounts (read-only)")
     sv = sub.add_parser("serve", help="run the API server")
@@ -219,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
 
     factory = make_session_factory(make_engine(settings.database_url))
     with session_scope(factory) as s:
+        if args.cmd == "export":
+            return _export(s, args)
         if args.cmd == "seed-instruments":
             from apex.domain.instruments import DEFAULT_UNIVERSE
             from apex.marketdata.repository import upsert_instrument
