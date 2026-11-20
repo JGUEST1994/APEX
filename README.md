@@ -28,7 +28,7 @@ Real data (all free; paid sources such as Databento are deliberately not built y
 
 | `--provider` | Markets | Key |
 |---|---|---|
-| `coinbase`, `kraken`, `binance` | crypto | none |
+| `coinbase`, `kraken`, `binance` | crypto (Binance also gives buy volume, used by the order-flow strategy) | none |
 | `alpaca`, `polygon` | US stocks/ETFs | free account key |
 | `tiingo` | US stocks/ETFs (daily), forex (1m-1h) | free account key |
 | `dukascopy-csv` | forex files you export by hand from Dukascopy (their terms forbid automated downloads) | none |

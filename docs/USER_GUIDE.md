@@ -72,6 +72,11 @@ apex ingest --provider kraken   --symbol BTCUSDT --timeframe 1h --start 2024-01-
 Kraken only gives the most recent 720 bars, so use it for keeping data up to date rather
 than for long history. Coinbase and Binance can fetch long history.
 
+Binance also reports how much of each bar's volume came from buyers who were in a hurry
+(they bought at the asking price). APEX keeps that as "buy volume", and the order-flow
+strategy OF-DELTA-001 needs it, so use Binance (1m, 5m or 15m) for that strategy. Bars
+you downloaded before this was added don't have it; download a fresh date range to get it.
+
 **US stocks and ETFs:** sign up for a free Alpaca account, create API keys, and put them
 in the `.env` file in the APEX folder (never in the code, and never share that file):
 

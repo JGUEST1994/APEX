@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from apex.core.errors import UnknownInstrumentError
 from apex.db.models import Instrument, PriceBar
 from apex.domain.market import AssetClass, CostModel, InstrumentSpec, Timeframe
-from apex.marketdata.base import BAR_COLUMNS
+from apex.marketdata.base import BAR_COLUMNS, OPTIONAL_COLUMNS
 
 
 def upsert_instrument(session: Session, spec: InstrumentSpec) -> Instrument:
@@ -63,10 +63,12 @@ def store_bars(session: Session, instrument_id: int, timeframe: Timeframe, sourc
     """Insert bars, ignoring rows that already exist. Returns number of rows inserted."""
     if df.empty:
         return 0
+    has_buy = "buy_volume" in df.columns
     records = [
         {"instrument_id": instrument_id, "timeframe": timeframe.value, "source": source,
          "ingestion_run_id": ingestion_run_id, "ts": r.ts.to_pydatetime(), "open": r.open,
-         "high": r.high, "low": r.low, "close": r.close, "volume": r.volume}
+         "high": r.high, "low": r.low, "close": r.close, "volume": r.volume,
+         "buy_volume": _opt(r.buy_volume) if has_buy else None}
         for r in df.itertuples(index=False)
     ]
     dialect = session.get_bind().dialect.name
@@ -88,10 +90,18 @@ def load_bars(session: Session, instrument_id: int, timeframe: Timeframe, source
     if end:
         q = q.where(PriceBar.ts < end)
     rows = session.scalars(q.order_by(PriceBar.ts)).all()
-    df = pd.DataFrame([{c: getattr(r, c) for c in BAR_COLUMNS} for r in rows], columns=BAR_COLUMNS)
+    cols = BAR_COLUMNS + [c for c in OPTIONAL_COLUMNS
+                          if any(getattr(r, c) is not None for r in rows)]
+    df = pd.DataFrame([{c: getattr(r, c) for c in cols} for r in rows], columns=cols)
     if not df.empty:
         df["ts"] = pd.to_datetime(df["ts"], utc=True)
+        for c in cols[len(BAR_COLUMNS):]:
+            df[c] = df[c].astype("float64")  # bars stored before the source supplied it: NaN
     return df
+
+
+def _opt(v: float) -> float | None:
+    return None if pd.isna(v) else float(v)
 
 
 def latest_bar_ts(session: Session, instrument_id: int, timeframe: Timeframe,
@@ -103,8 +113,11 @@ def latest_bar_ts(session: Session, instrument_id: int, timeframe: Timeframe,
 
 
 def frame_sha256(df: pd.DataFrame) -> str:
-    """Content hash of a canonical bar frame: the data version used by experiments."""
-    canon = df[BAR_COLUMNS].copy()
+    """Content hash of a canonical bar frame: the data version used by experiments.
+
+    Optional columns count only when present, so frames without them hash exactly as they
+    did before those columns existed."""
+    canon = df[BAR_COLUMNS + [c for c in OPTIONAL_COLUMNS if c in df.columns]].copy()
     canon["ts"] = canon["ts"].map(lambda t: t.isoformat())
     payload = canon.to_csv(index=False, float_format="%.10g", lineterminator="\n")
     return hashlib.sha256(payload.encode()).hexdigest()

@@ -125,7 +125,8 @@ def create_app(settings: Settings | None = None,
                 raise HTTPException(422, "start/end must include a timezone, e.g. Z")
         df = load_bars(s, inst.id, timeframe, source, start, end).tail(limit)
         df["ts"] = df["ts"].map(lambda t: t.isoformat())
-        return df.to_dict(orient="records")
+        # NaN is not valid JSON: an unknown optional value (e.g. buy_volume) becomes null
+        return df.astype(object).where(df.notna(), None).to_dict(orient="records")
 
     @app.get("/ingestion-runs")
     def runs(limit: int = Query(50, le=500), s: Session = Depends(db)) -> list[dict]:
