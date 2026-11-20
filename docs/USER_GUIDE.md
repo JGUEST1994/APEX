@@ -161,6 +161,21 @@ apex research-import C:\notes\my-notes.md --licence-note "my own notes"
 apex research-search "opening range breakout"
 ```
 
+## 7. Save results for Excel
+
+Any of these writes a CSV file you can open in Excel. It will not overwrite a file that
+already exists unless you add `--force`.
+
+```powershell
+apex export experiments --out C:\apex-exports\backtests.csv
+apex export leaderboard --out C:\apex-exports\tournament.csv
+apex export bars --symbol SPY --timeframe 1d --source alpaca --out C:\apex-exports\spy.csv
+apex export fills --name sma-spy --out C:\apex-exports\sma-spy-fills.csv
+```
+
+Every results row has a `simulated` column set to true, as a reminder that none of it is
+real trading.
+
 ## When something goes wrong
 
 Start with a check-up. It only reads, never changes anything, and never shows your keys:
