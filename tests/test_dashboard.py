@@ -50,6 +50,24 @@ def test_dashboard_and_endpoints(db_url, session):
     engine.dispose()
 
 
+def test_backtest_detail_glossary_only_names_recorded_figures():
+    import re
+
+    from apex.backtest.engine import run_backtest
+
+    html = (STATIC / "index.html").read_text()
+    block = html[html.index("const GLOSSARY"):html.index("const fmt")]
+    keys = set(re.findall(r"^\s+([a-z_]+): \[", block, re.M))
+    bars = SyntheticProvider().fetch_bars(by_symbol()["SPY"], Timeframe.D1,
+                                          utc(2022, 1, 1), utc(2024, 1, 1))
+    recorded = set(run_backtest(bars, all_strategies()["TF-SMA-001"](),
+                                by_symbol()["SPY"]).metrics)
+    validation = (STATIC.parent.parent / "backtest" / "validation.py").read_text()
+    recorded |= set(re.findall(r'"([a-z_]+)":', validation))
+    assert len(keys) >= 20 and keys <= recorded, keys - recorded
+    assert 'id="xmetrics"' in html and '"wrap"' in html
+
+
 def test_dashboard_never_injects_html():
     html = (STATIC / "index.html").read_text()
     assert "innerHTML" not in html.replace("never innerHTML", "")
