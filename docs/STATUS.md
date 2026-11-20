@@ -16,11 +16,11 @@ Update this file at the end of every working session so work can continue from a
 
 ## Implemented and tested
 
-Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
+Tests last run: 2026-11-20, `ruff check` clean, **570 passed**, with database tests run on both SQLite and PostgreSQL 16 (`APEX_TEST_POSTGRES_URL` set).
 
 - `apex.core`: env config, live trading impossible to enable, secret redaction in logs, injectable clock.
 - `apex.domain`: Bar, Timeframe, InstrumentSpec, CostModel; 22-instrument default universe (FX majors, US ETFs/stocks, BTC/ETH, ES/MES/NQ/MNQ).
-- `apex.db`: 12 tables, Alembic migrations `0001` (schema) and `0002` (pgvector, no-op when unavailable), tested upgrade/downgrade on both engines.
+- `apex.db`: 17 tables, Alembic migrations `0001` (schema), `0002` (pgvector, no-op when unavailable), `0003` (portable chunk vectors), `0004` (paper trading), `0005` (multi-instrument paper accounts), `0006` (research full-text index), tested upgrade/downgrade on both engines.
 - `apex.marketdata`: provider interface + normalisation; calendars (FX 24x5, CME Globex with daily halt, NYSE RTH with computed holidays, crypto 24x7); validation (NaN, non-positive, OHLC consistency, duplicates/conflicts, misalignment, out-of-session, gaps, spikes) and staleness check; repository with content hashing; ingestion pipeline that records runs and issues.
 - `apex.research` (Phase 2): file extraction (`extract.py`: text/markdown, HTML with metadata, PDF text layer + metadata via pypdf, CSV dataset summaries, VTT/SRT transcripts), deterministic extraction of concepts, risk techniques, formulas and if/then trading rules stored as untested hypotheses (`concepts.py`), local embeddings (`embeddings.py`: dependency-free hashing embedder by default, sentence-transformers optional), hybrid BM25 + cosine search, concept and formula lookup, licence note required on import (`library.py`). Migration `0003` adds portable chunk vectors.
 - Phase 3 data infrastructure: calendar `session_date` (FX/CME evening sessions roll to the next trading day), approximate CME/FX holiday closures; `resample.py` (calendar-aware resampling with partial-bucket detection); `ResampledProvider` so derived timeframes go through the normal validation + versioning pipeline (source `<src>:rs<tf>`); `reconcile.py` cross-source comparison; `update_bars` incremental, cron-safe updates of completed bars only; `AlpacaStocksProvider` for US equities (mock-tested; needs `APEX_ALPACA_KEY_ID`/`APEX_ALPACA_SECRET_KEY`). `KrakenSpotProvider` (crypto, public endpoint, latest 720 bars only so best for incremental updates; drops the still-forming bar) and `PolygonStocksProvider` (US equities, `APEX_POLYGON_API_KEY`, key never logged; follows `next_url`), both mock-tested. Continuous futures (`marketdata/continuous.py`, `--provider csv-cont` / `csv-cont-ratio`): one CSV per contract in `<csv_root>/<SYMBOL>/`, ordered by last bar; causal roll the bar after the next contract's volume exceeds the front's (else at the end of their overlap), history back-adjusted by the roll gap (points, or ratio); `ingest` prints each roll. `CoinbaseSpotProvider` (`--provider coinbase`; crypto, public candles endpoint, no key; walks 300-candle windows so it can backfill long history, which Kraken cannot; 1m/5m/15m/1h/1d, drops the still-forming candle; mock-tested, not yet run against the live endpoint from this sandbox) is a second free crypto source for `apex reconcile` against Binance or Kraken. CLI: `update`, `resample`, `reconcile`; `ingest`/`update` accept `--provider alpaca|kraken|polygon`.
@@ -87,7 +87,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 ## Next steps (in order)
 
 1. Phase 3 remainder: Databento (futures, paid; needs Jake's go-ahead on cost), Dukascopy (FX tick files).
-2. Paper trading for multi-instrument strategies.
+2. Paper trading for multi-instrument strategies (pairs, baskets): written as PR #38, waiting for Jake's review because it touches order execution.
 3. Optional real LightGBM/ONNX backend behind the same interface (only if the built-in trees prove too slow); Phase 10 dashboard.
 
 ## Decisions needed from Jake
