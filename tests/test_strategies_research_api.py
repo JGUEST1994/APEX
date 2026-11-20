@@ -1,3 +1,5 @@
+import functools
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -25,19 +27,27 @@ def test_lifecycle_rules():
     assert not can_transition(S.REJECTED, S.EXPERIMENTAL)
 
 
-_DATASETS = {
-    "spy_daily": ("SPY", Timeframe.D1, utc(2022, 1, 1), utc(2025, 1, 1), 400),
-    "es_15m": ("ES", Timeframe.M15, utc(2025, 3, 3), utc(2025, 3, 21), 700),
-    "spy_5m": ("SPY", Timeframe.M5, utc(2025, 3, 3), utc(2025, 3, 14), 500),
+_DATASETS = {  # symbol, timeframe, start, end, look-ahead cut, overnight gap vol
+    "spy_daily": ("SPY", Timeframe.D1, utc(2022, 1, 1), utc(2025, 1, 1), 400, 0.0),
+    "es_15m": ("ES", Timeframe.M15, utc(2025, 3, 3), utc(2025, 3, 21), 700, 0.0),
+    "spy_5m": ("SPY", Timeframe.M5, utc(2025, 3, 3), utc(2025, 3, 14), 500, 0.0),
+    "spy_5m_gaps": ("SPY", Timeframe.M5, utc(2025, 3, 3), utc(2025, 4, 4), 1500, 0.03),
 }
+
+
+@functools.cache
+def _bars(data: str):
+    sym, tf, start, end, _, gap_vol = _DATASETS[data]
+    return SyntheticProvider(annual_vol=0.6, gap_vol=gap_vol).fetch_bars(
+        by_symbol()[sym], tf, start, end)
 
 
 @pytest.mark.parametrize("data", list(_DATASETS))
 @pytest.mark.parametrize("key", list(all_strategies()))
 def test_strategies_have_no_lookahead(key, data):
-    sym, tf, start, end, cut = _DATASETS[data]
+    cut = _DATASETS[data][4]
     strat = all_strategies()[key]()
-    bars = SyntheticProvider(annual_vol=0.6).fetch_bars(by_symbol()[sym], tf, start, end)
+    bars = _bars(data).copy()
     params = strat.params()
     full = strat.target_position(bars, params)
     partial = strat.target_position(bars.iloc[:cut].copy(), params)
@@ -119,7 +129,6 @@ def test_every_strategy_trades_on_some_data(key):
     from apex.backtest.engine import run_backtest
 
     trades = 0
-    for sym, tf, start, end, _ in _DATASETS.values():
-        bars = SyntheticProvider(annual_vol=0.6).fetch_bars(by_symbol()[sym], tf, start, end)
-        trades += run_backtest(bars, all_strategies()[key](), by_symbol()[sym]).metrics["trades"]
+    for data, (sym, *_rest) in _DATASETS.items():
+        trades += run_backtest(_bars(data).copy(), all_strategies()[key](), by_symbol()[sym]).metrics["trades"]
     assert trades > 0
