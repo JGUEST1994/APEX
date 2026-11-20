@@ -61,6 +61,7 @@
     <div class="card"><h3 id="pname">Select an account</h3>
       <p class="dlrow"><a class="dl" id="pdl" hidden download>Download all fills for Excel</a></p>
       <p id="pcheck" class="muted"></p>
+      <p id="prec" class="muted"></p>
       <div id="pcurve" hidden><p class="muted">Simulated account value at each processed bar.</p>
         <div class="chart-wrap"><svg id="pchart" class="pchart" role="img" aria-label="Simulated practice account value"></svg>
           <div class="tip" id="ptip"></div></div></div>
@@ -447,6 +448,14 @@ const LOAD = {
         p.appendChild(el("span", ` · same direction on ${pct(c.direction_agreement)} of ${c.bars} bars` +
           ` · ${c.paper_changes} of ${c.backtest_changes} position changes followed. ` + (c.notes || []).join(" ")));
       }).catch((e) => { $("pcheck").textContent = "Comparison unavailable."; console.error(e); });
+      $("prec").textContent = "";
+      get("/paper/accounts/" + encodeURIComponent(name) + "/record").then((r) => {
+        if ($("pname").textContent.indexOf(name + ":") !== 0) return;
+        const p = $("prec"); p.replaceChildren();
+        p.appendChild(el("span", r.ready ? "practice record ready" : "practice record not ready", r.ready ? "pass" : "fail"));
+        p.appendChild(el("span", ` · ${r.days} of ${r.min_days} days since ${r.started.slice(0, 10)}` +
+          (r.ready ? ". A person can now consider approving this strategy." : ": " + r.reasons.join("; ") + ".")));
+      }).catch((e) => { $("prec").textContent = ""; console.error(e); });
       table($("pfills"), [["Time (UTC)", (r) => r.ts.slice(0, 19).replace("T", " ")], ["Symbol", (r) => r.symbol],
         ["Side", (r) => r.qty > 0 ? "buy" : "sell"], ["Units", (r) => fmt(Math.abs(r.qty), 4), "num"],
         ["Price", (r) => fmt(r.price, 4), "num"], ["Costs", (r) => fmt(r.cost), "num"]], a.fills); };

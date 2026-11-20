@@ -102,8 +102,12 @@ def test_paper_endpoints_are_read_only(db_url, session):
     cmp = c.get("/paper/accounts/demo/consistency").json()
     assert cmp["consistent"] is True and cmp["direction_agreement"] == 1.0
     assert c.get("/paper/accounts/nope/consistency").status_code == 404
+    rec = c.get("/paper/accounts/demo/record").json()  # created today: no forward days yet
+    assert rec["ready"] is False and rec["min_days"] == 30 and rec["reasons"]
+    assert c.get("/paper/accounts/nope/record").status_code == 404
     # nothing on the API can change an account or reset the kill switch
-    for path in ("/paper/accounts", "/paper/accounts/demo", "/paper/accounts/demo/consistency"):
+    for path in ("/paper/accounts", "/paper/accounts/demo", "/paper/accounts/demo/consistency",
+                 "/paper/accounts/demo/record"):
         assert c.post(path).status_code == 405 and c.delete(path).status_code == 405
     assert not [r for r in c.app.routes if "reset" in getattr(r, "path", "")]
 
