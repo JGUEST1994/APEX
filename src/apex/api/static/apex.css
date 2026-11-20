@@ -171,7 +171,7 @@ input:focus, select:focus { border-color: var(--brand); outline: none; box-shado
 .quote .chg { font: 600 14px/1 var(--num); }
 .quote .chg.up { color: var(--good); } .quote .chg.down { color: var(--bad); }
 .chart-wrap { position: relative; }
-svg#xchart { height: 260px; }
+svg#xchart, svg#pchart { height: 260px; }
 svg.pchart { width: 100%; height: 340px; display: block; cursor: crosshair; touch-action: pan-y; }
 svg.pchart .grid { stroke: var(--grid); stroke-width: 1; }
 svg.pchart .axis { fill: var(--muted); font: 11px var(--num); }
@@ -200,7 +200,7 @@ svg.pchart .dot { fill: var(--brand); stroke: var(--panel); stroke-width: 2; }
   main { padding: 20px 16px 40px; }
   #banner { font-size: 11px; letter-spacing: .03em; }
   svg.pchart { height: 260px; }
-  svg#xchart { height: 200px; }
+  svg#xchart, svg#pchart { height: 200px; }
   td.wrap { min-width: 12em; }
   #srules td:first-child { white-space: normal; }
 }

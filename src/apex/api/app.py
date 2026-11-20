@@ -70,6 +70,18 @@ def _require_token(app: FastAPI, settings: Settings) -> None:
                                  status_code=401)
 
 
+def _thin(series, points: int) -> tuple[list[str], list[float]]:  # noqa: ANN001
+    """About ``points`` evenly spaced values of a time series, always keeping the last."""
+    if series.empty:
+        return [], []
+    step = max(1, -(-len(series) // points))
+    keep = list(range(0, len(series), step))
+    if keep[-1] != len(series) - 1:
+        keep.append(len(series) - 1)
+    return ([series.index[i].isoformat() for i in keep],
+            [round(float(series.iloc[i]), 2) for i in keep])
+
+
 def create_app(settings: Settings | None = None,
                session_factory: sessionmaker[Session] | None = None) -> FastAPI:
     settings = settings or get_settings()
@@ -171,17 +183,13 @@ def create_app(settings: Settings | None = None,
         finally:
             s.rollback()  # never keep anything from the replay
         eq = res.equity
-        step = max(1, -(-len(eq) // points))
-        keep = list(range(0, len(eq), step))
-        if keep[-1] != len(eq) - 1:
-            keep.append(len(eq) - 1)
+        ts, vals = _thin(eq, points)
         stored = (exp.metrics or {}).get("total_return")
         total = float(eq.iloc[-1] / eq.iloc[0] - 1) if len(eq) else None
         return {"id": exp_id, "available": True, "simulated": True,
                 "initial_capital": res.config.initial_capital,
                 "matches_record": stored is None or total is None or abs(stored - total) < 1e-4,
-                "ts": [eq.index[i].isoformat() for i in keep],
-                "equity": [round(float(eq.iloc[i]), 2) for i in keep]}
+                "ts": ts, "equity": vals}
 
     @app.get("/leaderboard")
     def get_leaderboard(asset_class: str | None = None, symbol: str | None = None,
@@ -312,6 +320,20 @@ def create_app(settings: Settings | None = None,
                           "avg_price": o.avg_price, "reason": o.reason,
                           "signal_ts": o.signal_ts.isoformat()} for o in orders]
         return out
+
+    @app.get("/paper/accounts/{name}/equity")
+    def paper_equity(name: str, points: int = Query(600, ge=10, le=5000),
+                     s: Session = Depends(db)) -> dict:
+        """Simulated account value at each processed bar, rebuilt from the fill ledger and
+        thinned to about ``points`` points."""
+        from apex.paper_history import equity_history
+
+        try:
+            eq = equity_history(s, name)
+        except KeyError as exc:
+            raise HTTPException(404, "paper account not found") from exc
+        ts, vals = _thin(eq, points)
+        return {"account": name, "simulated": True, "ts": ts, "equity": vals}
 
     @app.get("/paper/accounts/{name}/consistency")
     def paper_consistency(name: str, s: Session = Depends(db)) -> dict:

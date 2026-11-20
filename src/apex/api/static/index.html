@@ -60,7 +60,11 @@
     <div class="card"><table id="paccts"></table></div>
     <div class="card"><h3 id="pname">Select an account</h3>
       <p class="dlrow"><a class="dl" id="pdl" hidden download>Download all fills for Excel</a></p>
-      <p id="pcheck" class="muted"></p><table id="pfills"></table></div>
+      <p id="pcheck" class="muted"></p>
+      <div id="pcurve" hidden><p class="muted">Simulated account value at each processed bar.</p>
+        <div class="chart-wrap"><svg id="pchart" class="pchart" role="img" aria-label="Simulated practice account value"></svg>
+          <div class="tip" id="ptip"></div></div></div>
+      <table id="pfills"></table></div>
   </section>
   <section id="research">
     <div class="card"><div class="toolbar"><input id="q" class="search" type="search"
@@ -425,6 +429,10 @@ const LOAD = {
     const open = async (name) => { const a = await get("/paper/accounts/" + encodeURIComponent(name));
       $("pname").textContent = `${a.name}: recent simulated fills`;
       $("pdl").href = "/export/fills.csv?name=" + encodeURIComponent(a.name); $("pdl").hidden = false;
+      get("/paper/accounts/" + encodeURIComponent(name) + "/equity").then((c) => {
+        if ($("pname").textContent.indexOf(name + ":") !== 0) return;  // another account opened
+        $("pcurve").hidden = c.equity.length < 2; chart($("pchart"), c.ts, c.equity, $("ptip"));
+      }).catch((e) => { $("pcurve").hidden = true; console.error(e); });
       $("pcheck").textContent = "Checking against the backtest…";
       get("/paper/accounts/" + encodeURIComponent(name) + "/consistency").then((c) => {
         const p = $("pcheck"); p.replaceChildren();
