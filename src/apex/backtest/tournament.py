@@ -81,19 +81,30 @@ def evaluate(metrics: dict, gates: Gates, family_n: int) -> tuple[bool, list[str
         dsr = _num(probabilistic_sharpe(inp["sharpe_per_period"], inp["n_obs"], inp["skew"],
                                         inp["kurtosis"], sr0))
     m["deflated_sharpe_family"] = dsr
+    # Plain-English reasons (shown in the dashboard's "Why not" column); the technical
+    # name follows in brackets.
+    pc = lambda x: f"{x:.0%}"  # noqa: E731
     if oos_trades < gates.min_oos_trades:
-        reasons.append(f"only {oos_trades} OOS trades (< {gates.min_oos_trades})")
+        reasons.append(f"too few trades on unseen data: {oos_trades}, needs "
+                       f"{gates.min_oos_trades} (OOS trades)")
     if dsr is None or dsr < gates.min_dsr:
-        reasons.append(f"deflated Sharpe {dsr if dsr is None else round(dsr, 3)} < {gates.min_dsr}")
+        got = "not measurable" if dsr is None else pc(dsr)
+        reasons.append(f"could be luck: confidence the edge is real {got}, needs "
+                       f"{pc(gates.min_dsr)} (deflated Sharpe)")
     pf = _num(m.get("pct_profitable_folds"))
     if pf is None or pf < gates.min_profitable_folds:
-        reasons.append(f"profitable folds {pf} < {gates.min_profitable_folds}")
+        got = "not measurable" if pf is None else pc(pf)
+        reasons.append(f"not consistent: profitable in {got} of unseen stretches, needs "
+                       f"{pc(gates.min_profitable_folds)} (profitable folds)")
     dd = _num(m.get("oos_max_drawdown"))
     if dd is None or dd < -gates.max_drawdown:
-        reasons.append(f"OOS drawdown {dd} worse than -{gates.max_drawdown}")
+        got = "not measurable" if dd is None else pc(dd)
+        reasons.append(f"falls too far: worst drop on unseen data {got}, limit "
+                       f"-{pc(gates.max_drawdown)} (OOS max drawdown)")
     pbo = _num(m.get("pbo"))
     if pbo is not None and pbo > gates.max_pbo:
-        reasons.append(f"PBO {round(pbo, 3)} > {gates.max_pbo}")
+        reasons.append(f"likely overfitted: {pc(pbo)} chance the chosen settings are just the "
+                       f"luckiest, limit {pc(gates.max_pbo)} (PBO)")
     return not reasons, reasons, m
 
 
