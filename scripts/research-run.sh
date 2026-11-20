@@ -87,7 +87,10 @@ for g in $RESEARCH_GROUPS; do
 done
 CRYPTO="BTCUSDT ETHUSDT ETHUSDT/BTCUSDT"
 STOCKS="SPY QQQ IWM AAPL MSFT NVDA AMZN"
-STOCK_SETS="$STOCKS QQQ/SPY MSFT/AAPL SPY/QQQ/IWM/AAPL/MSFT/NVDA/AMZN"
+# Daily only: the Dow and the nine original sector funds, markets the daily ideas were not
+# first tried on (one Tiingo request each).
+FUNDS="DIA XLB XLE XLF XLI XLK XLP XLU XLV XLY"
+STOCK_SETS="$STOCKS $FUNDS QQQ/SPY MSFT/AAPL SPY/QQQ/IWM/AAPL/MSFT/NVDA/AMZN"
 
 # --- crypto (Coinbase: long history; Binance: buy volume for the order-flow strategies)
 if want crypto-1d; then
@@ -107,10 +110,10 @@ fi
 if want stocks-1d; then
   GOT=""
   if [ -n "${APEX_TIINGO_API_KEY:-}" ]; then
-    for s in $STOCKS; do ingest_patiently tiingo $s 1d 2000-01-03; done
+    for s in $STOCKS $FUNDS; do ingest_patiently tiingo $s 1d 2000-01-03; done
     tour stocks-1d tiingo 1d 2000-01-03 504 126 $STOCK_SETS
   elif [ -n "${APEX_ALPACA_KEY_ID:-}" ]; then
-    for s in $STOCKS; do ingest alpaca $s 1d 2016-06-01; done
+    for s in $STOCKS $FUNDS; do ingest alpaca $s 1d 2016-06-01; done
     tour stocks-1d alpaca 1d 2016-06-01 504 126 $STOCK_SETS
   else
     log "stocks-1d skipped: no Tiingo or Alpaca key"

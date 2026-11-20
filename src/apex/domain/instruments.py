@@ -43,6 +43,9 @@ DEFAULT_UNIVERSE: list[InstrumentSpec] = [
     *(_fx(p) for p in ["EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDCAD", "USDCHF"]),
     _fx("USDJPY", 0.001), _fx("EURJPY", 0.001), _fx("EURGBP"),
     *(_eq(s) for s in ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "AMZN"]),
+    # more US index and sector funds (Dow; materials, energy, financials, industrials, tech,
+    # staples, utilities, health care, consumer discretionary), all listed before 2000
+    *(_eq(s) for s in ["DIA", "XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLY"]),
     _crypto("BTCUSDT", "BTC"), _crypto("ETHUSDT", "ETH"),
     _fut("ES", 0.25, 50.0, 2.50), _fut("MES", 0.25, 5.0, 0.75),
     _fut("NQ", 0.25, 20.0, 2.50), _fut("MNQ", 0.25, 2.0, 0.75),
