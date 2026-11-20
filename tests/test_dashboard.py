@@ -36,6 +36,12 @@ def test_dashboard_and_endpoints(db_url, session):
     assert {s["key"] for s in st} == set(all_strategies()) | set(all_multi_strategies())
     assert {s["key"]: s["instruments"] for s in st}["STAT-PAIR-001"] == 2
     assert all(s["status"] == "experimental" for s in st)
+    hs = c.get("/hypotheses").json()
+    from apex.strategies.hypotheses import HYPOTHESES
+    assert [h["id"] for h in hs] == [h.id for h in HYPOTHESES]
+    keys = {s["key"] for s in st}
+    assert all(h["implemented"] in keys for h in hs if h["implemented"])
+    assert 'id="ideas"' in page.text and '"/hypotheses"' in page.text
     engine.dispose()
 
 

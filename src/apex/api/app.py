@@ -149,6 +149,15 @@ def create_app(settings: Settings | None = None,
                  "instruments": getattr(c, "legs", 1) or "2+"}
                 for k, c in sorted({**all_strategies(), **all_multi_strategies()}.items())]
 
+    @app.get("/hypotheses")
+    def hypotheses() -> list[dict]:
+        """The strategy hypothesis bank (spec section 8) and which strategy codes each."""
+        from dataclasses import asdict
+
+        from apex.strategies.hypotheses import HYPOTHESES
+
+        return [asdict(h) for h in HYPOTHESES]
+
     @app.get("/datasets")
     def datasets(s: Session = Depends(db)) -> list[dict]:
         q = (select(Instrument.symbol, PriceBar.timeframe, PriceBar.source,
