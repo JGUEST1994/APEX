@@ -70,6 +70,10 @@ def validate_bars(
         "NaN in OHLCV")
     add((prices <= 0).any(axis=1), "non_positive_price", ERROR, "price <= 0")
     add(df["volume"] < 0, "negative_volume", ERROR, "volume < 0")
+    if "buy_volume" in df.columns:
+        bv = df["buy_volume"]
+        add((bv < 0) | (bv > df["volume"] * (1 + 1e-9) + 1e-12), "buy_volume_out_of_range",
+            ERROR, "buy volume outside 0..volume")
     hi_bad = df["high"] < df[["open", "close", "low"]].max(axis=1)
     lo_bad = df["low"] > df[["open", "close", "high"]].min(axis=1)
     add(hi_bad | lo_bad, "ohlc_inconsistent", ERROR, "high/low do not bound open/close")

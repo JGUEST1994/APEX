@@ -13,7 +13,7 @@ from datetime import UTC, datetime, time
 import pandas as pd
 
 from apex.domain.market import Timeframe
-from apex.marketdata.base import BAR_COLUMNS
+from apex.marketdata.base import BAR_COLUMNS, OPTIONAL_COLUMNS
 from apex.marketdata.calendars import TradingCalendar
 
 _AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
@@ -25,9 +25,10 @@ def resample_bars(df: pd.DataFrame, source_tf: Timeframe, target_tf: Timeframe,
         raise ValueError("tick resampling is not supported")
     if target_tf.delta <= source_tf.delta or target_tf.delta % source_tf.delta:
         raise ValueError(f"cannot resample {source_tf.value} -> {target_tf.value}")
+    cols = BAR_COLUMNS + [c for c in OPTIONAL_COLUMNS if c in df.columns]
     if df.empty:
-        return df[BAR_COLUMNS].copy()
-    work = df[BAR_COLUMNS].sort_values("ts")
+        return df[cols].copy()
+    work = df[cols].sort_values("ts")
     if target_tf is Timeframe.D1:
         key = work["ts"].map(
             lambda t: datetime.combine(calendar.session_date(t.to_pydatetime()), time(), UTC))
@@ -35,6 +36,9 @@ def resample_bars(df: pd.DataFrame, source_tf: Timeframe, target_tf: Timeframe,
         key = work["ts"].dt.floor(pd.Timedelta(target_tf.delta))
     grouped = work.groupby(key, sort=True)
     out = grouped.agg(_AGG)
+    for c in cols[len(BAR_COLUMNS):]:
+        # a bucket's buy volume is known only if every bar in it has one
+        out[c] = grouped[c].sum(min_count=1).where(grouped[c].count() == grouped.size())
     out["n"] = grouped.size()
     out.index.name = "ts"
     out = out.reset_index()
@@ -45,4 +49,4 @@ def resample_bars(df: pd.DataFrame, source_tf: Timeframe, target_tf: Timeframe,
             1 for _ in calendar.expected_bars(t.to_pydatetime(),
                                               t.to_pydatetime() + target_tf.delta, source_tf)))
         out = out[out["n"] >= expected]
-    return out[BAR_COLUMNS].reset_index(drop=True)
+    return out[cols].reset_index(drop=True)

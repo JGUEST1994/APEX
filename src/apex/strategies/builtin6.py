@@ -89,3 +89,56 @@ class EarningsAnchoredVwap(Strategy):
         sig = (above & was_below).astype(float)
         stop = avwap - p["atr_mult"] * ind.atr(bars, int(p["atr_n"]))
         return _trade(bars, sig, stop.fillna(-np.inf), exit_long=c < avwap)
+
+
+def cumulative_delta(bars: pd.DataFrame) -> pd.Series:
+    """Running sum of (aggressive buying - aggressive selling) per bar, from ``buy_volume``.
+
+    A bar without ``buy_volume`` adds nothing; :func:`delta_known` says which bars had it.
+    Order-flow purists build delta from every trade; per-bar buy volume gives the same sum
+    for each bar, which is all a bar-based strategy can act on.
+    """
+    if "buy_volume" not in bars.columns:
+        return pd.Series(0.0, index=bars.index)
+    delta = 2.0 * bars["buy_volume"] - bars["volume"]
+    return delta.fillna(0.0).cumsum()
+
+
+def delta_known(bars: pd.DataFrame) -> pd.Series:
+    if "buy_volume" not in bars.columns:
+        return pd.Series(False, index=bars.index)
+    return bars["buy_volume"].notna()
+
+
+@register
+class DeltaDivergence(Strategy):
+    meta = _meta("OF-DELTA-001", "Cumulative delta divergence", "order_flow",
+                 "A new price high that aggressive buyers did not push (cumulative delta below "
+                 "its own recent high) tends to fail; the mirror image for new lows. Needs "
+                 "data with buy volume (e.g. Binance); on data without it, it never trades.",
+                 "high above the prior `lookback`-bar high while cumulative delta is below its "
+                 "prior `lookback`-bar high: sell (mirror image: buy)",
+                 "close beyond the prior swing (lowest low / highest high of the prior "
+                 "`lookback` bars) or the target",
+                 "the new extreme +/- `stop_atr` x ATR", "`rr` x the risk",
+                 {"lookback": 20, "atr_n": 14, "stop_atr": 0.1, "rr": 1.5,
+                  "allow_long": True},
+                 tfs=(Timeframe.M1, Timeframe.M5, Timeframe.M15),
+                 assets=(AssetClass.CRYPTO,), regimes=("range",))
+
+    def target_position(self, bars, p):
+        n = int(p["lookback"])
+        h, lo, c = bars["high"], bars["low"], bars["close"]
+        cd = cumulative_delta(bars)
+        # every bar in the window (and this one) must have real buy volume
+        known = delta_known(bars).astype(float).rolling(n + 1, min_periods=n + 1).min() == 1
+        prior_hi, prior_lo = h.shift(1).rolling(n).max(), lo.shift(1).rolling(n).min()
+        cd_hi, cd_lo = cd.shift(1).rolling(n).max(), cd.shift(1).rolling(n).min()
+        bear = known & (h > prior_hi) & (cd < cd_hi)
+        bull = known & (lo < prior_lo) & (cd > cd_lo) & bool(p["allow_long"])
+        sig = bull.astype(float) - bear.astype(float)
+        a = ind.atr(bars, int(p["atr_n"])) * p["stop_atr"]
+        stop = pd.Series(np.where(sig > 0, lo - a, h + a), index=bars.index)
+        target = c - p["rr"] * (stop - c)
+        return _trade(bars, sig, stop, target=target,
+                      exit_long=c > prior_hi, exit_short=c < prior_lo)

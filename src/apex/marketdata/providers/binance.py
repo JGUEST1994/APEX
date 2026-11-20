@@ -61,5 +61,7 @@ class BinanceSpotProvider(MarketDataProvider):
                 "open": [r[1] for r in rows], "high": [r[2] for r in rows],
                 "low": [r[3] for r in rows], "close": [r[4] for r in rows],
                 "volume": [r[5] for r in rows],
+                # taker buy base volume: the part of volume from aggressive buyers
+                "buy_volume": [r[9] for r in rows],
             }
         )

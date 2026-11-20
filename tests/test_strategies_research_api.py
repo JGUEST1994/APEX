@@ -32,6 +32,8 @@ _DATASETS = {  # symbol, timeframe, start, end, look-ahead cut, overnight gap vo
     "es_15m": ("ES", Timeframe.M15, utc(2025, 3, 3), utc(2025, 3, 21), 700, 0.0),
     "spy_5m": ("SPY", Timeframe.M5, utc(2025, 3, 3), utc(2025, 3, 14), 500, 0.0),
     "spy_5m_gaps": ("SPY", Timeframe.M5, utc(2025, 3, 3), utc(2025, 4, 4), 1500, 0.03),
+    # crypto with buy volume (order-flow strategies); also proves the extra column is harmless
+    "btc_5m_flow": ("BTCUSDT", Timeframe.M5, utc(2025, 3, 3), utc(2025, 3, 8), 800, 0.0),
 }
 
 
@@ -43,7 +45,8 @@ _PARAMS = {"VWAP-EARN-001": {"anchors": [f"{y}-{m:02d}-05" for y in (2022, 2023,
 @functools.cache
 def _bars(data: str):
     sym, tf, start, end, _, gap_vol = _DATASETS[data]
-    return SyntheticProvider(annual_vol=0.6, gap_vol=gap_vol).fetch_bars(
+    return SyntheticProvider(annual_vol=0.6, gap_vol=gap_vol,
+                             order_flow=data.endswith("_flow")).fetch_bars(
         by_symbol()[sym], tf, start, end)
 
 
