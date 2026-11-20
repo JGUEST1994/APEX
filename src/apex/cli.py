@@ -17,7 +17,7 @@ def _dt(s: str) -> datetime:
 
 
 PROVIDERS = ["synthetic", "csv", "csv-cont", "csv-cont-ratio", "dukascopy-csv", "binance",
-             "kraken", "coinbase", "alpaca", "polygon"]
+             "kraken", "coinbase", "alpaca", "polygon", "tiingo"]
 
 
 def make_provider(name: str, settings, csv_root: str = "data/csv"):  # noqa: ANN001, ANN201

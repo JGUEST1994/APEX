@@ -73,3 +73,12 @@ def test_errors_never_show_the_key_and_unsupported_markets():
     p = TiingoProvider("k", client=client)
     assert not p.supports(BTC, Timeframe.D1) and not p.supports(SPY, Timeframe.H1)
     assert not p.supports(EUR, Timeframe.D1) and p.supports(EUR, Timeframe.M5)
+
+
+def test_cli_offers_tiingo_and_asks_for_the_key(monkeypatch):
+    from apex.cli import PROVIDERS, make_provider
+    from apex.core.config import Settings
+
+    assert "tiingo" in PROVIDERS
+    with pytest.raises(SystemExit, match="APEX_TIINGO_API_KEY"):
+        make_provider("tiingo", Settings(_env_file=None))
