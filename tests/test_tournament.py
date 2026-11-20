@@ -64,6 +64,18 @@ def test_gates():
     ok, reasons, _ = evaluate(_m(deflated_sharpe=0.5, pbo=0.7, oos_max_drawdown=-0.4,
                                  folds_detail=[]), Gates(), 4)
     assert not ok and len(reasons) == 4
+    text = " | ".join(reasons)
+    assert "too few trades on unseen data: 0, needs 100" in text
+    assert "falls too far: worst drop on unseen data -40%, limit -25%" in text
+    assert "likely overfitted: 70% chance" in text and "limit 50% (PBO)" in text
+    assert "(deflated Sharpe)" in text and "needs 95%" in text
+
+
+def test_gate_reasons_when_figures_are_missing():
+    ok, reasons, _ = evaluate(_m(deflated_sharpe=None, dsr_inputs=None,
+                                 pct_profitable_folds=None, oos_max_drawdown=None),
+                              Gates(), 4)
+    assert not ok and sum("not measurable" in r for r in reasons) == 3
 
 
 def test_family_trials_deflate():
