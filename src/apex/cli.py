@@ -217,6 +217,9 @@ def main(argv: list[str] | None = None) -> int:
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
+    pr = sub.add_parser("paper-record", help="is this practice account's record long and "
+                        "clean enough to consider approving its strategy? (read-only)")
+    pr.add_argument("--name", required=True)
     bp = sub.add_parser("backtest-pair", help="backtest a strategy that trades several "
                         "instruments together, e.g. STAT-PAIR-001 (SIMULATED)")
     bp.add_argument("--strategy", default="STAT-PAIR-001")
@@ -489,6 +492,22 @@ def main(argv: list[str] | None = None) -> int:
             for k, v in rep.items():
                 print(f"{k:24} {v}")
             return 0 if rep.get("consistent") else 4
+        elif args.cmd == "paper-record":
+            from apex.paper_record import record
+
+            rep = record(s, args.name)
+            print(f"{rep['account']}: {rep['strategy']} on {', '.join(rep['symbols'])} "
+                  "(SIMULATED)")
+            print(f"  {rep['days']} of {rep['min_days']} days since {rep['started'][:10]}, "
+                  f"still running: {'yes' if rep['running'] else 'no'}")
+            if rep["ready"]:
+                print("  READY: the record is long and clean enough for a person to "
+                      "consider approving the strategy")
+                return 0
+            print("  NOT READY:")
+            for r in rep["reasons"]:
+                print(f"  - {r}")
+            return 4
         elif args.cmd in ("paper-create", "paper-run", "paper-reset-kill"):
             from datetime import UTC, datetime
 
