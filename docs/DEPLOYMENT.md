@@ -2,7 +2,9 @@
 
 Status: the local install (venv + SQLite or PostgreSQL) is tested, and the Docker stack is built and started on every CI run (the `docker` job checks that migrations ran, `/health` reaches the database in research mode and `/ui/` is served). Use `docker compose up -d --build --wait` to block until the API is healthy.
 
-## Local (Windows or Linux)
+## Local (Windows, Mac or Linux)
+
+Mac: see [MAC_SETUP.md](MAC_SETUP.md) (double-click `start-apex.command` and `start-scheduler.command`; they keep the Mac awake while running).
 
 See README quick start. On Windows use PowerShell and `.venv\Scripts\activate`.
 

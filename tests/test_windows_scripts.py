@@ -35,3 +35,26 @@ def test_example_jobs_parse_and_use_known_markets_and_free_sources():
         assert j.spec["provider"] in {"coinbase", "binance", "kraken"}  # no key needed
         assert set(j.spec["symbols"]) <= set(universe)
     assert "jobs.json" in (ROOT / ".gitignore").read_text().split()
+
+
+@pytest.mark.parametrize("name", ["start-apex.command", "start-scheduler.command"])
+def test_mac_launchers_are_executable_lf_and_use_only_real_commands(name):
+    import os
+    import subprocess
+
+    path = ROOT / name
+    raw = path.read_bytes()
+    assert b"\r" not in raw and raw.startswith(b"#!/bin/bash\n"), "Mac scripts need LF endings"
+    if os.name != "nt":  # Windows checkouts do not keep the executable bit
+        assert os.access(path, os.X_OK), f"{name} must be executable (git update-index --chmod=+x)"
+        subprocess.run(["bash", "-n", str(path)], check=True)  # syntax check, runs nothing
+    text = raw.decode()
+    assert 'cd "$(dirname "$0")"' in text and ".venv/bin/activate" in text
+    import apex.cli as cli_mod
+
+    src = Path(cli_mod.__file__).read_text()
+    cmds = re.findall(r"^(?:caffeinate -i )?apex ([a-z-]+)", text, re.M)
+    assert cmds, f"{name} runs no apex command"
+    for cmd in cmds:
+        assert f'"{cmd}"' in src, f"{name} runs unknown command apex {cmd}"
+    assert "APEX_TRADING_MODE" not in text and "caffeinate -i" in text

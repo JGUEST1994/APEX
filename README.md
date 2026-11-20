@@ -10,6 +10,8 @@ Standalone quantitative research and (eventually) trading platform for FX, US st
 
 ## Quick start (single machine, SQLite)
 
+On a Mac, follow [docs/MAC_SETUP.md](docs/MAC_SETUP.md): double-click `start-apex.command`. On Windows, use `start-apex.bat`.
+
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[dev,server]"
