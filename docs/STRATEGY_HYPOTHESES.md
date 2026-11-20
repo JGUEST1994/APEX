@@ -16,7 +16,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | H06 | Time-series momentum | futures,forex,crypto | 1d | sign of 60-bar return | sign flip | vol targeting | ohlcv | MOM-TSMOM-001 |
 | H07 | Cross-sectional momentum | equity,crypto | 1d | long top decile of 12-1 month return | monthly rebalance | portfolio-level DD stop | multi | MOM-XSEC-001 |
 | H08 | Intraday momentum (first half hour) | equity,futures | 30m | sign of first-30m return at 15:30 ET | close | none | ohlcv | MOM-ID30-001 |
-| H09 | 52-week high proximity | equity | 1d | close within 2% of 52w high | close 10% below entry high | 10% trail | multi | - |
+| H09 | 52-week high proximity | equity | 1d | close within 2% of 52w high | close 10% below entry high | 10% trail | multi | MOM-52WH-001 |
 | H10 | Crypto weekend momentum | crypto | 1h | Friday 20:00 UTC 24h return sign | Monday 00:00 UTC | 2 ATR | ohlcv | MOM-WKND-001 |
 
 ## Mean Reversion (5)
@@ -62,8 +62,8 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
-| H25 | Value area 80% rule | futures | 30m | two 30m closes inside prior value area | opposite value area edge | outside value area | ticks | - |
-| H26 | Point of control magnet | futures,equity | 5m | price > 1 ATR from POC with declining volume | touch POC | 1 ATR further | ticks | - |
+| H25 | Value area 80% rule | futures | 30m | two 30m closes inside prior value area | opposite value area edge | outside value area | ticks | VP-VA80-001 |
+| H26 | Point of control magnet | futures,equity | 5m | price > 1 ATR from POC with declining volume | touch POC | 1 ATR further | ticks | VP-POC-001 |
 | H27 | Low-volume node rejection | futures | 5m | rejection candle at HVN | next LVN | beyond HVN | ticks | - |
 
 ## Order Flow (3)
