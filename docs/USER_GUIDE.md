@@ -205,7 +205,11 @@ meaning next to each. The main ones:
 
 ## 8. Save results for Excel
 
-Any of these writes a CSV file you can open in Excel. It will not overwrite a file that
+On the dashboard, the Backtests and Tournament tabs, each market on the Markets tab, and
+each practice account have a **Download for Excel** link. You can also make the same files
+from the command line.
+
+Each of these writes a CSV file you can open in Excel. It will not overwrite a file that
 already exists unless you add `--force`.
 
 ```powershell

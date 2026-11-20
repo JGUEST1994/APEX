@@ -69,3 +69,46 @@ def test_export_fills_from_a_practice_account(session):
                                       "qty": 10.0, "price": 100.0, "cost": 0.5,
                                       "client_order_id": "p1-1", "simulated": True}]
     assert export.fills(session, "p1").columns.tolist()[-1] == "simulated"
+
+
+def test_dashboard_downloads_match_export_and_defuse_formulas(db_url, session):
+    import io
+
+    from fastapi.testclient import TestClient
+
+    from apex.api.app import create_app
+    from apex.core.config import Settings
+    from apex.db.models import PaperAccount, PaperFill
+    from apex.db.session import make_engine, make_session_factory
+    from apex.domain.instruments import by_symbol
+    from apex.domain.market import Timeframe
+    from apex.marketdata.ingest import ingest_bars
+    from apex.marketdata.providers.synthetic import SyntheticProvider
+    from tests.conftest import utc
+
+    ingest_bars(session, SyntheticProvider(), by_symbol()["SPY"], Timeframe.D1,
+                utc(2024, 1, 1), utc(2024, 2, 1))
+    a = PaperAccount(name="=evil", strategy_key="TF-SMA-001", symbol="SPY", timeframe="1d",
+                     source="synthetic", initial_capital=1e5, cash=1e5, peak_equity=1e5,
+                     day_start_equity=1e5)
+    session.add(a)
+    session.flush()
+    session.add(PaperFill(account_id=a.id, client_order_id="=HYPERLINK(1)", symbol="SPY",
+                          qty=-10, price=100.0, cost=0.5, ts=utc(2024, 1, 2)))
+    session.commit()
+    engine = make_engine(db_url)
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                              make_session_factory(engine)))
+    r = c.get("/export/bars.csv?symbol=SPY&timeframe=1d&source=synthetic")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    assert 'filename="apex-prices-SPY-1d-synthetic.csv"' in r.headers["content-disposition"]
+    assert len(pd.read_csv(io.StringIO(r.text))) > 15
+    r = c.get("/export/fills.csv", params={"name": "=evil"})
+    assert 'filename="apex-practice-fills--evil.csv"' in r.headers["content-disposition"]
+    row = pd.read_csv(io.StringIO(r.text)).iloc[0]
+    assert row["client_order_id"] == "'=HYPERLINK(1)" and row["qty"] == -10  # numbers kept
+    for path in ("/export/experiments.csv", "/export/leaderboard.csv"):  # empty but valid
+        assert c.get(path).status_code == 200
+    assert c.get("/export/fills.csv?name=ghost").status_code == 404
+    assert c.get("/export/bars.csv?symbol=NOPE&timeframe=1d&source=x").status_code == 404
+    engine.dispose()

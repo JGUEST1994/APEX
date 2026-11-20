@@ -13,6 +13,9 @@ Run `apex serve` and open `http://127.0.0.1:8000/docs` for the live OpenAPI refe
 | GET | `/leaderboard` | `asset_class`, `symbol`, `timeframe`, `category` | latest walk-forward result per strategy/market ranked by robustness score, with gate pass/fail reasons and status; all `simulated: true` |
 | GET | `/strategies` | | registered strategies with metadata (description, `entry_rules`, `exit_rules`, `stop_loss`, `take_profit`, `asset_classes`, `default_params`, `ideas` = hypothesis ids), current lifecycle status and `instruments` (1, 2, or `"2+"` for a basket) |
 | GET | `/system/checks` | | the `apex doctor` check-up: list of `level` (OK/WARN/FAIL), `name`, `detail`; says whether keys are set, never their values |
+| GET | `/export/experiments.csv`, `/export/leaderboard.csv` | | CSV download (same columns as `apex export`; every results row `simulated=true`) |
+| GET | `/export/bars.csv` | `symbol`, `timeframe`, `source` | stored prices as CSV; 404 for an unknown symbol |
+| GET | `/export/fills.csv` | `name` | a practice account's fills as CSV; 404 if no such account. Text cells starting with `= + - @` get a leading `'` in all downloads so Excel never runs them as formulas |
 | GET | `/hypotheses` | | the strategy hypothesis bank (spec section 8): id, name, category, markets, timeframes, idea, entry/exit/stop/target, regime, `data` needed and `implemented` (strategy key or null) |
 | GET | `/datasets` | | stored bar datasets (symbol, timeframe, source) with counts and first/last bar |
 | GET | `/paper/accounts` | | simulated paper accounts: status, kill switch, cash, realised P&L, holdings |

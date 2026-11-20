@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -37,6 +37,7 @@ from apex.research.library import search
 
 TOKEN_COOKIE = "apex_token"
 OPEN_PATHS = ("/health",)  # container healthchecks need no token
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")  # Excel would run these as formulas
 
 
 def _require_token(app: FastAPI, settings: Settings) -> None:
@@ -290,6 +291,51 @@ def create_app(settings: Settings | None = None,
             return compare(s, name)
         except KeyError as exc:
             raise HTTPException(404, "paper account not found") from exc
+
+    # "Download for Excel": the same tables as `apex export`, as CSV attachments.
+    def _csv(df, filename: str) -> Response:  # noqa: ANN001
+        def cell(v):  # noqa: ANN001, ANN202 - stop Excel treating text as a formula
+            return "'" + v if isinstance(v, str) and v[:1] in FORMULA_START else v
+
+        body = df.astype(object).map(cell).to_csv(index=False) if not df.empty else (
+            ",".join(map(str, df.columns)) + "\n")
+        return Response(body, media_type="text/csv; charset=utf-8", headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'})
+
+    @app.get("/export/experiments.csv")
+    def export_experiments(s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        return _csv(export.experiments(s), "apex-backtests.csv")
+
+    @app.get("/export/leaderboard.csv")
+    def export_leaderboard(s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        return _csv(export.leaderboard(s), "apex-tournament.csv")
+
+    @app.get("/export/bars.csv")
+    def export_bars(symbol: str, timeframe: Timeframe, source: str,
+                    s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        try:
+            df = export.bars(s, symbol, timeframe.value, source)
+        except UnknownInstrumentError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        safe = "".join(c if c.isalnum() else "-" for c in f"{symbol}-{timeframe.value}-{source}")
+        return _csv(df, f"apex-prices-{safe}.csv")
+
+    @app.get("/export/fills.csv")
+    def export_fills(name: str, s: Session = Depends(db)) -> Response:
+        from apex import export
+
+        try:
+            df = export.fills(s, name)
+        except LookupError as exc:
+            raise HTTPException(404, "paper account not found") from exc
+        safe = "".join(c if c.isalnum() else "-" for c in name)
+        return _csv(df, f"apex-practice-fills-{safe}.csv")
 
     static = Path(__file__).parent / "static"
     app.mount("/ui", StaticFiles(directory=static, html=True), name="ui")

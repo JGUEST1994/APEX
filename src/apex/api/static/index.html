@@ -32,7 +32,8 @@
   <section id="markets">
     <div class="card">
       <div class="toolbar"><select id="dataset" aria-label="Dataset"></select>
-        <span class="muted" id="dsinfo"></span></div>
+        <span class="muted" id="dsinfo"></span>
+        <a class="dl" id="dsdl" hidden download>Download these prices for Excel</a></div>
       <div class="quote" id="quote"></div>
       <div class="chart-wrap"><svg id="chart" role="img" aria-label="Close price chart"></svg>
         <div class="tip" id="tip"></div></div>
@@ -45,14 +46,17 @@
   <section id="ideas"><div class="card"><p id="ideasum" class="muted"></p>
     <table id="ideatab"></table></div></section>
   <section id="leaderboard">
-    <div class="card"><table id="lb"></table></div>
+    <div class="card"><p class="dlrow"><a class="dl" href="/export/leaderboard.csv" download>Download for Excel</a></p>
+      <table id="lb"></table></div>
   </section>
-  <section id="experiments"><div class="card"><table id="exps"></table></div>
+  <section id="experiments"><div class="card"><p class="dlrow"><a class="dl" href="/export/experiments.csv" download>Download all backtests for Excel</a></p>
+    <table id="exps"></table></div>
     <div class="card"><h3 id="xname">Select a backtest</h3><p id="xinfo" class="muted"></p>
       <table id="xmetrics"></table></div></section>
   <section id="paper">
     <div class="card"><table id="paccts"></table></div>
     <div class="card"><h3 id="pname">Select an account</h3>
+      <p class="dlrow"><a class="dl" id="pdl" hidden download>Download all fills for Excel</a></p>
       <p id="pcheck" class="muted"></p><table id="pfills"></table></div>
   </section>
   <section id="research">
@@ -318,6 +322,8 @@ const LOAD = {
       const bars = await get(`/instruments/${encodeURIComponent(d.symbol)}/bars?timeframe=${d.timeframe}` +
         `&source=${encodeURIComponent(d.source)}&limit=2000`);
       const ys = bars.map((b) => b.close); quote(d, ys);
+      $("dsdl").href = `/export/bars.csv?symbol=${encodeURIComponent(d.symbol)}&timeframe=${d.timeframe}` +
+        `&source=${encodeURIComponent(d.source)}`; $("dsdl").hidden = false;
       chart($("chart"), bars.map((b) => b.ts), ys); };
     sel.onchange = draw;
     if (!ds.length) { $("dsinfo").textContent = "No price data stored yet. Run apex ingest, then reload."; return; }
@@ -401,6 +407,7 @@ const LOAD = {
     const accts = await get("/paper/accounts");
     const open = async (name) => { const a = await get("/paper/accounts/" + encodeURIComponent(name));
       $("pname").textContent = `${a.name}: recent simulated fills`;
+      $("pdl").href = "/export/fills.csv?name=" + encodeURIComponent(a.name); $("pdl").hidden = false;
       $("pcheck").textContent = "Checking against the backtest…";
       get("/paper/accounts/" + encodeURIComponent(name) + "/consistency").then((c) => {
         const p = $("pcheck"); p.replaceChildren();
