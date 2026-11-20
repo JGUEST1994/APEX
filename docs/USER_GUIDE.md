@@ -78,6 +78,21 @@ apex ingest --provider alpaca --symbol SPY --timeframe 1d --start 2019-01-01 --e
 **Your own files:** save a CSV as `data\csv\<SYMBOL>_<timeframe>.csv` (for example
 `data\csv\EURUSD_1h.csv`) and use `--provider csv`.
 
+**Futures, one file per contract:** each futures contract (say the March and June S&P
+contracts) expires, so a long history has to be stitched together. Put one CSV per contract
+in a folder named after the market, for example `data\csv\ES\ESH5_1d.csv` and
+`data\csv\ES\ESM5_1d.csv`, then:
+
+```powershell
+apex ingest --provider csv-cont --symbol ES --timeframe 1d --start 2020-01-01 --end 2025-07-01
+```
+
+APEX switches to the next contract the day after it trades more than the old one, and
+shifts older prices so there is no false jump at the switch (it prints each switch). The
+newest prices are real; older ones are adjusted, so use them for testing ideas, not for
+looking up what something cost. `--provider csv-cont-ratio` adjusts by percentage instead,
+which keeps old prices above zero.
+
 **Made-up practice data** (useful for learning the commands; it means nothing about real
 markets): `--provider synthetic`.
 
