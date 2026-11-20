@@ -14,6 +14,7 @@ from apex.backtest.tournament import (
     run_tournament,
     score,
 )
+from apex.backtest.validation import walk_forward
 from apex.cli import main as cli
 from apex.core.config import Settings
 from apex.db.models import AuditEvent, StrategyStatusChange
@@ -61,8 +62,8 @@ def _m(**kw):
 def test_gates():
     ok, reasons, m = evaluate(_m(), Gates(), 4)
     assert ok and not reasons and m["oos_trades"] == 120
-    ok, reasons, _ = evaluate(_m(deflated_sharpe=0.5, pbo=0.7, oos_max_drawdown=-0.4,
-                                 folds_detail=[]), Gates(), 4)
+    ok, reasons, _ = evaluate(_m(deflated_sharpe=0.5, dsr_inputs=None, pbo=0.7,
+                                 oos_max_drawdown=-0.4, folds_detail=[]), Gates(), 4)
     assert not ok and len(reasons) == 4
     text = " | ".join(reasons)
     assert "too few trades on unseen data: 0, needs 100" in text
@@ -92,6 +93,46 @@ def test_family_trials_deflate():
     _, _, few = evaluate(_m(), Gates(), 4)
     _, _, many = evaluate(_m(), Gates(), 5000)
     assert many["deflated_sharpe_family"] < few["deflated_sharpe_family"]
+
+
+def test_luck_test_judges_the_whole_unseen_history():
+    inp = _m()["dsr_inputs"] | {"sharpe_per_period": 0.06}  # about 0.95 a year, daily
+    short = evaluate(_m(dsr_inputs=inp | {"n_obs": 1000}), Gates(), 300)[2]
+    long_ = evaluate(_m(dsr_inputs=inp | {"n_obs": 8000}), Gates(), 300)[2]
+    assert long_["deflated_sharpe_family"] > 0.95 > short["deflated_sharpe_family"]
+    # how noisy the short training stretches were no longer sets the bar
+    noisy = evaluate(_m(dsr_inputs=inp | {"n_obs": 8000, "sr_variance": 0.5}), Gates(), 300)[2]
+    assert noisy["deflated_sharpe_family"] == long_["deflated_sharpe_family"]
+
+
+def _bounce_bars(n: int, bounce: float, drift: float = 0.0002, seed: int = 1) -> pd.DataFrame:
+    """Daily bars where, when ``bounce`` > 0, a close near the day's low is followed by a
+    rise of that size (a real edge for MR-IBS-001); otherwise a plain random walk."""
+    rng = np.random.default_rng(seed)
+    c, prev_ibs, rows = 100.0, 0.5, []
+    for t in pd.bdate_range("2000-01-03", periods=n, tz="UTC"):
+        r = drift + (bounce if prev_ibs < 0.2 else 0.0) + 0.012 * rng.standard_normal()
+        o, cl = c, c * (1 + r)
+        h = max(o, cl) * (1 + abs(rng.normal(0, 0.004)))
+        lo = min(o, cl) * (1 - abs(rng.normal(0, 0.004)))
+        rows.append((t, o, h, lo, cl, 1e6))
+        prev_ibs, c = (cl - lo) / (h - lo), cl
+    return pd.DataFrame(rows, columns=["ts", "open", "high", "low", "close", "volume"])
+
+
+def _family_confidence(bars: pd.DataFrame) -> float:
+    wf = walk_forward(bars, all_strategies()["MR-IBS-001"](), by_symbol()["SPY"], {},
+                      train_bars=504, test_bars=126)
+    # judged as the tournament would if the idea had been tried on 7 markets
+    return evaluate(wf.summary, Gates(), 7 * wf.n_trials)[2]["deflated_sharpe_family"]
+
+
+def test_more_history_makes_a_real_edge_easier_to_confirm():
+    edge = _bounce_bars(20 * 252, bounce=0.002)
+    six, twenty = _family_confidence(edge.iloc[:6 * 252]), _family_confidence(edge)
+    assert twenty > six and twenty >= 0.95
+    # and the same long history without the edge still reads as luck
+    assert _family_confidence(_bounce_bars(20 * 252, bounce=0.0, drift=0.0)) < 0.5
 
 
 def test_score_ignores_raw_return():

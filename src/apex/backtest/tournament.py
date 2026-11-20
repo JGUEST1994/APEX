@@ -17,7 +17,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from apex.backtest.experiments import run_validation
-from apex.backtest.validation import expected_max_sharpe, probabilistic_sharpe
+from apex.backtest.validation import (
+    expected_max_sharpe,
+    null_sharpe_variance,
+    probabilistic_sharpe,
+)
 from apex.db.models import Experiment, StrategyVersion
 from apex.db.models import Strategy as StrategyRow
 from apex.domain.market import Timeframe
@@ -75,9 +79,12 @@ def evaluate(metrics: dict, gates: Gates, family_n: int) -> tuple[bool, list[str
     m["oos_trades"] = oos_trades
     dsr = _num(m.get("deflated_sharpe"))
     inp = m.get("dsr_inputs")
-    if inp and family_n > m.get("n_trials", 0):
-        # re-deflate against the expected maximum Sharpe of ALL trials in the family
-        sr0 = expected_max_sharpe(family_n, inp["sr_variance"])
+    if inp and (inp.get("n_obs") or 0) > 1:
+        # re-deflate against the expected best of ALL the family's trials, each judged over
+        # the same length of unseen history as this result (results recorded before that
+        # rule are re-judged the same way)
+        n = max(family_n, int(m.get("n_trials") or 1))
+        sr0 = expected_max_sharpe(n, null_sharpe_variance(inp["n_obs"]))
         dsr = _num(probabilistic_sharpe(inp["sharpe_per_period"], inp["n_obs"], inp["skew"],
                                         inp["kurtosis"], sr0))
     m["deflated_sharpe_family"] = dsr

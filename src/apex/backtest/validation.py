@@ -88,16 +88,27 @@ def expected_max_sharpe(n_trials: int, sr_variance: float) -> float:
     return math.sqrt(sr_variance) * ((1 - EULER_GAMMA) * a + EULER_GAMMA * b)
 
 
-def deflated_sharpe(returns: pd.Series, n_trials: int, sr_variance: float) -> dict[str, float]:
+def null_sharpe_variance(n_obs: int) -> float:
+    """Variance of a zero-skill per-period Sharpe estimate over ``n_obs`` returns."""
+    return 1.0 / (n_obs - 1) if n_obs > 1 else 0.0
+
+
+def deflated_sharpe(returns: pd.Series, n_trials: int,
+                    sr_variance: float | None = None) -> dict[str, float]:
     """Deflated Sharpe Ratio of a per-period return series selected from ``n_trials``.
 
-    ``sr_variance`` is the variance of the per-period Sharpe ratios across all trials.
+    ``sr_variance`` is the variance of the per-period Sharpe estimates across the trials.
+    By default each trial is taken to be judged over as many returns as this series
+    (``null_sharpe_variance``), so the bar falls as the evidence grows: more history makes
+    a real edge easier to confirm, never harder.
     """
     r = returns.dropna()
     sd = r.std(ddof=1)
     sr = float(r.mean() / sd) if len(r) > 1 and sd > 0 else 0.0
     skew = float(r.skew()) if len(r) > 2 else 0.0
     kurt = float(r.kurt()) + 3.0 if len(r) > 3 else 3.0
+    if sr_variance is None:
+        sr_variance = null_sharpe_variance(len(r))
     sr0 = expected_max_sharpe(n_trials, sr_variance)
     return {"sharpe_per_period": sr, "sr_benchmark": sr0, "n_trials": n_trials,
             "n_obs": len(r), "skew": skew, "kurtosis": kurt, "sr_variance": sr_variance,
@@ -327,12 +338,11 @@ def summarise_walk_forward(wf: WalkForwardResult) -> dict:
     is_scores = [f.is_score for f in wf.folds if math.isfinite(f.is_score)]
     oos_sharpes = [f.oos_metrics.get("sharpe") for f in wf.folds]
     oos_sharpes = [s for s in oos_sharpes if s is not None]
-    # trial Sharpes are annualised; convert variance to per-period scale for DSR
-    ppy = _ppy(oos.index)
-    var_pp = 0.0
-    if len(wf.trial_sharpes) > 1 and ppy:
-        var_pp = float(np.var(wf.trial_sharpes, ddof=1)) / ppy
-    dsr = deflated_sharpe(oos, max(wf.n_trials, 1), var_pp)
+    # Every setting tried on every stretch counts as a try (on the safe side), and each try
+    # is judged like this one: over the whole unseen history. (The training-stretch Sharpes
+    # in wf.trial_sharpes are far noisier, being over much less data, so they would set the
+    # bar by the training length and make more history count against a real edge.)
+    dsr = deflated_sharpe(oos, max(wf.n_trials, 1))
     hold = wf.buy_hold_returns
     held = (1 + hold).cumprod() if hold is not None and len(hold) else None
     return {
@@ -353,13 +363,6 @@ def summarise_walk_forward(wf: WalkForwardResult) -> dict:
                                             "sr_variance")},
         "param_stability": _param_stability([f.params for f in wf.folds]),
     }
-
-
-def _ppy(index: pd.Index) -> float:
-    if len(index) < 2:
-        return 0.0
-    span = (index[-1] - index[0]).total_seconds()
-    return (len(index) - 1) / (span / (365.25 * 86400)) if span > 0 else 0.0
 
 
 def _param_stability(params: list[dict]) -> float:

@@ -311,7 +311,7 @@ meaning next to each. The main ones:
 | Unseen-data return / Sharpe | How the strategy did on the stretches of history it was not tuned on (tournament and `apex validate` only). This matters far more than the plain backtest. |
 | Just holding the market | What simply buying and holding the market made over the same unseen stretches (single markets only; the Tournament tab's **Just holding** column). A strategy should beat it, or come close with smaller drops. |
 | Kept after tuning | Unseen Sharpe as a share of tuning Sharpe. Low means the tuning mostly fitted noise. |
-| Luck-adjusted confidence (deflated Sharpe) | Chance the edge is real after allowing for how many variations were tried. The tournament wants 95%. |
+| Luck-adjusted confidence (deflated Sharpe) | Chance the edge is real after allowing for how many tries were made (every setting on every stretch counts as a try). It is judged on all the unseen history, so more history helps a real edge pass and makes luck easier to spot. The tournament wants 95%. |
 | Overfitting risk (PBO) | Chance the best-looking settings are just the luckiest. The tournament wants 50% or less. |
 
 ## 8. Save results for Excel
