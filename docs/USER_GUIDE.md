@@ -173,6 +173,24 @@ the next step is the real test.
 apex backtest-pair --strategy STAT-PAIR-001 --symbols QQQ,SPY --timeframe 1d --source alpaca --start 2019-01-01 --end 2025-01-01
 ```
 
+**Earnings-day idea (VWAP-EARN-001)** needs each company's earnings dates. APEX gets them
+free from the US regulator's EDGAR website. The SEC asks automated tools to say who is
+asking, so first add your name and email to `.env`:
+
+```
+APEX_SEC_USER_AGENT="Your Name you@example.com"
+```
+
+Then save the dates and use them in a backtest:
+
+```powershell
+apex earnings-dates --symbol AAPL
+apex backtest --strategy VWAP-EARN-001 --symbol AAPL --timeframe 1d --source tiingo --start 2019-01-01 --end 2025-01-01 --param anchors=@data/events/AAPL_earnings.json
+```
+
+EDGAR's recent-filings list goes back a few years for most companies, so dates are only
+found for that period; bars before the first date simply don't trade.
+
 ## 4. Rank ideas fairly (the tournament)
 
 The tournament runs each strategy through **walk-forward testing**: it tunes on one stretch
