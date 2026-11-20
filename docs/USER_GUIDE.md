@@ -108,6 +108,19 @@ is for your own use only; don't share it. For daily forex, download 1h and use
 **Your own files:** save a CSV as `data\csv\<SYMBOL>_<timeframe>.csv` (for example
 `data\csv\EURUSD_1h.csv`) and use `--provider csv`.
 
+**Forex from Dukascopy (free):** on Dukascopy's Historical Data Export page, pick the
+pair, the timeframe and "GMT" time, download the CSV yourself, save it as for example
+`data\csv\EURUSD_1h.csv`, then:
+
+```powershell
+apex ingest --provider dukascopy-csv --symbol EURUSD --timeframe 1h --start 2020-01-01 --end 2025-01-01
+```
+
+APEX reads Dukascopy's day-first dates and drops the flat weekend filler bars it writes.
+Dukascopy's website rules forbid automated downloading without their written permission,
+so APEX does not download from Dukascopy for you; files you download yourself for personal,
+non-commercial use are fine. Don't share the files or put them in a public place.
+
 **Futures, one file per contract:** each futures contract (say the March and June S&P
 contracts) expires, so a long history has to be stitched together. Put one CSV per contract
 in a folder named after the market, for example `data\csv\ES\ESH5_1d.csv` and
