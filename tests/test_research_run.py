@@ -8,6 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from apex.domain.instruments import by_symbol
+from apex.domain.market import AssetClass
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "research-run.sh"
 
@@ -67,6 +70,18 @@ def test_a_failed_download_drops_only_that_market_and_the_sets_that_need_it(tmp_
     assert "NVDA" not in syms and "SPY" in syms and "QQQ/SPY" in syms and "MSFT/AAPL" in syms
     assert not any("NVDA" in s for s in syms)  # the 7-stock basket needs every leg
     assert "--source tiingo --timeframe 1d" in out and "--train-bars 504" in out
+
+
+def test_daily_stocks_also_rank_the_dow_and_sector_funds(tmp_path):
+    out = _run(tmp_path, "stocks-1d", APEX_TIINGO_API_KEY="k")
+    funds = ["DIA", "XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLY"]
+    for f in funds:
+        assert f"prices ok: tiingo {f} 1d from 2000-01-03" in out
+    syms = _symbols(out, "stocks-1d")
+    assert syms[:17] == ["SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "AMZN", *funds]
+    assert "SPY/QQQ/IWM/AAPL/MSFT/NVDA/AMZN" in syms  # the basket is unchanged
+    universe = by_symbol()
+    assert all(universe[f].asset_class is AssetClass.EQUITY for f in funds)
 
 
 def test_daily_stocks_fall_back_to_alpaca_and_groups_can_be_picked(tmp_path):
