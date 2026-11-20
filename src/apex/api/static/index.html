@@ -143,10 +143,10 @@ const GLOSSARY = {
   mean_is_sharpe: ["Tuning-data Sharpe", "num", "Average Sharpe on the stretches used for tuning (expect this to look better)."],
   walk_forward_efficiency: ["Kept after tuning", "pct", "Unseen Sharpe as a share of tuning Sharpe. Low means the tuning mostly fitted noise."],
   pct_profitable_folds: ["Profitable stretches", "pct", "Share of unseen stretches that made money."],
-  deflated_sharpe: ["Luck-adjusted confidence", "pct", "Chance the edge is real after allowing for how many variations were tried. The tournament wants 95%."],
+  deflated_sharpe: ["Luck-adjusted confidence", "pct", "Chance the edge is real after allowing for how many tries were made. It is judged on all the unseen history, so more history helps a real edge. The tournament wants 95%."],
   pbo: ["Overfitting risk", "pct", "Chance the best-looking settings are just the luckiest. The tournament wants 50% or less."],
   folds: ["Stretches tested", "int", "Number of tune-then-test rounds."],
-  n_trials: ["Variations tried", "int", "Parameter combinations tried; more tries make luck more likely."],
+  n_trials: ["Tries counted", "int", "Settings tried times stretches tested. Each counts as a try, which makes the luck test stricter."],
 };
 // What each data-quality finding means. "error" rows were not stored; warnings were.
 const ISSUE_TEXT = {
