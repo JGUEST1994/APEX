@@ -6,7 +6,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
-| H51 | Micro pullback scalp | futures,crypto | 1m | 3+ trend bars then 1-2 bar pullback holding 9 EMA | next swing | below pullback low | ohlcv | - |
+| H51 | Micro pullback scalp | futures,crypto | 1m | 3+ trend bars then 1-2 bar pullback holding 9 EMA | next swing | below pullback low | ohlcv | SC-MICRO-001 |
 | H52 | Round-number fade | forex,crypto | 1m | first touch of round number | 5 bars | 5 ticks through | ohlcv | SC-ROUND-001 |
 
 ## Momentum (5)
@@ -27,7 +27,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | H12 | Bollinger band fade | forex,crypto,equity | 15m,1h | close outside 2-sigma band | middle band | 3.5 sigma | ohlcv | MR-BB-001 |
 | H13 | Internal bar strength | equity | 1d | (close-low)/(high-low) < 0.2 | next close > prior high | 5 days | ohlcv | MR-IBS-001 |
 | H14 | Consecutive down days | equity,futures | 1d | 3 lower closes and close > SMA200 | first up close | 5 bars | ohlcv | MR-DOWN-001 |
-| H15 | FX overnight reversion | forex | 1h | Asia range break > 1.5x average | London 10:00 | 2x Asia range | ohlcv | - |
+| H15 | FX overnight reversion | forex | 1h | Asia range break > 1.5x average | London 10:00 | 2x Asia range | ohlcv | MR-ASIA-001 |
 
 ## Trend Following (5)
 
@@ -79,16 +79,16 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H31 | Prior-low sweep reversal | forex,crypto,futures,equity | 15m,1h | low < prior 20-bar low and close back above | 5 bars | sweep low | ohlcv | LIQ-SWEEP-001 |
-| H32 | Asian range sweep (FX) | forex | 15m | sweep of Asia high/low then close inside | 16:00 UTC | sweep extreme | ohlcv | - |
+| H32 | Asian range sweep (FX) | forex | 15m | sweep of Asia high/low then close inside | 16:00 UTC | sweep extreme | ohlcv | LIQ-ASIA-001 |
 | H33 | Previous day high/low sweep | futures,equity | 5m | trade through PDH/PDL and close back | session close | sweep extreme | ohlcv | LIQ-PDHL-001 |
-| H34 | Equal highs raid | crypto,forex | 1h | two highs within 0.1 ATR swept and rejected | 6 bars | sweep extreme | ohlcv | - |
+| H34 | Equal highs raid | crypto,forex | 1h | two highs within 0.1 ATR swept and rejected | 6 bars | sweep extreme | ohlcv | LIQ-EQH-001 |
 
 ## Market Structure (3)
 
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H35 | Break of structure with higher low | forex,crypto,futures,equity | 15m,1h | close > last swing high with HL | close < last swing low | last swing low | ohlcv | MS-BOS-001 |
-| H36 | Change of character reversal | forex,crypto | 15m | first lower low after series of HH/HL | new swing high | last swing high | ohlcv | - |
+| H36 | Change of character reversal | forex,crypto | 15m | first lower low after series of HH/HL | new swing high | last swing high | ohlcv | MS-CHOCH-001 |
 | H37 | Fair value gap fill | forex,futures,crypto | 5m,15m | price returns into FVG in trend direction | FVG far edge broken | beyond FVG | ohlcv | MS-FVG-001 |
 
 ## Statistical Arbitrage (4)
@@ -113,8 +113,8 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
 | H45 | HTF trend with LTF pullback | forex,crypto,futures,equity | 15m,1h | HTF above SMA and LTF RSI < 35 | RSI > 50 or HTF flip | HTF flip | ohlcv | MTF-PB-001 |
-| H46 | Daily bias, 5m execution | futures,equity | 5m | daily close > SMA20 and 5m ORB long | session close | ORB low | ohlcv | - |
-| H47 | Weekly level, daily trigger | forex,crypto | 1d | daily bullish engulfing at prior week low | 5 days | pattern low | ohlcv | - |
+| H46 | Daily bias, 5m execution | futures,equity | 5m | daily close > SMA20 and 5m ORB long | session close | ORB low | ohlcv | MTF-ORB-001 |
+| H47 | Weekly level, daily trigger | forex,crypto | 1d | daily bullish engulfing at prior week low | 5 days | pattern low | ohlcv | MTF-WKENG-001 |
 
 ## Machine Learning (4)
 

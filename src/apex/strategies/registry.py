@@ -33,6 +33,7 @@ def all_strategies() -> dict[str, type[Strategy]]:
         builtin,
         builtin2,
         builtin3,
+        builtin4,
         reference,
     )
 
