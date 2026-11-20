@@ -127,3 +127,24 @@ def test_dashboard_has_empty_and_error_states():
     for table_id in ("runs", "lb", "exps", "paccts", "hits"):
         assert f'id="{table_id}"' in html and f"  {table_id}: " in html
     assert "This page couldn't load." in html and 'id="glance"' in html
+
+
+def test_ingestion_runs_show_market_and_findings(db_url, session):
+    from apex.db.models import DataQualityIssue
+
+    r = ingest_bars(session, SyntheticProvider(), by_symbol()["QQQ"], Timeframe.D1,
+                    utc(2024, 1, 1), utc(2024, 2, 1))
+    session.add_all([DataQualityIssue(run_id=r.run_id, kind="gap", severity="warning",
+                                      ts=utc(2024, 1, 15), detail="1 bar missing"),
+                     DataQualityIssue(run_id=r.run_id, kind="spike", severity="warning",
+                                      ts=utc(2024, 1, 20), detail="12 sigma")])
+    session.commit()
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url)))
+    run = c.get("/ingestion-runs").json()[0]
+    assert run["symbol"] == "QQQ" and run["issues"] >= 2 and run["error"] is None
+    iss = c.get(f"/ingestion-runs/{run['id']}/issues").json()
+    assert [i["kind"] for i in iss][-2:] == ["gap", "spike"]
+    assert iss[-1]["ts"].startswith("2024-01-20") and iss[-1]["detail"] == "12 sigma"
+    assert c.get("/ingestion-runs/999999/issues").status_code == 404
+    html = (STATIC / "index.html").read_text()
+    assert '`/ingestion-runs/' in html and "ISSUE_TEXT" in html and 'id="issues"' in html
