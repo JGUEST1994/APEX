@@ -207,11 +207,17 @@ apex tournament --strategies TF-SMA-001,BO-DONCH-001,MR-RSI2-001 --symbols SPY,Q
 apex leaderboard
 ```
 
-Leave out `--strategies` to try every strategy that suits the market. Most ideas **fail**
+Leave out `--strategies` to try every strategy that suits the market and timeframe
+(strategies meant for other markets are skipped). Most ideas **fail**
 the gates, and that is the system working: the "Why not" column on the Tournament tab says
 which test each one missed (too few trades, not enough out-of-sample profit, too big a
 drawdown, and so on). Click a strategy's name there to see every figure from that run,
 explained. Only strategies that pass move on towards paper trading.
+
+To rank everything on real prices in one go, run `scripts/research-run.sh` (Mac or Linux),
+or on GitHub open the Actions tab, pick **research-run** and press **Run workflow**. It
+downloads free crypto prices (plus US stocks and forex if your Alpaca and Tiingo keys are
+set) and saves the leaderboard in `research-out/`.
 
 ## 5. Practice (paper) trading
 

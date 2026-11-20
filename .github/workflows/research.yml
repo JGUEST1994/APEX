@@ -1,0 +1,36 @@
+name: research-run
+# Ranks every built strategy on real, free price data. Research only: nothing is traded,
+# no account is touched. Start it by hand (Actions tab -> research-run -> Run workflow).
+# Optional repository secrets: APEX_ALPACA_KEY_ID + APEX_ALPACA_SECRET_KEY (US stocks),
+# APEX_TIINGO_API_KEY (forex). Without them only crypto is ranked.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rank:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      APEX_DATABASE_URL: sqlite:///research.db
+      APEX_TRADING_MODE: research
+      APEX_ALPACA_KEY_ID: ${{ secrets.APEX_ALPACA_KEY_ID }}
+      APEX_ALPACA_SECRET_KEY: ${{ secrets.APEX_ALPACA_SECRET_KEY }}
+      APEX_TIINGO_API_KEY: ${{ secrets.APEX_TIINGO_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - run: scripts/research-run.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-results
+          path: |
+            research-out/
+            research.db
+          retention-days: 30
