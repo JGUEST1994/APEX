@@ -89,3 +89,50 @@ def test_cli_saves_dates_and_backtest_reads_them_from_file(tmp_path, monkeypatch
     from apex.cli import _param
 
     assert _param("@" + str(saved)) == ["2024-08-02", "2024-10-31"] and _param("3") == 3
+
+
+# The SEC lists the latest filings first and older ones on further pages.
+PAGED = {"filings": {"recent": SUBS["filings"]["recent"],
+                     "files": [{"name": "CIK0000320193-submissions-001.json"},
+                               {"name": "CIK0000320193-submissions-002.json"}]}}
+PAGES = {
+    "/submissions/CIK0000320193-submissions-001.json": {
+        "form": ["8-K"], "items": ["2.02,9.01"],
+        "acceptanceDateTime": ["2010-04-20T16:35:00.000Z"]},
+    "/submissions/CIK0000320193-submissions-002.json": {
+        "form": ["8-K", "8-K", "8-K", "4"], "items": ["12,7", "5", "12", ""],
+        "acceptanceDateTime": ["2003-07-16T16:05:00.000Z", "2003-09-01T09:00:00.000Z",
+                               "2005-01-12T16:30:00.000Z", "2003-07-17T10:00:00.000Z"]},
+}
+
+
+def _paged_client(calls):
+    def handler(req):
+        calls.append(req)
+        if req.url.path.endswith("company_tickers.json"):
+            return httpx.Response(200, json=TICKERS)
+        if req.url.path == "/submissions/CIK0000320193.json":
+            return httpx.Response(200, json=PAGED)
+        return httpx.Response(200, json=PAGES[req.url.path])
+    return _CLIENT(transport=httpx.MockTransport(handler))
+
+
+def test_older_filing_pages_reach_back_to_2003_under_the_old_item_number():
+    calls = []
+    sec = SecEarningsDates("Test Person test@example.com", _paged_client(calls), min_interval=0)
+    # results were item 12 until the SEC renumbered 8-K items in August 2004: counted
+    # before that, not after; other items and other forms never count
+    assert anchor_dates(sec.releases("AAPL")) == ["2003-07-17", "2010-04-21", "2024-08-02",
+                                                  "2024-10-31"]
+    assert len(calls) == 4 and all(c.headers["User-Agent"].endswith("@example.com")
+                                   for c in calls)
+
+
+def test_requests_are_spaced_out_as_the_sec_asks(monkeypatch):
+    import apex.marketdata.earnings as earn
+
+    waits = []
+    monkeypatch.setattr(earn, "monotonic", lambda: 100.0)  # a clock that never moves
+    monkeypatch.setattr(earn, "sleep", waits.append)
+    SecEarningsDates("a b@c.d", _paged_client([]), min_interval=0.125).releases("AAPL")
+    assert waits == [pytest.approx(0.125)] * 3  # 4 requests, a pause before all but the first

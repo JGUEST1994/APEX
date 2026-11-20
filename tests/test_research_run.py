@@ -36,6 +36,13 @@ case $cmd in
       echo "run 3: failed received=0 stored=0 error=tiingo: not found"; exit 1 ;;
     esac
     echo "run 1: ok received=10 stored=10 issues=0" ;;
+  earnings-dates)
+    while [ $# -gt 0 ]; do [ "$1" = --symbol ] && sym=$2; shift; done
+    case " $EARN_FAIL " in *" $sym "*)
+      echo "SEC EDGAR request failed: HTTPStatusError 403"; exit 1 ;;
+    esac
+    echo "88 earnings releases for $sym (2003-07-17 to 2026-10-31) saved to events"
+    echo "use them with: --strategy VWAP-EARN-001 --param anchors=@events" ;;
   tournament) echo "TOURNAMENT $*" ;;
   shortlist) echo "# APEX shortlist" ;;
 esac
@@ -51,7 +58,7 @@ def _run(tmp_path, groups, **env):
     (tmp_path / "state").mkdir(exist_ok=True)
     full = {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(tmp_path / "out"),
             "STATE": str(tmp_path / "state"), "RESEARCH_GROUPS": groups, "END": "2026-11-01",
-            "FAIL": "", "LIMIT_ONCE": "", **env}
+            "FAIL": "", "LIMIT_ONCE": "", "EARN_FAIL": "", **env}
     r = subprocess.run(["bash", str(SCRIPT)], env=full, capture_output=True, text=True,
                        timeout=60, cwd=tmp_path)
     assert r.returncode == 0, r.stderr
@@ -82,6 +89,27 @@ def test_daily_stocks_also_rank_the_dow_and_sector_funds(tmp_path):
     assert "SPY/QQQ/IWM/AAPL/MSFT/NVDA/AMZN" in syms  # the basket is unchanged
     universe = by_symbol()
     assert all(universe[f].asset_class is AssetClass.EQUITY for f in funds)
+
+
+def test_the_earnings_idea_runs_on_each_company_with_its_own_dates(tmp_path):
+    out = _run(tmp_path, "stocks-1d", APEX_TIINGO_API_KEY="k", FAIL="NVDA", EARN_FAIL="MSFT",
+               APEX_SEC_USER_AGENT="Test Person test@example.com")
+    main = next(x for x in out.splitlines() if "--symbols SPY," in x)
+    assert "--exclude VWAP-EARN-001" in main  # it cannot trade without its dates
+    runs = [x for x in out.splitlines() if x.startswith("TOURNAMENT --strategies VWAP-EARN-001")]
+    # companies only (funds have no earnings); NVDA had no prices and MSFT no dates
+    assert [x.split("--symbols ")[1].split()[0] for x in runs] == ["AAPL", "AMZN"]
+    assert f"--param anchors=@{tmp_path / 'out'}/events/AAPL_earnings.json" in runs[0]
+    assert "--source tiingo --timeframe 1d" in runs[0] and "--train-bars 504" in runs[0]
+    assert "88 earnings releases for AAPL (2003-07-17 to 2026-10-31)" in out
+    assert "earnings dates FAILED: MSFT: SEC EDGAR request failed: HTTPStatusError 403" in out
+    assert "test@example.com" not in out  # the contact is never printed
+
+
+def test_without_an_sec_contact_the_earnings_idea_is_left_out_and_says_why(tmp_path):
+    out = _run(tmp_path, "stocks-1d", APEX_TIINGO_API_KEY="k")
+    assert "earnings idea (VWAP-EARN-001) skipped: set APEX_SEC_USER_AGENT" in out
+    assert "--exclude VWAP-EARN-001" in out and "--strategies VWAP-EARN-001" not in out
 
 
 def test_daily_stocks_fall_back_to_alpaca_and_groups_can_be_picked(tmp_path):

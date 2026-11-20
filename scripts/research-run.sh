@@ -17,6 +17,9 @@
 # requests an hour: daily stocks take one each, an hourly forex pair about 8 from FX_START, a
 # 30-minute pair about 16, and a download refused for that limit is tried once more an hour
 # later (so a run of every group waits about an hour once).
+# The earnings idea (VWAP-EARN-001) needs each company's earnings dates, which come from the
+# SEC's free EDGAR service; it asks for a contact, so it runs only when APEX_SEC_USER_AGENT
+# holds the operator's own name and email (one run per company, each with its own dates).
 # Used by .github/workflows/research.yml; also runs on a Mac or Linux machine.
 set -u
 OUT="${OUT:-research-out}"
@@ -67,17 +70,42 @@ markets() {  # candidates (A, or A/B/... for pairs and baskets) whose every leg 
   echo "${out#,}"
 }
 
+EXCLUDE=""  # strategies the next `tour` leaves out (comma-separated)
 tour() {  # name source timeframe start train test candidates...
   local name=$1 src=$2 tf=$3 start=$4 train=$5 test=$6 symbols
   shift 6
   symbols=$(markets "$@")
   if [ -z "$symbols" ]; then log "tournament $name skipped: no prices"; return; fi
   log "tournament $name on $symbols"
-  apex tournament --strategies all --only-suited --no-promote --source "$src" --timeframe "$tf" \
-    --symbols "$symbols" --start "$start" --end "$END" --train-bars "$train" --test-bars "$test" \
+  apex tournament --strategies all --exclude "$EXCLUDE" --only-suited --no-promote \
+    --source "$src" --timeframe "$tf" --symbols "$symbols" --start "$start" --end "$END" \
+    --train-bars "$train" --test-bars "$test" \
     >"$OUT/tournament-$name.txt" 2>>"$OUT/run.log" || log "tournament $name FAILED"
   # also print it, so the results can be read from the job log as soon as each one finishes
   echo "----- tournament-$name.txt"; cat "$OUT/tournament-$name.txt"; echo "----- end"
+}
+
+COMPANIES="AAPL MSFT NVDA AMZN"  # earnings dates belong to companies, not funds
+earnings() {  # source start: the earnings idea on each company, with that company's dates
+  local src=$1 start=$2 s msg file="$OUT/tournament-stocks-1d-earnings.txt"
+  if [ -z "${APEX_SEC_USER_AGENT:-}" ]; then
+    log "earnings idea (VWAP-EARN-001) skipped: set APEX_SEC_USER_AGENT to your own name and" \
+      "email, as the SEC asks"
+    return
+  fi
+  : >"$file"
+  for s in $(markets $COMPANIES | tr , ' '); do
+    if ! msg=$(apex earnings-dates --symbol "$s" --out "$OUT/events" 2>&1); then
+      log "earnings dates FAILED: $s: $(echo "$msg" | tail -n 1)"; continue
+    fi
+    log "$(echo "$msg" | head -n 1)"
+    log "tournament stocks-1d-earnings on $s"
+    apex tournament --strategies VWAP-EARN-001 --only-suited --no-promote --source "$src" \
+      --timeframe 1d --symbols "$s" --start "$start" --end "$END" --train-bars 504 \
+      --test-bars 126 --param "anchors=@$OUT/events/${s}_earnings.json" \
+      >>"$file" 2>>"$OUT/run.log" || log "tournament stocks-1d-earnings on $s FAILED"
+  done
+  echo "----- tournament-stocks-1d-earnings.txt"; cat "$file"; echo "----- end"
 }
 
 apex db-upgrade >/dev/null 2>&1
@@ -108,15 +136,22 @@ fi
 
 # --- US stocks and ETFs
 if want stocks-1d; then
-  GOT=""
+  GOT="" SRC=""
   if [ -n "${APEX_TIINGO_API_KEY:-}" ]; then
-    for s in $STOCKS $FUNDS; do ingest_patiently tiingo $s 1d 2000-01-03; done
-    tour stocks-1d tiingo 1d 2000-01-03 504 126 $STOCK_SETS
+    SRC=tiingo START=2000-01-03
+    for s in $STOCKS $FUNDS; do ingest_patiently tiingo $s 1d $START; done
   elif [ -n "${APEX_ALPACA_KEY_ID:-}" ]; then
-    for s in $STOCKS $FUNDS; do ingest alpaca $s 1d 2016-06-01; done
-    tour stocks-1d alpaca 1d 2016-06-01 504 126 $STOCK_SETS
+    SRC=alpaca START=2016-06-01
+    for s in $STOCKS $FUNDS; do ingest alpaca $s 1d $START; done
   else
     log "stocks-1d skipped: no Tiingo or Alpaca key"
+  fi
+  if [ -n "$SRC" ]; then
+    # the earnings idea cannot trade without its dates, so it runs on its own below
+    EXCLUDE=VWAP-EARN-001
+    tour stocks-1d $SRC 1d $START 504 126 $STOCK_SETS
+    EXCLUDE=""
+    earnings $SRC $START
   fi
 fi
 for tf in 5m 15m; do

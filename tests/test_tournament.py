@@ -230,6 +230,41 @@ def test_cli_and_api(db_url, monkeypatch, capsys):
     engine.dispose()
 
 
+def test_cli_tournament_leaves_out_strategies_and_sets_their_settings(db_url, monkeypatch,
+                                                                     capsys, tmp_path):
+    import json
+
+    from apex.core.config import get_settings
+
+    monkeypatch.setenv("APEX_DATABASE_URL", db_url)
+    get_settings.cache_clear()
+    dates = tmp_path / "SPY_earnings.json"
+    dates.write_text(json.dumps([f"{y}-{m:02d}-05" for y in range(2018, 2025)
+                                 for m in (1, 4, 7, 10)]))
+    run = ["tournament", "--symbols", "SPY", "--source", "synthetic", "--start", "2018-01-01",
+           "--end", "2025-01-01", "--train-bars", "500", "--test-bars", "250"]
+    try:
+        assert cli(["ingest", "--provider", "synthetic", "--symbol", "SPY", "--timeframe", "1d",
+                    "--start", "2018-01-01", "--end", "2025-01-01"]) == 0
+        capsys.readouterr()
+        assert cli([*run, "--strategies", "TF-SMA-001,VWAP-EARN-001", "--exclude", "TF-SMA-001",
+                    "--param", f"anchors=@{dates}"]) == 0
+        out = capsys.readouterr().out
+        assert "VWAP-EARN-001" in out and "TF-SMA-001" not in out
+        # a setting no chosen strategy has is a typo, not something to ignore
+        assert cli([*run, "--strategies", "TF-SMA-001", "--param", "anchors=[]"]) == 2
+        assert "none of the chosen strategies has that setting" in capsys.readouterr().err
+        assert cli([*run, "--exclude", "NOPE"]) == 2
+    finally:
+        get_settings.cache_clear()
+    engine = make_engine(db_url)
+    with make_session_factory(engine)() as s:
+        lb = leaderboard(s, symbol="SPY")
+    engine.dispose()
+    assert list(lb["strategy"]) == ["VWAP-EARN-001"]
+    assert lb["oos_trades"].iloc[0] > 0  # the dates reached it: without them it never trades
+
+
 def test_regime_filtered_variants_share_trial_family(session):
     btc = by_symbol()["BTCUSDT"]
     ingest_bars(session, SyntheticProvider(), btc, Timeframe.D1, utc(2018, 1, 1),
