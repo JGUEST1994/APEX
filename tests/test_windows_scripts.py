@@ -30,8 +30,8 @@ def test_example_jobs_parse_and_use_known_markets_and_free_sources():
     cfg = json.loads((ROOT / "jobs.example.json").read_text())
     jobs = parse_jobs(cfg)
     universe = by_symbol()
-    assert jobs and all(j.type == "update" for j in jobs)
-    for j in jobs:
+    assert {j.type for j in jobs} == {"update", "backup"}  # never paper trading by default
+    for j in (j for j in jobs if j.type == "update"):
         assert j.spec["provider"] in {"coinbase", "binance", "kraken"}  # no key needed
         assert set(j.spec["symbols"]) <= set(universe)
     assert "jobs.json" in (ROOT / ".gitignore").read_text().split()

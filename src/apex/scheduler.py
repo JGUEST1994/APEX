@@ -6,12 +6,15 @@ A small, dependency-free loop driven by a JSON file::
       {"name": "crypto-1h", "type": "update", "provider": "kraken",
        "symbols": ["BTCUSDT"], "timeframe": "1h", "backfill_start": "2024-01-01",
        "every_minutes": 60},
-      {"name": "paper", "type": "paper", "accounts": ["mix"], "every_minutes": 60}
+      {"name": "paper", "type": "paper", "accounts": ["mix"], "every_minutes": 60},
+      {"name": "nightly-backup", "type": "backup", "folder": "backups", "keep": 14,
+       "every_minutes": 1440}
     ]}
 
 Each cycle runs the jobs that are due, data updates before paper runs so accounts see the
-newest bars. A failing job is logged and audited and never stops the others. Paper jobs
-run only in paper mode; a halted account stays halted until a named human resets it.
+newest bars, and backups (SQLite only) last. A failing job is logged and audited and never
+stops the others. Paper jobs run only in paper mode; a halted account stays halted until a
+named human resets it.
 Every step is idempotent (incremental updates, deterministic order ids), so a restart or
 an overlapping cron run cannot duplicate data or orders.
 """
@@ -32,7 +35,7 @@ from apex.core.config import Settings, TradingMode
 from apex.db.models import AuditEvent
 
 log = logging.getLogger(__name__)
-KINDS = ("update", "paper")
+KINDS = ("update", "paper", "backup")
 
 
 @dataclass
@@ -101,7 +104,17 @@ class Scheduler:
     def _run(self, job: Job, now: datetime) -> dict:
         if job.type == "update":
             return self._update(job, now)
+        if job.type == "backup":
+            return self._backup(job, now)
         return self._paper(job, now)
+
+    def _backup(self, job: Job, now: datetime) -> dict:
+        from apex.backup import backup
+
+        keep = job.spec.get("keep")
+        dest = backup(self.settings.database_url, Path(job.spec.get("folder", "backups")),
+                      keep=None if keep is None else int(keep), now=now)
+        return {"file": str(dest)}
 
     def _update(self, job: Job, now: datetime) -> dict:
         from apex.domain.instruments import by_symbol
@@ -164,7 +177,8 @@ def parse_jobs(cfg: dict) -> list[Job]:
         every = float(j.get("every_minutes", 60))
         if every < 1:
             raise ValueError(f"{name}: every_minutes must be >= 1")
-        need = {"update": ("provider", "symbols", "backfill_start"), "paper": ("accounts",)}
+        need = {"update": ("provider", "symbols", "backfill_start"), "paper": ("accounts",),
+                "backup": ()}
         missing = [k for k in need[kind] if not j.get(k)]
         if missing:
             raise ValueError(f"{name}: missing {', '.join(missing)}")

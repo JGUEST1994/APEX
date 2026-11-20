@@ -227,6 +227,10 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("--name", help="practice account (for fills)")
     sub.add_parser("doctor", help="check this install: database, tables, keys, data, "
                    "practice accounts (read-only)")
+    bk = sub.add_parser("backup", help="copy the SQLite database to a dated file in a "
+                        "backups folder (safe while APEX is running)")
+    bk.add_argument("--folder", default="backups", help="where to put the copy")
+    bk.add_argument("--keep", type=int, help="keep only the newest N backups there")
     sv = sub.add_parser("serve", help="run the API server")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
@@ -247,6 +251,17 @@ def main(argv: list[str] | None = None) -> int:
         checks = run_checks(settings)
         print(render(checks))
         return 1 if any(c.level == FAIL for c in checks) else 0
+    if args.cmd == "backup":
+        from apex.backup import BackupError
+        from apex.backup import backup as do_backup
+
+        try:
+            dest = do_backup(settings.database_url, Path(args.folder), keep=args.keep)
+        except BackupError as exc:
+            print(f"backup not made: {exc}", file=sys.stderr)
+            return 1
+        print(f"backup saved: {dest} (checked OK)")
+        return 0
     if args.cmd == "hypotheses":
         from apex.strategies.hypotheses import to_markdown
 
