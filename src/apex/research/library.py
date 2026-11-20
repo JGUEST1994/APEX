@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from sqlalchemy import select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.orm import Session
 
 from apex.db.models import ChunkVector, ResearchChunk, ResearchDocument
@@ -121,19 +121,47 @@ def _bm25(query: list[str], docs: list[list[str]], k1: float = 1.5, b: float = 0
     return scores
 
 
+SCAN_LIMIT = 20_000  # chunks; above this, PostgreSQL pre-selects keyword candidates
+CANDIDATES = 2_000
+
+
+def _fts_candidates(session: Session, query: str, n: int) -> list[int] | None:
+    """Chunk ids matching ``query`` by PostgreSQL full-text search (any term, best
+    ``ts_rank`` first), or None when the database is not PostgreSQL."""
+    if session.get_bind().dialect.name != "postgresql":
+        return None
+    terms = [t for t in _terms(query) if t.isalnum()]
+    if not terms:
+        return []
+    doc = func.to_tsvector(literal_column("'english'"), ResearchChunk.text)
+    q = func.to_tsquery(literal_column("'english'"), " | ".join(terms))
+    return list(session.scalars(select(ResearchChunk.id).where(doc.op("@@")(q))
+                                .order_by(func.ts_rank(doc, q).desc(), ResearchChunk.id)
+                                .limit(n)))
+
+
 def search(session: Session, query: str, limit: int = 10, *, alpha: float = 0.5,
-           embedder: Embedder | None = None) -> list[SearchHit]:
+           embedder: Embedder | None = None, scan_limit: int = SCAN_LIMIT) -> list[SearchHit]:
     """Hybrid search: ``alpha`` weights BM25 keyword relevance vs. vector similarity.
 
-    Phase 2 scans chunks in memory: fine for tens of thousands of chunks. Larger libraries
-    should move to PostgreSQL full-text + pgvector (migration 0002).
+    Up to ``scan_limit`` chunks are scored in memory. Beyond that, on PostgreSQL, the
+    database first picks the best ``CANDIDATES`` keyword matches (GIN full-text index,
+    migration 0006) and only those are re-scored, so BM25 statistics come from the
+    candidates and chunks with no keyword match are not considered. Other databases always
+    scan in memory.
     """
     q_terms = _terms(query)
     if not q_terms:
         return []
     emb = embedder or default_embedder()
-    rows = session.execute(select(ResearchChunk, ResearchDocument.title).join(ResearchDocument)
-                           .order_by(ResearchChunk.id)).all()
+    stmt = select(ResearchChunk, ResearchDocument.title).join(ResearchDocument)
+    if session.scalar(select(func.count(ResearchChunk.id))) > scan_limit:
+        ids = _fts_candidates(session, query, CANDIDATES)
+        if ids is not None:
+            if not ids:
+                return []
+            stmt = stmt.where(ResearchChunk.id.in_(ids))
+    rows = session.execute(stmt.order_by(ResearchChunk.id)).all()
     if not rows:
         return []
     chunk_ids = [c.id for c, _ in rows]
