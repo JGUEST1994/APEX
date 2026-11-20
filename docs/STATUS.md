@@ -54,6 +54,7 @@ Tests last run: 2026-11-19, `ruff check` clean, **286 passed**, with database te
 
 ## Written but not verified
 
+- `start-apex.bat` (double-click launcher for Windows: activates `.venv`, runs `apex db-upgrade`, opens the dashboard, runs `apex serve`): written in a Linux sandbox, not yet run on Windows.
 - `BinanceSpotProvider` and `AlpacaStocksProvider` against the real endpoints (sandbox network blocks them; logic tested with mocked HTTP).
 
 ## Known limitations
