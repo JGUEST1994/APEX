@@ -24,7 +24,17 @@ apex serve            # http://127.0.0.1:8000/docs
 pytest
 ```
 
-Real data: put CSV files in `data/csv/<SYMBOL>_<timeframe>.csv` and use `--provider csv`, or `--provider binance` for crypto (public market data, no key).
+Real data (all free; paid sources such as Databento are deliberately not built yet):
+
+| `--provider` | Markets | Key |
+|---|---|---|
+| `coinbase`, `kraken`, `binance` | crypto | none |
+| `alpaca`, `polygon` | US stocks/ETFs | free account key |
+| `tiingo` | US stocks/ETFs (daily), forex (1m-1h) | free account key |
+| `dukascopy-csv` | forex files you export by hand from Dukascopy (their terms forbid automated downloads) | none |
+| `csv`, `csv-cont` | your own CSV files; futures contracts stitched into one series | none |
+
+`apex earnings-dates --symbol AAPL` fetches earnings-release dates from the SEC's free EDGAR API (needs `APEX_SEC_USER_AGENT` with your name and email) for the earnings strategy. Keys go in `.env`, never in code; see `.env.example`.
 
 ## PostgreSQL
 
