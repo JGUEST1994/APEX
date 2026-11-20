@@ -175,6 +175,9 @@ each `apex update`. `paper-compare` checks that the paper account behaved like a
 of the same strategy over the same bars. One account can trade several markets with shared
 cash: `--symbol SPY,QQQ,BTCUSDT`.
 
+On the dashboard's Practice trading tab, click an account's name to see how its simulated
+value moved, whether it matched the backtest, and its recent fills.
+
 If the kill switch trips (too big a loss, a losing streak, or a reconciliation problem),
 the account goes flat and stays stopped until a named person resets it:
 
