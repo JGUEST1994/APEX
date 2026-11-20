@@ -149,6 +149,16 @@ def create_app(settings: Settings | None = None,
                  "instruments": getattr(c, "legs", 1) or "2+"}
                 for k, c in sorted({**all_strategies(), **all_multi_strategies()}.items())]
 
+    @app.get("/system/checks")
+    def system_checks() -> list[dict]:
+        """The `apex doctor` check-up (read-only; says whether keys are set, never their
+        values)."""
+        from dataclasses import asdict
+
+        from apex.doctor import run_checks
+
+        return [asdict(c) for c in run_checks(settings)]
+
     @app.get("/hypotheses")
     def hypotheses() -> list[dict]:
         """The strategy hypothesis bank (spec section 8) and which strategy codes each."""

@@ -33,7 +33,7 @@ you use it; press Ctrl+C there to stop it. The tabs are:
 
 | Tab | What it shows |
 |---|---|
-| Overview | Is everything running, and what data APEX has stored |
+| Overview | Is everything running (a check-up list), and what data APEX has stored |
 | Markets | Price chart for each stored market |
 | Strategy lab | Every strategy APEX can test and how far through testing it is |
 | Trading ideas | The 53 ideas from the APEX spec, and which ones have a strategy yet |
