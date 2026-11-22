@@ -23,7 +23,12 @@ FAKE_APEX = """#!/usr/bin/env bash
 cmd=$1; shift
 case $cmd in
   ingest)
-    while [ $# -gt 0 ]; do [ "$1" = --symbol ] && sym=$2; shift; done
+    reuse=""
+    while [ $# -gt 0 ]; do [ "$1" = --symbol ] && sym=$2; [ "$1" = --reuse ] && reuse=1; shift; done
+    echo "ingest $sym reuse=${reuse:-no}" >>"$STATE/calls"
+    case " $STORED " in *" $sym "*)
+      if [ -n "$reuse" ]; then echo "run 4: reused stored=10 (already downloaded)"; exit 0; fi ;;
+    esac
     case " $LIMIT_ONCE " in *" $sym "*)
       if [ ! -f "$STATE/$sym" ]; then
         touch "$STATE/$sym"
@@ -43,6 +48,7 @@ case $cmd in
     esac
     echo "88 earnings releases for $sym (2003-07-17 to 2026-10-31) saved to events"
     echo "use them with: --strategy VWAP-EARN-001 --param anchors=@events" ;;
+  price-cache-save) mkdir -p "$(dirname "$2")"; echo saved >"$2"; echo "saved 10 bars to $2" ;;
   tournament) echo "TOURNAMENT $*" ;;
   shortlist) echo "# APEX shortlist" ;;
 esac
@@ -58,7 +64,7 @@ def _run(tmp_path, groups, **env):
     (tmp_path / "state").mkdir(exist_ok=True)
     full = {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(tmp_path / "out"),
             "STATE": str(tmp_path / "state"), "RESEARCH_GROUPS": groups, "END": "2026-11-01",
-            "FAIL": "", "LIMIT_ONCE": "", "EARN_FAIL": "", **env}
+            "FAIL": "", "LIMIT_ONCE": "", "EARN_FAIL": "", "STORED": "", **env}
     r = subprocess.run(["bash", str(SCRIPT)], env=full, capture_output=True, text=True,
                        timeout=60, cwd=tmp_path)
     assert r.returncode == 0, r.stderr
@@ -158,3 +164,28 @@ def test_basket_ideas_run_on_all_us_funds_and_a_fresh_overseas_basket(tmp_path):
     assert all(universe[f].asset_class is AssetClass.EQUITY for f in world)
     out = _run(tmp_path, "stocks-1d", APEX_TIINGO_API_KEY="k", FAIL="EWZ")
     assert "/".join(world) not in _symbols(out, "stocks-1d")
+
+
+def test_prices_are_kept_between_runs_when_a_price_cache_is_named(tmp_path):
+    cache = tmp_path / "cache" / "prices.db"
+    db = "sqlite:///research.db"
+    out = _run(tmp_path, "crypto-1d", PRICE_CACHE=str(cache), APEX_DATABASE_URL=db,
+               STORED="BTCUSDT")
+    assert "prices ok (kept from an earlier run): coinbase BTCUSDT 1d" in out
+    assert "prices ok: coinbase ETHUSDT 1d" in out  # not stored yet: downloaded
+    assert _symbols(out, "crypto-1d") == ["BTCUSDT", "ETHUSDT", "ETHUSDT/BTCUSDT"]
+    assert f"prices kept in {cache} for the next run" in out and cache.exists()
+    calls = (tmp_path / "state" / "calls").read_text()
+    assert "ingest BTCUSDT reuse=1" in calls
+    # the next run starts from the saved prices
+    assert "prices restored from" in _run(tmp_path, "crypto-1d", PRICE_CACHE=str(cache),
+                                          APEX_DATABASE_URL=db, STORED="")
+
+
+def test_without_a_price_cache_every_download_is_fresh(tmp_path):
+    out = _run(tmp_path, "crypto-1d", STORED="BTCUSDT")
+    assert "kept from an earlier run" not in out and "prices kept" not in out
+    assert "reuse=1" not in (tmp_path / "state" / "calls").read_text()
+    out = _run(tmp_path, "crypto-1d", PRICE_CACHE=str(tmp_path / "p.db"),
+               APEX_DATABASE_URL="postgresql+psycopg://x@h/db")
+    assert "price cache off: it needs APEX_DATABASE_URL to name a SQLite file" in out

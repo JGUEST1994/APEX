@@ -130,6 +130,11 @@ def main(argv: list[str] | None = None) -> int:
     ing.add_argument("--start", required=True, type=_dt)
     ing.add_argument("--end", required=True, type=_dt)
     ing.add_argument("--csv-root", default="data/csv")
+    ing.add_argument("--reuse", action="store_true",
+                     help="skip the download when exactly this request is already stored")
+    pc = sub.add_parser("price-cache-save",
+                        help="copy the SQLite database without research results, for reuse")
+    pc.add_argument("--out", required=True)
     up = sub.add_parser("update", help="incremental update of completed bars (cron-safe)")
     up.add_argument("--provider", choices=PROVIDERS, required=True)
     up.add_argument("--symbols", required=True, help="comma-separated")
@@ -372,6 +377,14 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"unknown symbol {args.symbol}", file=sys.stderr)
                 return 2
             provider = make_provider(args.provider, settings, args.csv_root)
+            if args.reuse:
+                from apex.price_cache import stored_run
+
+                old = stored_run(s, provider.name, spec.symbol, Timeframe(args.timeframe).value,
+                                 args.start, args.end)
+                if old is not None:
+                    print(f"run {old.id}: reused stored={old.rows_stored} (already downloaded)")
+                    return 0
             r = ingest_bars(s, provider, spec, Timeframe(args.timeframe), args.start, args.end)
             print(f"run {r.run_id}: {r.status} received={r.received} stored={r.stored}"
                   + (f" issues={len(r.report.issues)}" if r.report else f" error={r.error}"))
@@ -379,6 +392,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  rolled {roll.old} -> {roll.new} after {roll.ts:%Y-%m-%d %H:%M} UTC "
                       f"({roll.reason}, gap {roll.gap:+g})")
             return 0 if r.status != "failed" else 1
+        elif args.cmd == "price-cache-save":
+            from apex.price_cache import save_prices_only
+
+            s.commit()
+            try:
+                bars = save_prices_only(settings.database_url, Path(args.out))
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+            print(f"saved {bars} bars to {args.out} (research results left out)")
         elif args.cmd == "update":
             from apex.domain.instruments import by_symbol
             from apex.domain.market import Timeframe
