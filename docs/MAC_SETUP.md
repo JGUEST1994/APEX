@@ -61,6 +61,8 @@ the file, choose **Open**, then confirm **Open**. macOS remembers the choice aft
 2. The first time, it creates `jobs.json` and stops. Open it with `open -e jobs.json`, choose
    your markets, and save. The example keeps BTC and ETH up to date and backs up every night.
 3. Double-click `start-scheduler.command` again and leave that window open too.
+4. To check it is still working later, look at **Automatic jobs** on the dashboard's
+   Overview page. Any job marked **late** means the scheduler stopped or the Mac slept.
 
 ## 6. Stop the Mac going to sleep
 

@@ -76,7 +76,7 @@ class Scheduler:
                 detail, status = {"error": f"{type(exc).__name__}: {exc}"}, "failed"
             job.next_due = now + job.every
             res = {"job": job.name, "type": job.type, "status": status, "at": now.isoformat(),
-                   **detail}
+                   "every_minutes": job.every.total_seconds() / 60, **detail}
             results.append(res)
             with self.factory() as s:
                 s.add(AuditEvent(actor="scheduler", action=f"schedule.{job.type}",

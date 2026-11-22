@@ -117,3 +117,32 @@ def test_backup_job_runs_last_and_postgres_fails_softly(tmp_path):
     pg = Scheduler(jobs, Settings(_env_file=None, database_url="postgresql+psycopg://x/y"), None)
     with pytest.raises(Exception, match="pg_dump"):
         pg._backup(jobs[0], T0)
+
+
+def test_dashboard_shows_each_jobs_latest_run_and_flags_late_ones(db_url, session):
+    from fastapi.testclient import TestClient
+
+    from apex.api.app import create_app
+
+    sched, engine = _sched(db_url, mode="research")
+    sched.run_cycle(T0)
+    # an older run of the data job, and a backup job last seen two days ago (interval 1 day)
+    session.add(AuditEvent(actor="scheduler", action="schedule.update", target="data",
+                           at=datetime.now(UTC) - timedelta(days=5),
+                           detail={"status": "failed", "error": "old"}))
+    session.add(AuditEvent(actor="scheduler", action="schedule.backup", target="nightly",
+                           at=datetime.now(UTC) - timedelta(days=2, hours=1),
+                           detail={"status": "ok", "every_minutes": 1440}))
+    session.add(AuditEvent(actor="operator", action="schedule.update", target="ignored"))
+    session.commit()
+    c = TestClient(create_app(Settings(_env_file=None, database_url=db_url),
+                              make_session_factory(engine)))
+    jobs = {j["job"]: j for j in c.get("/scheduler/jobs").json()}
+    assert set(jobs) == {"data", "paper", "nightly"}
+    assert jobs["data"]["status"] == "partial" and not jobs["data"]["late"]  # the newest run
+    assert jobs["data"]["every_minutes"] == 1440 and "NOPE: unknown symbol" in jobs["data"]["errors"]
+    assert jobs["paper"]["status"] == "failed" and "APEX_TRADING_MODE" in jobs["paper"]["errors"][0]
+    assert jobs["nightly"]["late"] and jobs["nightly"]["type"] == "backup"
+    page = c.get("/ui/").text
+    assert 'id="sched"' in page and '"/scheduler/jobs"' in page
+    engine.dispose()

@@ -305,3 +305,26 @@ def test_only_suited_skips_markets_and_timeframes_a_strategy_is_not_for():
     assert not suits(reg["OF-DELTA-001"](), "BTCUSDT", Timeframe.D1)  # intraday only
     pair = all_multi_strategies()["STAT-PAIR-001"]()
     assert not suits(pair, "QQQ/SPY/IWM", pair.meta.timeframes[0])  # exactly two legs
+
+
+def test_every_market_is_judged_against_all_of_the_familys_tries(session):
+    """Running order must not matter: the first market faces as many tries as the last,
+    so the tournament's verdicts match the leaderboard's."""
+    spy, qqq = by_symbol()["SPY"], by_symbol()["QQQ"]
+    for spec in (spy, qqq):
+        ingest_bars(session, SyntheticProvider(), spec, Timeframe.D1, utc(2016, 1, 1),
+                    utc(2024, 1, 1))
+    session.commit()
+    entries = run_tournament(session, [all_strategies()["MR-IBS-001"]()],
+                             symbols=["SPY", "QQQ"], timeframe=Timeframe.D1,
+                             source="synthetic", start=utc(2016, 1, 1), end=utc(2024, 1, 1),
+                             train_bars=504, test_bars=252, promote=False)
+    session.commit()
+    total = family_trials(session, "MR-IBS-001")
+    assert len(entries) == 2 and {e.family_trials for e in entries} == {total}
+    assert total == sum(e.metrics["n_trials"] for e in entries)
+    lb = leaderboard(session).set_index("symbol")
+    for e in entries:
+        assert lb.loc[e.symbol, "family_trials"] == e.family_trials
+        assert lb.loc[e.symbol, "deflated_sharpe"] == e.metrics["deflated_sharpe_family"]
+        assert bool(lb.loc[e.symbol, "passed_gates"]) == e.passed

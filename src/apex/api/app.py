@@ -17,6 +17,7 @@ from apex import __version__
 from apex.core.config import Settings, get_settings
 from apex.core.errors import UnknownInstrumentError
 from apex.db.models import (
+    AuditEvent,
     DataQualityIssue,
     Experiment,
     IngestionRun,
@@ -292,6 +293,33 @@ def create_app(settings: Settings | None = None,
         from apex.doctor import run_checks
 
         return [asdict(c) for c in run_checks(settings)]
+
+    @app.get("/scheduler/jobs")
+    def scheduler_jobs(s: Session = Depends(db)) -> list[dict]:
+        """The latest run of each scheduled job (from the audit log), and whether it is late:
+        no run for more than twice its interval plus 15 minutes usually means the scheduler
+        window was closed or the computer slept."""
+        from datetime import UTC, timedelta
+
+        rows = s.scalars(select(AuditEvent).where(AuditEvent.actor == "scheduler")
+                         .order_by(AuditEvent.at.desc(), AuditEvent.id.desc())
+                         .limit(5000)).all()
+        now, out, seen = datetime.now(UTC), [], set()
+        for ev in rows:
+            if ev.target in seen:
+                continue
+            seen.add(ev.target)
+            d = ev.detail or {}
+            every = d.get("every_minutes")
+            at = ev.at if ev.at.tzinfo else ev.at.replace(tzinfo=UTC)
+            due = at + timedelta(minutes=every) if every else None
+            late = bool(every) and now > at + timedelta(minutes=2 * every + 15)
+            errors = d.get("errors") or ([d["error"]] if d.get("error") else [])
+            out.append({"job": ev.target, "type": ev.action.removeprefix("schedule."),
+                        "status": d.get("status", "ok"), "last_run": at.isoformat(),
+                        "every_minutes": every, "next_due": due.isoformat() if due else None,
+                        "late": late, "errors": [str(e) for e in errors][:5]})
+        return sorted(out, key=lambda r: r["job"])
 
     @app.get("/hypotheses")
     def hypotheses() -> list[dict]:
