@@ -111,6 +111,17 @@ tour() {  # name source timeframe start train test candidates...
   echo "----- tournament-$name.txt"; cat "$OUT/tournament-$name.txt"; echo "----- end"
 }
 
+if [ "$RESEARCH_GROUPS" = "practice-replay" ]; then  # throwaway branch: no research, just the replay
+  for s in SPY QQQ IWM DIA XLB XLE XLF XLI XLK XLP XLU XLV XLY; do
+    ingest_patiently tiingo $s 1d 2000-01-03
+  done
+  echo "----- practice-replay.txt"
+  APEX_TRADING_MODE=paper python scripts/practice_replay.py tiingo 2002-01-01 \
+    SPY,QQQ,IWM,DIA,XLB,XLE,XLF,XLI,XLK,XLP,XLU,XLV,XLY MR-IBS-BASKET-001 5 2>&1 | grep -v " INFO "
+  echo "----- end"
+  exit 0
+fi
+
 COMPANIES="AAPL MSFT NVDA AMZN"  # earnings dates belong to companies, not funds
 earnings() {  # source start: the earnings idea on each company, with that company's dates
   local src=$1 start=$2 s msg file="$OUT/tournament-stocks-1d-earnings.txt"
