@@ -41,7 +41,7 @@ def test_walk_forward_and_pbo_on_pairs():
     bars = _pair()
     specs = {s: SYMS[s] for s in bars}
     wf = walk_forward(bars, PairsZScore(), specs, GRID, train_bars=400, test_bars=200)
-    assert len(wf.folds) == 4 and wf.n_trials == 16
+    assert len(wf.folds) == 4 and wf.n_trials == 4
     assert len(wf.oos_returns) == 800
     assert wf.summary["mean_oos_sharpe"] > 0.5  # planted edge survives out of sample
     assert wf.summary["oos_buy_hold_return"] is None  # no single market to hold

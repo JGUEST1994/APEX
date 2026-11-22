@@ -57,13 +57,25 @@ class Entry:
     score: float = 0.0
 
 
+def tries(metrics: dict) -> int:
+    """Tries one walk-forward result counts for: the settings it chose between, on one
+    market. Results recorded before 2026-11-22 counted every setting on every stretch as a
+    try; they are re-counted the same way here (their total divided by their stretches)."""
+    m = metrics or {}
+    n = int(m.get("n_trials") or 0)
+    if n and m.get("trials_per") != "setting":
+        n = max(1, round(n / max(int(m.get("folds") or 1), 1)))
+    return n
+
+
 def family_trials(session: Session, strategy_key: str) -> int:
-    """All walk-forward trials ever recorded for this strategy key (every version)."""
+    """All walk-forward tries ever recorded for this strategy key (every version, every
+    market): one per setting per market."""
     rows = session.scalars(
         select(Experiment.metrics).join(StrategyVersion)
         .join(StrategyRow, StrategyRow.id == StrategyVersion.strategy_id)
         .where(StrategyRow.key == strategy_key, Experiment.kind == "walk_forward")).all()
-    return int(sum((m or {}).get("n_trials", 0) for m in rows))
+    return int(sum(tries(m) for m in rows))
 
 
 def _num(x: Any) -> float | None:
@@ -83,7 +95,7 @@ def evaluate(metrics: dict, gates: Gates, family_n: int) -> tuple[bool, list[str
         # re-deflate against the expected best of ALL the family's trials, each judged over
         # the same length of unseen history as this result (results recorded before that
         # rule are re-judged the same way)
-        n = max(family_n, int(m.get("n_trials") or 1))
+        n = max(family_n, tries(m), 1)
         sr0 = expected_max_sharpe(n, null_sharpe_variance(inp["n_obs"]))
         dsr = _num(probabilistic_sharpe(inp["sharpe_per_period"], inp["n_obs"], inp["skew"],
                                         inp["kurtosis"], sr0))

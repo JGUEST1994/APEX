@@ -95,6 +95,21 @@ def test_family_trials_deflate():
     assert many["deflated_sharpe_family"] < few["deflated_sharpe_family"]
 
 
+def test_a_try_is_a_setting_on_a_market_not_a_stretch():
+    from apex.backtest.tournament import tries
+
+    assert tries({"n_trials": 1, "folds": 47, "trials_per": "setting"}) == 1
+    assert tries({"n_trials": 4, "folds": 10, "trials_per": "setting"}) == 4
+    # recorded before the change: every setting on every stretch was counted
+    assert tries({"n_trials": 47, "folds": 47}) == 1
+    assert tries({"n_trials": 40, "folds": 10}) == 4
+    assert tries({}) == 0
+    # so the same result reads the same, whichever rule recorded it
+    old = evaluate(_m(n_trials=4 * 30, folds=30), Gates(), 0)[2]
+    new = evaluate(_m(n_trials=4, folds=30, trials_per="setting"), Gates(), 0)[2]
+    assert old["deflated_sharpe_family"] == new["deflated_sharpe_family"]
+
+
 def test_luck_test_judges_the_whole_unseen_history():
     inp = _m()["dsr_inputs"] | {"sharpe_per_period": 0.06}  # about 0.95 a year, daily
     short = evaluate(_m(dsr_inputs=inp | {"n_obs": 1000}), Gates(), 300)[2]
@@ -184,8 +199,7 @@ def test_tournament_promotes_only_to_validation(session):
     session.commit()
     assert not noise[0].passed and noise[0].reasons
     assert ensure_strategy_version(session, BB()).status == "backtesting"
-    n_folds = entries[0].metrics["folds"]
-    assert family_trials(session, "TF-SMA-001") == 4 * n_folds == entries[0].metrics["n_trials"]
+    assert family_trials(session, "TF-SMA-001") == 4 == entries[0].metrics["n_trials"]
 
     lb = leaderboard(session)
     assert set(lb["strategy"]) == {"TF-SMA-001", "MR-BB-001"}
