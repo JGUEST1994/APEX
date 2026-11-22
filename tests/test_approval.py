@@ -62,6 +62,25 @@ def test_named_person_approves_a_validated_strategy_with_a_ready_record(seeded):
         approve(s, "old", by="Jake", now=NOW)
 
 
+def test_the_approval_evidence_names_limits_that_differed(seeded):
+    s = seeded
+    store.create_account(s, "roomy", strategy_key="TF-SMA-001", symbol="SPY", timeframe="1d",
+                         source="synthetic", params={"fast": 10, "slow": 40},
+                         limits=store.RiskLimits().changed({"max_positions": 13}), actor="Sam")
+    acc = s.scalar(select(PaperAccount).where(PaperAccount.name == "roomy"))
+    acc.created_at = utc(2022, 6, 1)
+    s.commit()
+    store.run_account(s, "roomy", now=NOW)
+    ver = _validated(s)
+    approve(s, "roomy", by="Sam", now=NOW)
+    last = s.scalars(select(StrategyStatusChange).where(
+        StrategyStatusChange.strategy_version_id == ver.id)
+        .order_by(StrategyStatusChange.id.desc())).first()
+    assert last.to_status == "approved"
+    assert "safety limits differed from the standard: max_positions 13 (standard 10)" in (
+        last.reason)
+
+
 def test_refused_without_a_ready_record_or_validation(seeded):
     s = seeded
     _account(s, "new", utc(2022, 12, 20))

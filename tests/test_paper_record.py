@@ -79,6 +79,31 @@ def test_cli_reports_not_ready(seeded, db_url, monkeypatch, capsys):
     out = capsys.readouterr().out
     # wall-clock now is far past the synthetic data, so the CLI reports it as stale
     assert rc == 4 and "NOT READY" in out and "scheduler" in out
+    assert "safety limits" not in out  # standard limits are not mentioned
+
+
+def test_the_record_shows_limits_that_differ_from_the_standard(seeded, db_url, monkeypatch,
+                                                                capsys):
+    s = seeded
+    store.create_account(s, "roomy", strategy_key="TF-SMA-001", symbol="SPY", timeframe="1d",
+                         source="synthetic", params={"fast": 10, "slow": 40},
+                         limits=store.RiskLimits().changed({"max_positions": 13}), actor="Sam")
+    s.commit()
+    store.run_account(s, "roomy", now=utc(2023, 1, 2))
+    rep = record(s, "roomy", now=utc(2023, 1, 2))
+    assert rep["limits_changed"] == {"max_positions": {"standard": 10, "account": 13}}
+    _account(s, "plain", utc(2022, 6, 1))
+    assert record(s, "plain", now=utc(2023, 1, 2))["limits_changed"] == {}
+    from apex.core.config import get_settings
+
+    monkeypatch.setenv("APEX_DATABASE_URL", db_url)
+    get_settings.cache_clear()
+    try:
+        cli(["paper-record", "--name", "roomy"])
+    finally:
+        get_settings.cache_clear()
+    out = capsys.readouterr().out
+    assert "safety limits differ from the standard: max_positions 13 (standard 10)" in out
 
 
 def test_a_start_now_account_is_judged_on_its_own_days(seeded):

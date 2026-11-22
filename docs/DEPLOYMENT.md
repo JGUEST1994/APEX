@@ -52,6 +52,8 @@ Paper commands refuse to run unless `APEX_TRADING_MODE=paper`. There is no live 
 apex paper-create --name sma-spy --strategy TF-SMA-001 --symbol SPY --timeframe 1d --source alpaca
 # a 30-day practice run: trade only prices from now on (stored history only warms it up)
 apex paper-create --name practice --strategy TF-SMA-001 --symbol SPY --timeframe 1d --source alpaca --start-now
+# a safety limit for one account only; a looser one than the standard needs the deciding person's name (audit log)
+apex paper-create --name basket --strategy MR-IBS-BASKET-001 --symbol SPY,QQQ,IWM,DIA,XLB,XLE,XLF,XLI,XLK,XLP,XLU,XLV,XLY --source tiingo --start-now --param gross=0.38 --limit max_positions=13 --by "Your Name"
 # after each data update (cron-safe: only new stored bars are processed, each bar is one transaction)
 apex paper-run --name sma-spy
 # a tripped kill switch or a failed reconciliation halts the account until a person resets it

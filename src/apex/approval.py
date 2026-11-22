@@ -17,12 +17,11 @@ from sqlalchemy.orm import Session
 from apex.backtest.experiments import ensure_strategy_version
 from apex.db.models import StrategyVersion
 from apex.paper_record import record
+from apex.risk.limits import NOT_A_PERSON
 from apex.strategies.base import StrategyStatus
 from apex.strategies.lifecycle import transition
 from apex.strategies.multi import all_multi_strategies
 from apex.strategies.registry import all_strategies
-
-NOT_A_PERSON = ("", "system", "risk", "scheduler", "apex")
 
 
 class ApprovalRefused(ValueError):
@@ -53,6 +52,10 @@ def approve(session: Session, account: str, *, by: str, reason: str = "",
                               "approved")
     evidence = (f"practice account {account}: {rec['days']} days since "
                 f"{rec['started'][:10]}, consistent with its backtest, no kill-switch trips")
+    if rec["limits_changed"]:
+        evidence += "; its safety limits differed from the standard: " + ", ".join(
+            f"{k} {v['account']} (standard {v['standard']})"
+            for k, v in rec["limits_changed"].items())
     if status is StrategyStatus.VALIDATION:
         transition(session, ver, StrategyStatus.PAPER_TRADING, reason=evidence)
     return transition(session, ver, StrategyStatus.APPROVED, actor=who,

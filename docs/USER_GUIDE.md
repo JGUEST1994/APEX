@@ -272,6 +272,16 @@ create it; the stored history just warms the strategy up, and the comparison wit
 backtest covers only the account's own days. Download a few years of prices first, so the
 strategy has history to warm up on.
 
+**Safety limits for one account.** Every account gets the standard safety limits (for
+example at most 10 open positions, at most 40% of the money in markets that move together,
+and the kill switch after 6 losing trades in a row or a 10% fall). `--limit name=value`
+(repeatable) changes one for this account only, for example `--limit max_positions=13` so a
+13-fund basket can hold every fund at once. A tighter limit needs nothing more. A looser one
+is your decision, so APEX asks for your name with `--by "Your Name"` and records it, with the
+old and new values, in the audit log. The practice record, its page on the dashboard and any
+approval then list every limit that differs from the standard. The names are those in
+`src/apex/risk/limits.py`.
+
 Before you trust a strategy, it needs a practice record: `apex paper-record --name sma-spy`
 says READY only after at least 30 days of new prices processed since the account was
 created (old history replayed into a new account doesn't count), with the account still
