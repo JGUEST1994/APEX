@@ -78,7 +78,13 @@ def test_backtest_detail_glossary_only_names_recorded_figures():
 def test_dashboard_never_injects_html():
     html = (STATIC / "index.html").read_text()
     assert "innerHTML" not in html.replace("never innerHTML", "")
-    assert "<script src=" not in html  # no third-party scripts
+    # No scripts from the internet: the only script file is the chart library stored in vendor/.
+    import re
+    srcs = re.findall(r'<script src="([^"]+)"', html)
+    assert srcs == ["vendor/lightweight-charts.standalone.production.js"]
+    assert all((STATIC / src).is_file() and "//" not in src for src in srcs)
+    assert (STATIC / "vendor" / "lightweight-charts.LICENSE").is_file()
+    assert "tradingview.com" in html and "attributionLogo: true" in html  # licence credit
 
 
 def test_paper_endpoints_are_read_only(db_url, session):
