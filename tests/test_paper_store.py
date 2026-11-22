@@ -3,10 +3,17 @@
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from apex.cli import main as cli
-from apex.db.models import AuditEvent, PaperAccount, PaperFill, PaperOrder, PaperPosition
+from apex.db.models import (
+    AuditEvent,
+    PaperAccount,
+    PaperFill,
+    PaperOrder,
+    PaperPosition,
+    PriceBar,
+)
 from apex.domain.instruments import by_symbol
 from apex.domain.market import Timeframe
 from apex.execution import store
@@ -163,3 +170,59 @@ def test_cli_paper_requires_paper_mode(db_url, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "PAPER (SIMULATED)" in out and "simulated=True" in out
     assert "direction_agreement" in out
+
+
+def test_start_now_trades_only_prices_that_arrive_later(seeded):
+    s = seeded
+    later = s.execute(delete(PriceBar).where(PriceBar.ts >= utc(2022, 6, 1))).rowcount
+    s.commit()  # pretend those prices have not arrived yet when the account is set up
+    acc = store.create_account(s, "fresh", strategy_key="TF-SMA-001", symbol="SPY",
+                               timeframe="1d", source="synthetic",
+                               params={"fast": 10, "slow": 40}, start_now=True)
+    s.commit()
+    start = acc.last_bar_ts
+    assert start < utc(2022, 6, 1) and acc.starts_after == start
+    assert store.run_account(s, "fresh", now=NOW)["bars"] == 0  # no history replayed
+    ingest_bars(s, SyntheticProvider(annual_vol=0.4), by_symbol()["SPY"], Timeframe.D1,
+                utc(2021, 1, 1), utc(2023, 1, 1))  # the same prices, now arriving
+    s.commit()
+    assert store.run_account(s, "fresh", now=NOW)["bars"] == later
+    fills = s.scalars(select(PaperFill).where(PaperFill.account_id == acc.id)).all()
+    assert fills and min(f.ts for f in fills) > start
+    audit = s.scalars(select(AuditEvent).where(AuditEvent.target == "fresh")).first()
+    assert audit.detail["starts_after"] == start.isoformat()
+
+
+def test_start_now_needs_stored_prices_for_every_instrument(seeded):
+    with pytest.raises(ValueError, match="no stored 1d prices from alpaca for SPY"):
+        store.create_account(seeded, "x", strategy_key="TF-SMA-001", symbol="SPY",
+                             timeframe="1d", source="alpaca", start_now=True)
+
+
+def test_cli_paper_create_with_settings_and_start_now(db_url, monkeypatch, capsys):
+    monkeypatch.setenv("APEX_DATABASE_URL", db_url)
+    monkeypatch.setenv("APEX_TRADING_MODE", "paper")
+    from apex.core.config import get_settings
+    get_settings.cache_clear()
+    try:
+        assert cli(["ingest", "--provider", "synthetic", "--symbol", "SPY", "--timeframe",
+                    "1d", "--start", "2022-01-01", "--end", "2023-01-01"]) == 0
+        base = ["paper-create", "--strategy", "TF-SMA-001", "--symbol", "SPY",
+                "--source", "synthetic"]
+        assert cli([*base, "--name", "p2", "--start-now", "--param", "fast=12",
+                    "--param", "slow=50"]) == 0
+        assert cli(["paper-run", "--name", "p2"]) == 0  # nothing new since it started
+        assert cli([*base, "--name", "p3", "--param", "nope=1"]) == 2
+        assert cli([*base, "--name", "p4", "--source", "alpaca", "--start-now"]) == 2
+    finally:
+        get_settings.cache_clear()
+    out, err = capsys.readouterr()
+    assert "created paper account p2 (SIMULATED), trading prices after 2022-12-" in out
+    assert "bars=0" in out
+    assert "unknown parameters" in err and "no stored 1d prices from alpaca" in err
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    with Session(create_engine(db_url)) as s:
+        acc = s.scalar(select(PaperAccount).where(PaperAccount.name == "p2"))
+        assert acc.params == {"fast": 12, "slow": 50} and acc.starts_after is not None

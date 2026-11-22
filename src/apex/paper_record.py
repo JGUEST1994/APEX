@@ -11,7 +11,12 @@ A record is ready when all of these hold:
 - the account is still running: not halted, kill switch not engaged, and its newest bar is
   no older than ``STALE_DAYS`` (so a stopped scheduler shows up);
 - no kill-switch trip and no halt (reconciliation mismatch) since it was created;
-- the paper-vs-backtest report says paper and backtest agree.
+- the paper-vs-backtest report says paper and backtest agree (for an account created with
+  ``start_now``, on the bars after its start only).
+
+Create a practice account with ``start_now`` (CLI ``paper-create --start-now``): otherwise its
+first run replays all stored history, and a kill-switch trip while replaying it is logged
+after the account was created, so it would block the record from the start.
 """
 
 from __future__ import annotations

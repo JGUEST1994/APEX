@@ -5,9 +5,16 @@ strategy and parameters, and compares the two. Paper sizes are risk-capped and r
 every bar, so the comparison is on *direction* (long / flat / short per bar), entry/exit
 timing and fill prices rather than on unit counts. A strategy should not be approved by a
 human while its paper record disagrees with its backtest.
+
+An account created with ``start_now`` (or a comparison given ``since``) is compared only on
+the bars after its start. The backtest still runs over all stored history, so the strategy
+is warmed up the same way; the first bar after the start is left out, because a new account
+takes up a position the strategy already holds one bar later than the backtest did.
 """
 
 from __future__ import annotations
+
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -38,15 +45,25 @@ def _bars(session: Session, acc: PaperAccount, sym: str) -> pd.DataFrame:
     return bars[bars["ts"] <= acc.last_bar_ts].reset_index(drop=True)
 
 
-def _one(session: Session, acc: PaperAccount, sym: str, fills: list[PaperFill]) -> dict:
+def _window_return(equity, ts: pd.DatetimeIndex, since: datetime | None) -> float:  # noqa: ANN001
+    eq = pd.Series(np.asarray(equity, float), index=ts)
+    if since is not None and (eq.index <= pd.Timestamp(since)).any():
+        eq = eq[eq.index >= eq.index[eq.index <= pd.Timestamp(since)][-1]]
+    return float(eq.iloc[-1] / eq.iloc[0] - 1)
+
+
+def _one(session: Session, acc: PaperAccount, sym: str, fills: list[PaperFill],
+         since: datetime | None = None) -> dict:
     bars = _bars(session, acc, sym)
     spec = to_spec(get_instrument(session, sym))
     bt = run_backtest(bars, all_strategies()[acc.strategy_key](), spec, acc.params)
+    ts = pd.DatetimeIndex(bars["ts"])
     return _versus(bars, fills, pd.Series(bt.position.to_numpy(), index=bars["ts"]),
-                   float(bt.equity.iloc[-1] / bt.equity.iloc[0] - 1))
+                   _window_return(bt.equity, ts, since), since)
 
 
-def _multi(session: Session, acc: PaperAccount, fills: list[PaperFill]) -> dict[str, dict]:
+def _multi(session: Session, acc: PaperAccount, fills: list[PaperFill],
+           since: datetime | None = None) -> dict[str, dict]:
     """Backtest the whole book once on the legs' common bars (as the paper trader trades
     them) and compare each leg's direction and fill prices with its paper fills."""
     syms = acc.all_symbols
@@ -54,7 +71,7 @@ def _multi(session: Session, acc: PaperAccount, fills: list[PaperFill]) -> dict[
     specs = {s: to_spec(get_instrument(session, s)) for s in syms}
     bt = run_portfolio_backtest(frames, all_multi_strategies()[acc.strategy_key](), specs,
                                 acc.params)
-    ret = float(bt.equity.iloc[-1] / bt.equity.iloc[0] - 1)
+    ret = _window_return(bt.equity, pd.DatetimeIndex(bt.equity.index), since)
     out = {}
     for s in syms:
         ts = pd.DatetimeIndex(frames[s]["ts"])
@@ -62,12 +79,13 @@ def _multi(session: Session, acc: PaperAccount, fills: list[PaperFill]) -> dict[
         units = pd.Series(0.0, index=ts)
         for t, u in zip(legs["ts"], legs["units"], strict=True):
             units[pd.Timestamp(t)] += u
-        out[s] = _versus(frames[s], [f for f in fills if f.symbol == s], units.cumsum(), ret)
+        out[s] = _versus(frames[s], [f for f in fills if f.symbol == s], units.cumsum(), ret,
+                         since)
     return out
 
 
 def _versus(bars: pd.DataFrame, fills: list[PaperFill], bt_position: pd.Series,
-            bt_return: float) -> dict:
+            bt_return: float, since: datetime | None = None) -> dict:
     ts = pd.DatetimeIndex(bars["ts"])
     per_bar = pd.Series(0.0, index=ts)
     opens = pd.Series(bars["open"].to_numpy(), index=ts)
@@ -81,10 +99,15 @@ def _versus(bars: pd.DataFrame, fills: list[PaperFill], bt_position: pd.Series,
             gaps.append(abs(f.price / o - 1) * 1e4)
     paper_dir = np.sign(per_bar.cumsum().round(9))
     bt_dir = np.sign(pd.Series(bt_position.to_numpy(), index=ts).round(9))
+    if since is not None:  # the account's own bars, less the first (see the module notes)
+        keep = ts[ts > pd.Timestamp(since)][1:]
+        paper_dir, bt_dir = paper_dir.reindex(keep), bt_dir.reindex(keep)
     p_chg, b_chg = _changes(paper_dir), _changes(bt_dir)
     missed, extra = sorted(b_chg - p_chg), sorted(p_chg - b_chg)
     return {
-        "bars": len(bars), "direction_agreement": round(float((paper_dir == bt_dir).mean()), 4),
+        "bars": len(bt_dir),
+        "direction_agreement": round(float((paper_dir == bt_dir).mean()), 4) if len(bt_dir)
+        else 0.0,
         "backtest_changes": len(b_chg), "paper_changes": len(p_chg),
         "missed_changes": len(missed), "extra_changes": len(extra),
         "missed_examples": [t.isoformat() for t in missed[:20]],
@@ -94,20 +117,26 @@ def _versus(bars: pd.DataFrame, fills: list[PaperFill], bt_position: pd.Series,
     }
 
 
-def compare(session: Session, name: str) -> dict:
+def compare(session: Session, name: str, since: datetime | None = None) -> dict:
+    """Paper vs backtest for one account: on every bar it processed, or only on the bars
+    after ``since`` (default: the account's own start, if it was created with start_now)."""
     acc = session.scalar(select(PaperAccount).where(PaperAccount.name == name))
     if acc is None:
         raise KeyError(name)
+    since = since if since is not None else acc.starts_after
     syms = acc.all_symbols
     out: dict = {"account": name, "strategy": acc.strategy_key, "symbol": acc.symbol,
                  "symbols": syms, "simulated": True}
     if acc.last_bar_ts is None:
         return out | {"bars": 0, "consistent": None, "notes": ["account has not run yet"]}
+    if since is not None and acc.last_bar_ts <= since:
+        return out | {"bars": 0, "consistent": None,
+                      "notes": [f"no bars processed after {since:%Y-%m-%d %H:%M} UTC yet"]}
     fills = session.scalars(select(PaperFill).where(PaperFill.account_id == acc.id)
                             .order_by(PaperFill.id)).all()
     multi = acc.strategy_key not in all_strategies()
-    per = _multi(session, acc, fills) if multi else \
-        {s: _one(session, acc, s, [f for f in fills if f.symbol == s]) for s in syms}
+    per = _multi(session, acc, fills, since) if multi else \
+        {s: _one(session, acc, s, [f for f in fills if f.symbol == s], since) for s in syms}
     n = sum(p["bars"] for p in per.values())
     agree = sum(p["direction_agreement"] * p["bars"] for p in per.values()) / max(n, 1)
     gap = max(p["max_fill_price_gap_bps"] for p in per.values())
@@ -115,6 +144,9 @@ def compare(session: Session, name: str) -> dict:
              ("backtest_changes", "paper_changes", "missed_changes", "extra_changes")}
 
     notes = []
+    if since is not None:
+        notes.append(f"compared on the bars after {since:%Y-%m-%d %H:%M} UTC only, less the "
+                     "first (a new account takes up a held position one bar later)")
     if acc.kill_engaged or "reset" in (acc.kill_reason or ""):
         notes.append(f"the kill switch has been engaged on this account ({acc.kill_reason}); "
                      "paper was flat while the backtest kept trading, which lowers agreement")

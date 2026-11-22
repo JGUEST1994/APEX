@@ -1,13 +1,14 @@
 """The 30-day practice record: only forward days count, problems and staleness block it."""
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from apex.cli import main as cli
-from apex.db.models import PaperAccount, PaperPosition
+from apex.db.models import PaperAccount, PaperPosition, PriceBar
 from apex.domain.instruments import by_symbol
 from apex.domain.market import Timeframe
 from apex.execution import store
+from apex.execution.consistency import compare
 from apex.marketdata.ingest import ingest_bars
 from apex.marketdata.providers.synthetic import SyntheticProvider
 from apex.paper_record import record
@@ -78,3 +79,24 @@ def test_cli_reports_not_ready(seeded, db_url, monkeypatch, capsys):
     out = capsys.readouterr().out
     # wall-clock now is far past the synthetic data, so the CLI reports it as stale
     assert rc == 4 and "NOT READY" in out and "scheduler" in out
+
+
+def test_a_start_now_account_is_judged_on_its_own_days(seeded):
+    seeded.execute(delete(PriceBar).where(PriceBar.ts >= utc(2022, 6, 1)))
+    seeded.commit()  # set up on 1 June 2022, before later prices arrived
+    acc = store.create_account(seeded, "fresh", strategy_key="TF-SMA-001", symbol="SPY",
+                               timeframe="1d", source="synthetic",
+                               params={"fast": 10, "slow": 40}, start_now=True)
+    acc.created_at = utc(2022, 6, 1)
+    seeded.commit()
+    ingest_bars(seeded, SyntheticProvider(annual_vol=0.4), by_symbol()["SPY"], Timeframe.D1,
+                utc(2021, 1, 1), utc(2023, 1, 1))
+    seeded.commit()
+    store.run_account(seeded, "fresh", now=utc(2023, 1, 2))
+    rep = record(seeded, "fresh", now=utc(2023, 1, 2))
+    assert rep["ready"] is True, rep["reasons"]
+    own = compare(seeded, "fresh")  # the history before its start is warm-up only
+    assert own["consistent"] is True and own["bars"] < 160
+    assert "bars after" in own["notes"][0]
+    whole = compare(seeded, "fresh", since=utc(2020, 1, 1))  # as if it had to match it all
+    assert whole["bars"] > 400 and whole["direction_agreement"] < own["direction_agreement"]
