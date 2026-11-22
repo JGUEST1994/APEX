@@ -116,3 +116,7 @@ Tests last run: 2026-11-22, `ruff check` clean, **771 passed**, with database te
 - Forex currency conversion (USDJPY never trades): changes backtest and paper sizing.
 - Paid data sources (Databento futures etc., see design 08): parked 2026-11-20, Jake chose free sources first. Ask again when free data limits the research.
 - Confirm broker preference for later paper trading (recommendation: Interactive Brokers).
+
+- 22 Nov: added `docs/intelligence/` (approved free news/fundamentals sources, new-feed and
+  point-in-time checklists, evidence-report template) backing the `apex-market-intelligence`
+  skill. Docs only; no code yet. Next step if the owner agrees: stage 1, the news store.
