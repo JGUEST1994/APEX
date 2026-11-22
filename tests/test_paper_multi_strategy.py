@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 import numpy as np
 import pandas as pd
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from apex.core.config import TradingMode
-from apex.db.models import PaperAccount, PaperFill
+from apex.db.models import PaperAccount, PaperFill, PriceBar
 from apex.domain.instruments import by_symbol
 from apex.domain.market import Timeframe
 from apex.execution import store
@@ -183,3 +183,22 @@ def test_create_checks_the_leg_count(seeded):
     with pytest.raises(KeyError):
         store.create_account(seeded, "p", strategy_key="NOPE", symbol=["SPY"],
                              timeframe="1d", source="synthetic")
+
+
+def test_a_start_now_basket_matches_its_backtest_on_its_own_days(seeded):
+    s = seeded
+    s.execute(delete(PriceBar).where(PriceBar.ts >= utc(2022, 9, 1)))
+    s.commit()
+    no_streak_stop = RiskLimits(max_consecutive_losses=10_000)  # compare trading, not stops
+    store.create_account(s, "basket", strategy_key="MR-IBS-BASKET-001",
+                         symbol=["SPY", "QQQ", "AAPL"], timeframe="1d", source="synthetic",
+                         params={"gross": 0.3}, limits=no_streak_stop, start_now=True)
+    s.commit()
+    p = SyntheticProvider(annual_vol=0.4)
+    for sym in ("SPY", "QQQ", "AAPL"):
+        ingest_bars(s, p, SYMS[sym], Timeframe.D1, utc(2021, 1, 1), utc(2023, 1, 1))
+    s.commit()
+    store.run_account(s, "basket", now=NOW)
+    rep = compare(s, "basket")
+    assert rep["paper_changes"] > 10 and rep["consistent"] is True, rep["notes"]
+    assert rep["bars"] < 3 * 90  # three legs, only the days after the start

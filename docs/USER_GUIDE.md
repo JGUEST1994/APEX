@@ -261,7 +261,16 @@ apex paper-compare --name sma-spy
 `paper-run` processes any stored bars the account has not seen yet, so run it again after
 each `apex update`. `paper-compare` checks that the paper account behaved like a backtest
 of the same strategy over the same bars. One account can trade several markets with shared
-cash: `--symbol SPY,QQQ,BTCUSDT`.
+cash: `--symbol SPY,QQQ,BTCUSDT`. `--param name=value` (repeatable) changes one of the
+strategy's settings, for example `--param gross=0.38` to run a fund basket smaller.
+
+**For a 30-day practice run, add `--start-now`.** Without it, the account's first run
+replays every price already stored, and if the kill switch trips during that replay (a
+losing streak somewhere in years of history is likely), the practice record counts it and
+can never be ready. With `--start-now` the account trades only prices that arrive after you
+create it; the stored history just warms the strategy up, and the comparison with the
+backtest covers only the account's own days. Download a few years of prices first, so the
+strategy has history to warm up on.
 
 Before you trust a strategy, it needs a practice record: `apex paper-record --name sma-spy`
 says READY only after at least 30 days of new prices processed since the account was

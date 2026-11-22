@@ -22,7 +22,7 @@ from apex.domain.market import Timeframe
 from apex.execution.orders import TERMINAL, Order, OrderStatus
 from apex.execution.paper import Fill, Portfolio
 from apex.execution.trader import PaperTrader
-from apex.marketdata.repository import get_instrument, load_bars, to_spec
+from apex.marketdata.repository import get_instrument, latest_bar_ts, load_bars, to_spec
 from apex.risk.limits import RiskLimits  # noqa: F401  (re-exported for callers)
 from apex.risk.service import KillSwitch, RiskService
 from apex.strategies.base import Strategy
@@ -47,7 +47,12 @@ def strategy_class(key: str) -> type[Strategy]:
 def create_account(session: Session, name: str, *, strategy_key: str, symbol: str | list[str],
                    timeframe: str, source: str, capital: float = 100_000.0,
                    params: dict | None = None, limits: RiskLimits | None = None,
-                   actor: str = "system") -> PaperAccount:
+                   actor: str = "system", start_now: bool = False) -> PaperAccount:
+    """A new paper account. By default its first run replays every stored bar; with
+    ``start_now`` it starts after the newest bar every instrument already has, so it trades
+    only prices that arrive after it was set up (older bars still warm the strategy up).
+    That suits a practice run: replayed history counts for nothing in its record, and a
+    kill-switch trip while replaying it would."""
     cls = strategy_class(strategy_key)
     cls().params(params)  # validates parameter names
     symbols = [symbol] if isinstance(symbol, str) else list(dict.fromkeys(symbol))
@@ -55,16 +60,27 @@ def create_account(session: Session, name: str, *, strategy_key: str, symbol: st
         raise ValueError("at least one symbol is required")
     if hasattr(cls, "check_legs"):
         cls.check_legs(len(symbols))  # multi-instrument: legs in the order given
-    for sym in symbols:
-        get_instrument(session, sym)
+    instruments = {sym: get_instrument(session, sym) for sym in symbols}
+    start = None
+    if start_now:
+        newest = {sym: latest_bar_ts(session, inst.id, Timeframe(timeframe), source)
+                  for sym, inst in instruments.items()}
+        missing = [sym for sym, ts in newest.items() if ts is None]
+        if missing:
+            raise ValueError(f"no stored {timeframe} prices from {source} for "
+                             f"{', '.join(missing)}: download some first (they also warm the "
+                             "strategy up)")
+        start = min(newest.values())
     acc = PaperAccount(name=name, strategy_key=strategy_key, params=params or {},
                        symbol=symbols[0], symbols=symbols if len(symbols) > 1 else None,
                        timeframe=timeframe, source=source,
                        limits=asdict(limits or RiskLimits()), initial_capital=capital,
-                       cash=capital, peak_equity=capital, day_start_equity=capital)
+                       cash=capital, peak_equity=capital, day_start_equity=capital,
+                       last_bar_ts=start, starts_after=start)
     session.add(acc)
     session.add(AuditEvent(actor=actor, action="paper_account.create", target=name,
-                           detail={"strategy": strategy_key, "symbols": symbols}))
+                           detail={"strategy": strategy_key, "symbols": symbols,
+                                   "starts_after": start.isoformat() if start else None}))
     session.flush()
     return acc
 

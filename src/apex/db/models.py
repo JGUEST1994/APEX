@@ -259,6 +259,8 @@ class PaperAccount(Base):
     day_start_equity: Mapped[float] = mapped_column(Float)
     day: Mapped[str | None] = mapped_column(String(10), nullable=True)
     last_bar_ts: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # set when created with start_now: the account trades (and is compared) only after it
+    starts_after: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="running")  # running|halted
     kill_engaged: Mapped[bool] = mapped_column(Boolean, default=False)
     kill_reason: Mapped[str] = mapped_column(String(256), default="")

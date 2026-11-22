@@ -230,6 +230,11 @@ def main(argv: list[str] | None = None) -> int:
     pc.add_argument("--timeframe", default="1d")
     pc.add_argument("--source", required=True)
     pc.add_argument("--capital", type=float, default=100_000.0)
+    pc.add_argument("--param", action="append", default=[],
+                    help="strategy setting name=value (JSON value, repeatable)")
+    pc.add_argument("--start-now", action="store_true",
+                    help="trade only prices that arrive from now on, instead of first "
+                         "replaying every stored bar (use this for a 30-day practice run)")
     pr = sub.add_parser("paper-run", help="process new stored bars for a paper account "
                         "(restart-safe; run from cron or a scheduler)")
     pr.add_argument("--name", required=True)
@@ -607,6 +612,7 @@ def main(argv: list[str] | None = None) -> int:
             from datetime import UTC, datetime
 
             from apex.core.config import TradingMode
+            from apex.core.errors import ApexError
             from apex.execution import store
 
             if settings.trading_mode is not TradingMode.PAPER:
@@ -614,12 +620,23 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             now = datetime.now(UTC)
             if args.cmd == "paper-create":
-                store.create_account(s, args.name, strategy_key=args.strategy,
-                                     symbol=[x.strip() for x in args.symbol.split(",")],
-                                     timeframe=args.timeframe,
-                                     source=args.source, capital=args.capital)
+                given = {}
+                for kv in args.param:
+                    k, _, v = kv.partition("=")
+                    given[k] = _param(v)
+                try:
+                    acc = store.create_account(
+                        s, args.name, strategy_key=args.strategy,
+                        symbol=[x.strip() for x in args.symbol.split(",")],
+                        timeframe=args.timeframe, source=args.source, capital=args.capital,
+                        params=given or None, start_now=args.start_now)
+                except (KeyError, ValueError, ApexError) as exc:
+                    print(f"cannot create {args.name}: {exc}", file=sys.stderr)
+                    return 2
                 s.commit()
-                print(f"created paper account {args.name} (SIMULATED)")
+                start = (f", trading prices after {acc.last_bar_ts:%Y-%m-%d %H:%M} UTC"
+                         if acc.last_bar_ts else "")
+                print(f"created paper account {args.name} (SIMULATED){start}")
             elif args.cmd == "paper-run":
                 try:
                     out = store.run_account(s, args.name, now=now, end=args.end)
