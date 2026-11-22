@@ -54,6 +54,25 @@ def test_limits_only_tighten():
         r.tighten(max_positions=4)
 
 
+def test_a_person_may_change_limits_for_one_account():
+    std = RiskLimits()
+    lim = std.changed({"max_positions": 13, "max_drawdown": 0.05})
+    assert lim.max_positions == 13 and isinstance(lim.max_positions, int)
+    assert lim.looser_than() == {"max_positions": (10, 13)}  # tighter ones are not listed
+    assert lim.differences() == {"max_positions": (10, 13), "max_drawdown": (0.10, 0.05)}
+    assert std.changed({"max_positions": 13.0}).max_positions == 13
+    assert std.looser_than() == {} and std.differences() == {}
+    for bad, why in [({"max_positons": 13}, "unknown safety limit"),
+                     ({"max_positions": 12.5}, "whole number"),
+                     ({"max_positions": 0}, "positive"),
+                     ({"max_drawdown": -0.1}, "positive"),
+                     ({"max_drawdown": float("inf")}, "positive"),
+                     ({"max_drawdown": "0.2"}, "positive"),
+                     ({"max_positions": True}, "positive")]:
+        with pytest.raises(ValueError, match=why):
+            std.changed(bad)
+
+
 def test_pre_trade_checks():
     r = _risk()
     ok = r.check(_intent("ok", qty=100), _acct(), data_stale=False, now=NOW)

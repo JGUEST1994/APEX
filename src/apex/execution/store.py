@@ -23,7 +23,7 @@ from apex.execution.orders import TERMINAL, Order, OrderStatus
 from apex.execution.paper import Fill, Portfolio
 from apex.execution.trader import PaperTrader
 from apex.marketdata.repository import get_instrument, latest_bar_ts, load_bars, to_spec
-from apex.risk.limits import RiskLimits  # noqa: F401  (re-exported for callers)
+from apex.risk.limits import NOT_A_PERSON, RiskLimits
 from apex.risk.service import KillSwitch, RiskService
 from apex.strategies.base import Strategy
 from apex.strategies.multi import all_multi_strategies
@@ -52,7 +52,16 @@ def create_account(session: Session, name: str, *, strategy_key: str, symbol: st
     ``start_now`` it starts after the newest bar every instrument already has, so it trades
     only prices that arrive after it was set up (older bars still warm the strategy up).
     That suits a practice run: replayed history counts for nothing in its record, and a
-    kill-switch trip while replaying it would."""
+    kill-switch trip while replaying it would.
+
+    ``limits`` are this account's safety limits (default: the standard ones). Looser limits
+    are a human config change: ``actor`` must then be a named person, and the audit log
+    records every limit that differs from the standard."""
+    lim = limits or RiskLimits()
+    looser = lim.looser_than()
+    if looser and actor.strip().lower() in NOT_A_PERSON:
+        raise PermissionError(f"looser safety limits ({', '.join(looser)}) are a human config "
+                              "change: they need a named person (paper-create --by NAME)")
     cls = strategy_class(strategy_key)
     cls().params(params)  # validates parameter names
     symbols = [symbol] if isinstance(symbol, str) else list(dict.fromkeys(symbol))
@@ -74,13 +83,17 @@ def create_account(session: Session, name: str, *, strategy_key: str, symbol: st
     acc = PaperAccount(name=name, strategy_key=strategy_key, params=params or {},
                        symbol=symbols[0], symbols=symbols if len(symbols) > 1 else None,
                        timeframe=timeframe, source=source,
-                       limits=asdict(limits or RiskLimits()), initial_capital=capital,
+                       limits=asdict(lim), initial_capital=capital,
                        cash=capital, peak_equity=capital, day_start_equity=capital,
                        last_bar_ts=start, starts_after=start)
     session.add(acc)
     session.add(AuditEvent(actor=actor, action="paper_account.create", target=name,
                            detail={"strategy": strategy_key, "symbols": symbols,
-                                   "starts_after": start.isoformat() if start else None}))
+                                   "starts_after": start.isoformat() if start else None,
+                                   "limits_changed": {k: {"standard": a, "account": b}
+                                                      for k, (a, b) in
+                                                      lim.differences().items()},
+                                   "limits_loosened": sorted(looser)}))
     session.flush()
     return acc
 

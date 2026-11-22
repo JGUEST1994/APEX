@@ -199,6 +199,31 @@ def test_start_now_needs_stored_prices_for_every_instrument(seeded):
                              timeframe="1d", source="alpaca", start_now=True)
 
 
+def test_looser_limits_need_a_named_person_and_are_audited(seeded):
+    s = seeded
+    looser = store.RiskLimits().changed({"max_positions": 13})
+    for nobody in ("system", "", "  Scheduler "):
+        with pytest.raises(PermissionError, match="max_positions.*named person"):
+            store.create_account(s, "x", strategy_key="TF-SMA-001", symbol="SPY",
+                                 timeframe="1d", source="synthetic", limits=looser,
+                                 actor=nobody)
+    tighter = store.RiskLimits().changed({"max_drawdown": 0.05})  # tightening needs no name
+    store.create_account(s, "careful", strategy_key="TF-SMA-001", symbol="SPY",
+                         timeframe="1d", source="synthetic", limits=tighter)
+    acc = store.create_account(s, "roomy", strategy_key="TF-SMA-001", symbol="SPY",
+                               timeframe="1d", source="synthetic", limits=looser, actor="Sam")
+    s.commit()
+    assert acc.limits["max_positions"] == 13 and acc.limits["max_drawdown"] == 0.10
+    audit = s.scalars(select(AuditEvent).where(AuditEvent.target == "roomy")).one()
+    assert audit.actor == "Sam" and audit.detail["limits_loosened"] == ["max_positions"]
+    assert audit.detail["limits_changed"] == {"max_positions": {"standard": 10, "account": 13}}
+    plain = s.scalars(select(AuditEvent).where(AuditEvent.target == "careful")).one()
+    assert plain.detail["limits_loosened"] == []
+    assert plain.detail["limits_changed"]["max_drawdown"] == {"standard": 0.1, "account": 0.05}
+    rep = store.run_account(s, "roomy", now=NOW)  # the account trades under its own limits
+    assert rep["bars"] > 0
+
+
 def test_cli_paper_create_with_settings_and_start_now(db_url, monkeypatch, capsys):
     monkeypatch.setenv("APEX_DATABASE_URL", db_url)
     monkeypatch.setenv("APEX_TRADING_MODE", "paper")
@@ -214,15 +239,32 @@ def test_cli_paper_create_with_settings_and_start_now(db_url, monkeypatch, capsy
         assert cli(["paper-run", "--name", "p2"]) == 0  # nothing new since it started
         assert cli([*base, "--name", "p3", "--param", "nope=1"]) == 2
         assert cli([*base, "--name", "p4", "--source", "alpaca", "--start-now"]) == 2
+        assert cli([*base, "--name", "p5", "--start-now", "--limit", "max_positions=13",
+                    "--by", "Sam"]) == 0
+        assert cli([*base, "--name", "p6", "--limit", "max_positions=13"]) == 2  # no name
+        assert cli([*base, "--name", "p7", "--limit", "max_positions=many", "--by", "Sam"]) == 2
+        assert cli([*base, "--name", "p8", "--limit", "max_postions=13", "--by", "Sam"]) == 2
+        assert cli([*base, "--name", "p9", "--limit", "max_drawdown=0.05"]) == 0  # tighter
     finally:
         get_settings.cache_clear()
     out, err = capsys.readouterr()
     assert "created paper account p2 (SIMULATED), trading prices after 2022-12-" in out
     assert "bars=0" in out
     assert "unknown parameters" in err and "no stored 1d prices from alpaca" in err
+    assert ("safety limits for this account only: max_positions 13 (standard 10); set by Sam, "
+            "recorded in the audit log") in out
+    assert "safety limits for this account only: max_drawdown 0.05 (standard 0.1)\n" in out
+    assert "cannot create p6: looser safety limits (max_positions)" in err
+    assert "named person (paper-create --by NAME)" in err
+    assert "cannot create p7: max_positions must be a positive number, not 'many'" in err
+    assert "cannot create p8: unknown safety limit 'max_postions'" in err
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
 
     with Session(create_engine(db_url)) as s:
         acc = s.scalar(select(PaperAccount).where(PaperAccount.name == "p2"))
         assert acc.params == {"fast": 12, "slow": 50} and acc.starts_after is not None
+        assert acc.limits["max_positions"] == 10
+        acc = s.scalar(select(PaperAccount).where(PaperAccount.name == "p5"))
+        assert acc.limits["max_positions"] == 13
+        assert s.scalar(select(PaperAccount).where(PaperAccount.name == "p6")) is None

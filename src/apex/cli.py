@@ -235,6 +235,11 @@ def main(argv: list[str] | None = None) -> int:
     pc.add_argument("--start-now", action="store_true",
                     help="trade only prices that arrive from now on, instead of first "
                          "replaying every stored bar (use this for a 30-day practice run)")
+    pc.add_argument("--limit", action="append", default=[], metavar="NAME=VALUE",
+                    help="a safety limit for this account only, e.g. max_positions=13 "
+                         "(repeatable); a looser limit than the standard needs --by")
+    pc.add_argument("--by", default="",
+                    help="your name, recorded in the audit log (needed to loosen a limit)")
     pr = sub.add_parser("paper-run", help="process new stored bars for a paper account "
                         "(restart-safe; run from cron or a scheduler)")
     pr.add_argument("--name", required=True)
@@ -600,6 +605,10 @@ def main(argv: list[str] | None = None) -> int:
                   "(SIMULATED)")
             print(f"  {rep['days']} of {rep['min_days']} days since {rep['started'][:10]}, "
                   f"still running: {'yes' if rep['running'] else 'no'}")
+            if rep["limits_changed"]:
+                print("  safety limits differ from the standard: " + ", ".join(
+                    f"{k} {v['account']} (standard {v['standard']})"
+                    for k, v in rep["limits_changed"].items()))
             if rep["ready"]:
                 print("  READY: the record is long and clean enough for a person to "
                       "consider approving the strategy")
@@ -620,23 +629,39 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             now = datetime.now(UTC)
             if args.cmd == "paper-create":
-                given = {}
-                for kv in args.param:
-                    k, _, v = kv.partition("=")
-                    given[k] = _param(v)
+                from apex.risk.limits import RiskLimits
+
+                given, limit_changes = {}, {}
                 try:
+                    for kv in args.param:
+                        k, _, v = kv.partition("=")
+                        given[k] = _param(v)
+                    for kv in args.limit:
+                        k, _, v = kv.partition("=")
+                        try:
+                            limit_changes[k.strip()] = json.loads(v)
+                        except ValueError:
+                            limit_changes[k.strip()] = v  # refused below, naming the limit
+                    limits = RiskLimits().changed(limit_changes) if limit_changes else None
                     acc = store.create_account(
                         s, args.name, strategy_key=args.strategy,
                         symbol=[x.strip() for x in args.symbol.split(",")],
                         timeframe=args.timeframe, source=args.source, capital=args.capital,
-                        params=given or None, start_now=args.start_now)
-                except (KeyError, ValueError, ApexError) as exc:
+                        params=given or None, limits=limits,
+                        actor=args.by.strip() or "system", start_now=args.start_now)
+                except (KeyError, ValueError, PermissionError, ApexError) as exc:
                     print(f"cannot create {args.name}: {exc}", file=sys.stderr)
                     return 2
                 s.commit()
                 start = (f", trading prices after {acc.last_bar_ts:%Y-%m-%d %H:%M} UTC"
                          if acc.last_bar_ts else "")
                 print(f"created paper account {args.name} (SIMULATED){start}")
+                diff = RiskLimits(**acc.limits).differences()
+                if diff:
+                    print("safety limits for this account only: " + ", ".join(
+                        f"{k} {b} (standard {a})" for k, (a, b) in diff.items())
+                        + (f"; set by {args.by.strip()}, recorded in the audit log"
+                           if args.by.strip() else ""))
             elif args.cmd == "paper-run":
                 try:
                     out = store.run_account(s, args.name, now=now, end=args.end)

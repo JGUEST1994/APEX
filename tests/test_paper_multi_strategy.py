@@ -192,7 +192,8 @@ def test_a_start_now_basket_matches_its_backtest_on_its_own_days(seeded):
     no_streak_stop = RiskLimits(max_consecutive_losses=10_000)  # compare trading, not stops
     store.create_account(s, "basket", strategy_key="MR-IBS-BASKET-001",
                          symbol=["SPY", "QQQ", "AAPL"], timeframe="1d", source="synthetic",
-                         params={"gross": 0.3}, limits=no_streak_stop, start_now=True)
+                         params={"gross": 0.3}, limits=no_streak_stop, actor="Sam",
+                         start_now=True)
     s.commit()
     p = SyntheticProvider(annual_vol=0.4)
     for sym in ("SPY", "QQQ", "AAPL"):

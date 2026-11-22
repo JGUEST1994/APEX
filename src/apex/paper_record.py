@@ -14,6 +14,9 @@ A record is ready when all of these hold:
 - the paper-vs-backtest report says paper and backtest agree (for an account created with
   ``start_now``, on the bars after its start only).
 
+The record also lists any safety limit the account was given that differs from the standard
+(``paper-create --limit``), so whoever reads it can see what the practice run was allowed.
+
 Create a practice account with ``start_now`` (CLI ``paper-create --start-now``): otherwise its
 first run replays all stored history, and a kill-switch trip while replaying it is logged
 after the account was created, so it would block the record from the start.
@@ -28,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from apex.db.models import AuditEvent, PaperAccount
 from apex.execution.consistency import compare
+from apex.risk.limits import RiskLimits
 
 MIN_DAYS = 30
 STALE_DAYS = 4  # a long weekend of closed markets is fine; a week is not
@@ -75,5 +79,7 @@ def record(session: Session, name: str, now: datetime | None = None) -> dict:
                             "detail": e.detail} for e in events],
         "consistent": cons.get("consistent"),
         "direction_agreement": cons.get("direction_agreement"),
+        "limits_changed": {k: {"standard": a, "account": b} for k, (a, b) in
+                           RiskLimits(**acc.limits).differences().items()},
         "ready": not reasons, "reasons": reasons,
     }

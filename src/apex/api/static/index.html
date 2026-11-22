@@ -479,6 +479,9 @@ const LOAD = {
         p.appendChild(el("span", r.ready ? "practice record ready" : "practice record not ready", r.ready ? "pass" : "fail"));
         p.appendChild(el("span", ` · ${r.days} of ${r.min_days} days since ${r.started.slice(0, 10)}` +
           (r.ready ? ". A person can now consider approving this strategy." : ": " + r.reasons.join("; ") + ".")));
+        const lim = Object.entries(r.limits_changed || {});
+        if (lim.length) p.appendChild(el("span", " Safety limits for this account only: " +
+          lim.map(([k, v]) => `${k} ${v.account} (standard ${v.standard})`).join(", ") + "."));
       }).catch((e) => { $("prec").textContent = ""; console.error(e); });
       table($("pfills"), [["Time (UTC)", (r) => r.ts.slice(0, 19).replace("T", " ")], ["Symbol", (r) => r.symbol],
         ["Side", (r) => r.qty > 0 ? "buy" : "sell"], ["Units", (r) => fmt(Math.abs(r.qty), 4), "num"],
