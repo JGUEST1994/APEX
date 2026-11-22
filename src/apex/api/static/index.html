@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
 <meta name="theme-color" content="#142430">
 <link rel="stylesheet" href="apex.css">
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <div id="banner" class="research">RESEARCH MODE · SIMULATED RESULTS ONLY · NO LIVE TRADING</div>
@@ -20,7 +21,8 @@
   <nav id="tabs" aria-label="Sections"><div class="nav-label" aria-hidden="true">Workspace</div><div class="ind" aria-hidden="true"></div></nav>
   <div class="rail-foot"><div class="sys"><span class="live" id="live"></span><span id="conn">Connecting…</span>
     <span class="clock" id="clock" title="Time now in UTC, the time zone every table uses"></span></div>
-    <b id="footmode">Research</b><br>Practice data only.<br>Real-money trading is switched off.</div>
+    <b id="footmode">Research</b><br>Practice data only.<br>Real-money trading is switched off.
+    <p class="credit">Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> Lightweight Charts™, © TradingView, Inc.</p></div>
 </aside>
 <main>
   <header class="page-head" id="phead"><p class="crumb" aria-hidden="true">APEX / <b id="pnum">01</b></p><h1 id="ptitle">Overview</h1><p id="pdesc"></p></header>
@@ -33,13 +35,19 @@
     <div class="card" id="issuecard" hidden><h3 id="iname"></h3><table id="issues"></table></div>
   </section>
   <section id="markets">
-    <div class="card">
-      <div class="toolbar"><select id="dataset" aria-label="Dataset"></select>
-        <span class="muted" id="dsinfo"></span>
-        <a class="dl" id="dsdl" hidden download>Download these prices for Excel</a></div>
-      <div class="quote" id="quote"></div>
-      <div class="chart-wrap"><svg id="chart" class="pchart" role="img" aria-label="Close price chart"></svg>
-        <div class="tip" id="tip"></div></div>
+    <div class="mk">
+      <aside class="card watch" aria-label="Watchlist"><h3>Watchlist</h3><div class="watch-list" id="watch"></div></aside>
+      <div class="card mk-main">
+        <div class="toolbar"><select id="dataset" aria-label="Dataset"></select>
+          <span class="muted" id="dsinfo"></span>
+          <a class="dl" id="dsdl" hidden download>Download these prices for Excel</a></div>
+        <div class="quote" id="quote"></div>
+        <div class="viewbar" id="mview"></div>
+        <div class="chart-wrap"><div id="chart" class="lwc" role="img"
+          aria-label="Price chart: one candle per bar with volume underneath. Drag to scroll; scroll or pinch to zoom."></div>
+          <div class="legend" id="tip"></div></div>
+        <p class="hint muted">Drag to scroll back in time, scroll or pinch to zoom, double-click the price scale to reset it.</p>
+      </div>
     </div>
   </section>
   <section id="strategies"><div class="card"><table id="strats"></table></div>
@@ -59,8 +67,8 @@
     <table id="exps"></table></div>
     <div class="card"><h3 id="xname">Select a backtest</h3><p id="xinfo" class="muted"></p>
       <div id="xcurve" hidden><p class="muted" id="xcurvenote"></p>
-        <div class="chart-wrap"><svg id="xchart" class="pchart" role="img" aria-label="Simulated account value over the backtest"></svg>
-          <div class="tip" id="xtip"></div></div></div>
+        <div class="chart-wrap"><div id="xchart" class="lwc short" role="img" aria-label="Simulated account value over the backtest"></div>
+          <div class="legend" id="xtip"></div></div></div>
       <table id="xmetrics"></table></div></section>
   <section id="paper">
     <div class="card"><table id="paccts"></table></div>
@@ -68,9 +76,12 @@
       <p class="dlrow"><a class="dl" id="pdl" hidden download>Download all fills for Excel</a></p>
       <p id="pcheck" class="muted"></p>
       <p id="prec" class="muted"></p>
-      <div id="pcurve" hidden><p class="muted">Simulated account value at each processed bar.</p>
-        <div class="chart-wrap"><svg id="pchart" class="pchart" role="img" aria-label="Simulated practice account value"></svg>
-          <div class="tip" id="ptip"></div></div></div>
+      <div id="pcurve" hidden><div class="toolbar"><select id="psym" aria-label="Market to chart" hidden></select>
+          <span class="muted" id="pcurvenote"></span></div>
+        <div class="viewbar" id="pview"></div>
+        <div class="chart-wrap"><div id="pchart" class="lwc tall" role="img"
+          aria-label="Price with this practice account's simulated buys and sells, and its simulated account value below"></div>
+          <div class="legend" id="ptip"></div></div></div>
       <table id="pfills"></table></div>
   </section>
   <section id="research">
@@ -258,70 +269,197 @@ function svgEl(tag, attrs, text) {
   if (text !== undefined) e.textContent = String(text);
   return e;
 }
-function niceTicks(lo, hi, n) {
-  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) || raw;
-  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+// ---- Charts: TradingView Lightweight Charts (stored in static/vendor, no internet needed) ----
+const LW = window.LightweightCharts;
+const LWC = {};  // open chart per container id, so a page can redraw it
+const cssv = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const toT = (iso) => Math.floor(Date.parse(iso) / 1000);
+const fade = (hex, a) => /^#[0-9a-f]{6}$/i.test(hex) ? hex + a : hex;  // add alpha to a #rrggbb colour
+const day = (t) => new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ").replace(" 00:00", "");
+// Decimal places that suit the price level (FX needs 4-5, indices 1-2).
+const decimals = (v) => { const a = Math.abs(v); return a < 2 ? 5 : a < 20 ? 4 : a < 2000 ? 2 : 1; };
+function lwOptions(intraday) {
+  const ink = cssv("--ink"), grid = cssv("--grid");
+  return {
+    autoSize: true,
+    layout: { background: { type: "solid", color: "transparent" }, textColor: cssv("--muted"), fontSize: 11,
+      fontFamily: cssv("--num"), attributionLogo: true,
+      panes: { separatorColor: cssv("--rule"), separatorHoverColor: cssv("--brand-soft"), enableResize: true } },
+    grid: { vertLines: { color: grid, style: 2 }, horzLines: { color: grid, style: 2 } },
+    rightPriceScale: { borderColor: cssv("--rule") },
+    timeScale: { borderColor: cssv("--rule"), timeVisible: intraday, secondsVisible: false, rightOffset: 4 },
+    crosshair: { mode: 0, vertLine: { color: cssv("--ink-2"), labelBackgroundColor: ink, style: 3 },
+      horzLine: { color: cssv("--ink-2"), labelBackgroundColor: ink, style: 3 } },
+    localization: { timeFormatter: (t) => day(t) },
+  };
+}
+// Start a fresh chart in a container (any earlier one there is removed) and fade it in.
+function lwNew(id, intraday, redraw) {
+  if (LWC[id]) LWC[id].chart.remove();
+  const box = $(id), chart = LW.createChart(box, lwOptions(intraday));
+  LWC[id] = { chart, redraw };
+  box.classList.remove("fresh"); void box.offsetWidth; box.classList.add("fresh");
+  return chart;
+}
+function lwClear(id) { if (LWC[id]) { LWC[id].chart.remove(); delete LWC[id]; } }
+// Sorted, one point per time (the chart refuses duplicates or out-of-order times).
+function byTime(points) {
+  const m = new Map(); points.forEach((p) => { if (Number.isFinite(p.time)) m.set(p.time, p); });
+  return [...m.values()].sort((a, b) => a.time - b.time);
+}
+// Readout in the chart's top-left corner; shows the last bar until you hover another.
+function legendFor(chart, series, legend, title, show) {
+  const paint = (d) => { legend.replaceChildren(); if (!d) return;
+    legend.appendChild(el("b", title)); show(d).forEach(([k, v, cls]) => {
+      const s = el("span", "", cls); if (k) s.appendChild(el("i", k)); s.appendChild(document.createTextNode(v)); legend.appendChild(s); }); };
+  const last = series.data().at(-1); paint(last); legend.style.display = "flex";
+  chart.subscribeCrosshairMove((p) => paint((p && p.time && p.seriesData.get(series)) || last));
+}
+// ---- How price charts are shown: picked once, used by every price chart, remembered on this computer ----
+const STYLES = [["candles", "Candles"], ["hollow", "Hollow"], ["ha", "Heikin-Ashi"], ["bars", "Bars"],
+  ["line", "Line"], ["area", "Area"], ["baseline", "Baseline"]];
+const RANGES = [["1M", 31], ["3M", 92], ["6M", 183], ["1Y", 366], ["5Y", 1827], ["All", 0]];
+const SCALES = [["normal", "Price"], ["log", "Log"], ["pct", "%"]];
+const VIEW = { style: "candles", range: "All", scale: "normal", vol: true, ma20: false, ma50: false };
+try { Object.assign(VIEW, JSON.parse(localStorage.getItem("apex.chartView") || "{}")); } catch (e) { /* private window */ }
+const saveView = () => { try { localStorage.setItem("apex.chartView", JSON.stringify(VIEW)); } catch (e) { /* ignore */ } };
+const STYLE_HELP = {
+  candles: "One candle per bar: body from open to close, green when it closed higher, red when lower; thin wicks show the high and low.",
+  hollow: "Like candles, but rising bars are drawn as outlines, so falling bars stand out.",
+  ha: "Heikin-Ashi: each candle averages the bar with the one before, which smooths noise and makes runs of rises or falls easier to see. The prices shown are averaged, not traded prices.",
+  bars: "OHLC bars: a vertical line from low to high, a tick left for the open and a tick right for the close.",
+  line: "Closing prices joined by a line: the simplest view of the trend.",
+  area: "Closing prices with the area underneath shaded.",
+  baseline: "Closing prices compared with the first bar on screen: green above it, red below.",
+};
+// Smoothed Heikin-Ashi candles from real bars.
+function heikin(data) {
+  const out = []; let po = null, pc = null;
+  data.forEach((d) => { const c = (d.open + d.high + d.low + d.close) / 4;
+    const o = po === null ? (d.open + d.close) / 2 : (po + pc) / 2;
+    out.push({ time: d.time, open: o, high: Math.max(d.high, o, c), low: Math.min(d.low, o, c), close: c });
+    po = o; pc = c; });
   return out;
 }
-const priceFmt = (v, span) => v.toFixed(span < 2 ? 4 : span < 50 ? 2 : span < 5000 ? 1 : 0);
-function chart(svg, xs, ys, tip = $("tip")) {
-  svg.replaceChildren(); tip.style.display = "none";
-  if (ys.length < 2) return;
-  const W = svg.clientWidth || 800, H = svg.clientHeight || 340;
-  const L = 8, R = 64, T = 12, B = 26;
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  let lo = Math.min(...ys), hi = Math.max(...ys); const pad = (hi - lo || 1) * 0.06; lo -= pad; hi += pad;
-  const span = hi - lo;
-  const X = (i) => L + (W - L - R) * i / (ys.length - 1);
-  const Y = (v) => T + (H - T - B) * (1 - (v - lo) / span);
-  const defs = svgEl("defs"); const gid = svg.id + "Fill"; const g = svgEl("linearGradient", { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
-  g.appendChild(svgEl("stop", { offset: "0", "stop-color": "var(--brand)", "stop-opacity": ".18" }));
-  g.appendChild(svgEl("stop", { offset: "1", "stop-color": "var(--brand)", "stop-opacity": "0" }));
-  defs.appendChild(g); svg.appendChild(defs);
-  const lastY = Y(ys[ys.length - 1]);
-  niceTicks(lo, hi, 5).forEach((v) => {
-    svg.appendChild(svgEl("line", { class: "grid", x1: L, x2: W - R, y1: Y(v), y2: Y(v) }));
-    // leave room for the last-price tag rather than printing a label under it
-    if (Math.abs(Y(v) - lastY) > 14) svg.appendChild(svgEl("text", { class: "axis", x: W - R + 8, y: Y(v) + 4 }, priceFmt(v, span)));
-  });
-  const nx = Math.max(2, Math.min(6, Math.floor((W - L - R) / 140)));
-  for (let k = 0; k <= nx; k++) {
-    const i = Math.round(k * (xs.length - 1) / nx);
-    const anchor = k === 0 ? "start" : k === nx ? "end" : "middle";
-    svg.appendChild(svgEl("text", { class: "axis", x: X(i), y: H - 8, "text-anchor": anchor }, xs[i].slice(0, 10)));
-  }
-  const pts = ys.map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1));
-  // Draw the line in only when the data changed, not when the window is resized.
-  const key = xs[0] + "|" + xs[xs.length - 1] + "|" + ys.length + "|" + ys[ys.length - 1];
-  const fresh = svg.dataset.drawn !== key; svg.dataset.drawn = key;
-  svg.appendChild(svgEl("path", { class: "area" + (fresh ? " draw" : ""), fill: `url(#${gid})`, d: "M" + pts.join("L") + `L${X(ys.length - 1)},${H - B}L${L},${H - B}Z` }));
-  svg.appendChild(svgEl("path", { class: "line" + (fresh ? " draw" : ""), pathLength: 1, d: "M" + pts.join("L") }));
-  const last = ys[ys.length - 1], ly = Y(last);
-  svg.appendChild(svgEl("line", { class: "lastline", x1: L, x2: W - R, y1: ly, y2: ly }));
-  svg.appendChild(svgEl("rect", { class: "lasttag", x: W - R + 2, y: ly - 9, width: R - 4, height: 18, rx: 3 }));
-  svg.appendChild(svgEl("text", { class: "lasttxt", x: W - R + 8, y: ly + 4 }, last.toPrecision(6)));
-  const xh = svgEl("line", { class: "xhair", y1: T, y2: H - B, visibility: "hidden" });
-  const dot = svgEl("circle", { class: "dot", r: 4.5, visibility: "hidden" });
-  const halo = svgEl("circle", { class: "halo", r: 11, visibility: "hidden" });
-  svg.appendChild(xh); svg.appendChild(halo); svg.appendChild(dot);
-  const move = (ev) => {
-    const box = svg.getBoundingClientRect(); const px = (ev.clientX - box.left) * W / box.width;
-    const i = Math.max(0, Math.min(ys.length - 1, Math.round((px - L) / (W - L - R) * (ys.length - 1))));
-    const x = X(i), y = Y(ys[i]);
-    xh.setAttribute("x1", x); xh.setAttribute("x2", x); dot.setAttribute("cx", x); dot.setAttribute("cy", y);
-    halo.setAttribute("cx", x); halo.setAttribute("cy", y);
-    xh.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible"); halo.setAttribute("visibility", "visible");
-    tip.replaceChildren(el("b", ys[i].toPrecision(6)), document.createElement("br"),
-      el("span", xs[i].slice(0, 16).replace("T", " ") + " UTC"));
-    tip.style.left = (x * box.width / W) + "px"; tip.style.top = (y * box.height / H) + "px";
-    tip.style.display = "block";
-  };
-  svg.onpointermove = move; svg.onpointerdown = move;
-  svg.onpointerleave = () => { xh.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
-    halo.setAttribute("visibility", "hidden");
-    tip.style.display = "none"; };
+function sma(data, n) {
+  const out = []; let sum = 0;
+  data.forEach((d, i) => { sum += d.close; if (i >= n) sum -= data[i - n].close;
+    if (i >= n - 1) out.push({ time: d.time, value: sum / n }); });
+  return out;
 }
+// Zoom to the chosen range and apply the chosen price scale, without redrawing.
+function applyView(entry) {
+  if (!entry || !entry.main) return;
+  const { chart, main, first, last } = entry;
+  main.priceScale().applyOptions({ mode: VIEW.scale === "log" ? LW.PriceScaleMode.Logarithmic
+    : VIEW.scale === "pct" ? LW.PriceScaleMode.Percentage : LW.PriceScaleMode.Normal });
+  const days = (RANGES.find(([k]) => k === VIEW.range) || [, 0])[1], from = last - days * 86400;
+  if (!days || from <= first) chart.timeScale().fitContent();
+  else chart.timeScale().setVisibleRange({ from, to: last });
+}
+// The row of view buttons above a price chart.
+function viewBar(host) {
+  host.replaceChildren();
+  const group = (label, items, key) => { const g = el("div", "", "seg"); g.setAttribute("role", "group");
+    g.setAttribute("aria-label", label);
+    items.forEach(([k, text]) => { const b = el("button", text); b.type = "button"; b.dataset.k = k; b.dataset.g = key;
+      if (key === "style") b.title = STYLE_HELP[k];
+      b.setAttribute("aria-pressed", String(VIEW[key] === k));
+      b.onclick = () => { VIEW[key] = k; saveView(); refreshViews(key !== "style"); }; g.appendChild(b); });
+    return g; };
+  const toggles = el("div", "", "seg"); toggles.setAttribute("role", "group"); toggles.setAttribute("aria-label", "Extras");
+  [["vol", "Volume"], ["ma20", "MA 20"], ["ma50", "MA 50"]].forEach(([k, text]) => {
+    const b = el("button", text, "tog " + k); b.type = "button"; b.dataset.k = k; b.dataset.g = "tog";
+    b.title = k === "vol" ? "Show traded volume under the price" : `Average close of the last ${k.slice(2)} bars`;
+    b.setAttribute("aria-pressed", String(!!VIEW[k]));
+    b.onclick = () => { VIEW[k] = !VIEW[k]; saveView(); refreshViews(false); }; toggles.appendChild(b); });
+  host.append(group("Chart style", STYLES, "style"), group("Time range", RANGES.map(([k]) => [k, k]), "range"),
+    group("Price scale", SCALES, "scale"), toggles);
+  const help = el("p", STYLE_HELP[VIEW.style], "viewhelp muted"); help.setAttribute("aria-live", "polite"); host.appendChild(help);
+}
+// Re-mark the buttons; zoom/scale changes apply in place, others redraw the price charts.
+function refreshViews(inPlace) {
+  document.querySelectorAll(".viewbar").forEach((h) => {
+    h.querySelectorAll("button[data-k]").forEach((b) => { const { k, g } = b.dataset;
+      b.setAttribute("aria-pressed", String(g === "tog" ? !!VIEW[k] : VIEW[g] === k)); });
+    h.querySelector(".viewhelp").textContent = STYLE_HELP[VIEW.style]; });
+  Object.values(LWC).filter((c) => c.main).forEach((c) => (inPlace ? applyView(c) : c.redraw()));
+}
+// Price chart in the chosen style, with volume, moving averages, buy/sell markers and an
+// optional account-value pane.
+function priceChart(id, bars, legend, title, extra = {}) {
+  if (bars.length < 2) { lwClear(id); legend.style.display = "none"; return; }
+  const intraday = bars.some((b) => !b.ts.slice(11, 19).startsWith("00:00"));
+  const chart = lwNew(id, intraday, () => priceChart(id, bars, legend, title, extra));
+  const good = cssv("--good"), bad = cssv("--bad"), brand = cssv("--brand"), dp = decimals(bars[bars.length - 1].close);
+  const fmt = { type: "price", precision: dp, minMove: Math.pow(10, -dp) };
+  const data = byTime(bars.map((b) => ({ time: toT(b.ts), open: b.open, high: b.high, low: b.low, close: b.close })));
+  const closes = data.map((d) => ({ time: d.time, value: d.close }));
+  const st = VIEW.style; let main;
+  if (st === "candles" || st === "hollow" || st === "ha") {
+    main = chart.addSeries(LW.CandlestickSeries, { upColor: st === "hollow" ? "rgba(0,0,0,0)" : good, downColor: bad,
+      borderUpColor: good, borderDownColor: bad, wickUpColor: good, wickDownColor: bad, priceLineColor: brand, priceFormat: fmt });
+    main.setData(st === "ha" ? heikin(data) : data);
+  } else if (st === "bars") {
+    main = chart.addSeries(LW.BarSeries, { upColor: good, downColor: bad, thinBars: false, priceLineColor: brand, priceFormat: fmt });
+    main.setData(data);
+  } else if (st === "baseline") {
+    main = chart.addSeries(LW.BaselineSeries, { baseValue: { type: "price", price: data[0].close },
+      topLineColor: good, topFillColor1: fade(good, "38"), topFillColor2: fade(good, "05"),
+      bottomLineColor: bad, bottomFillColor1: fade(bad, "05"), bottomFillColor2: fade(bad, "38"), lineWidth: 2, priceFormat: fmt });
+    main.setData(closes);
+  } else {
+    main = chart.addSeries(st === "area" ? LW.AreaSeries : LW.LineSeries, st === "area"
+      ? { lineColor: brand, topColor: fade(brand, "40"), bottomColor: fade(brand, "00"), lineWidth: 2, priceFormat: fmt }
+      : { color: brand, lineWidth: 2, priceFormat: fmt });
+    main.setData(closes);
+  }
+  const vol = VIEW.vol && bars.some((b) => b.volume > 0);
+  if (vol) {
+    const v = chart.addSeries(LW.HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "vol",
+      lastValueVisible: false, priceLineVisible: false });
+    v.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    v.setData(byTime(bars.map((b) => ({ time: toT(b.ts), value: b.volume || 0,
+      color: fade(b.close >= b.open ? good : bad, "55") }))));
+  }
+  [["ma20", 20, cssv("--warn")], ["ma50", 50, cssv("--ink-2")]].forEach(([k, n, color]) => {
+    if (!VIEW[k] || data.length <= n) return;
+    chart.addSeries(LW.LineSeries, { color, lineWidth: 1.5, title: "MA " + n, priceLineVisible: false,
+      crosshairMarkerVisible: false, priceFormat: fmt }).setData(sma(data, n)); });
+  main.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: vol ? 0.24 : 0.08 } });
+  if (extra.markers && extra.markers.length) LW.createSeriesMarkers(main, extra.markers);
+  if (extra.equity && extra.equity.ys.length > 1) {
+    const e = chart.addSeries(LW.AreaSeries, { lineColor: brand, topColor: fade(brand, "40"),
+      bottomColor: fade(brand, "00"), lineWidth: 2, priceFormat: { type: "price", precision: 0, minMove: 1 } }, 1);
+    e.setData(byTime(extra.equity.xs.map((t, i) => ({ time: toT(t), value: extra.equity.ys[i] }))));
+    const panes = chart.panes(); panes[0].setStretchFactor(2.2); panes[1].setStretchFactor(1);
+  }
+  Object.assign(LWC[id], { main, first: data[0].time, last: data[data.length - 1].time });
+  applyView(LWC[id]);
+  // The readout always shows the real traded prices of the bar under the cursor.
+  const real = new Map(data.map((d) => [d.time, d])), f = (v) => v.toFixed(dp);
+  legendFor(chart, main, legend, title + (st === "ha" ? " · Heikin-Ashi" : ""), (d) => {
+    const b = real.get(d.time) || d; const ch = b.open ? b.close / b.open - 1 : 0;
+    return [["O", f(b.open)], ["H", f(b.high)], ["L", f(b.low)], ["C", f(b.close)],
+      ["", (ch >= 0 ? "+" : "−") + Math.abs(100 * ch).toFixed(2) + "%", "chg " + (ch >= 0 ? "up" : "down")],
+      ["", day(b.time) + " UTC", "when"]];
+  });
+}
+// One line (account value) with a soft fill.
+function lineChart(id, xs, ys, legend, title) {
+  if (ys.length < 2) { lwClear(id); legend.style.display = "none"; return; }
+  const intraday = xs.some((t) => !t.slice(11, 19).startsWith("00:00"));
+  const chart = lwNew(id, intraday, () => lineChart(id, xs, ys, legend, title));
+  const brand = cssv("--brand");
+  const s = chart.addSeries(LW.AreaSeries, { lineColor: brand, topColor: fade(brand, "40"), bottomColor: fade(brand, "00"),
+    lineWidth: 2, priceFormat: { type: "price", precision: 0, minMove: 1 } });
+  s.setData(byTime(xs.map((t, i) => ({ time: toT(t), value: ys[i] }))));
+  chart.timeScale().fitContent();
+  legendFor(chart, s, legend, title, (d) => [["", Math.round(d.value).toLocaleString("en-GB")], ["", day(d.time) + " UTC", "when"]]);
+}
+// Follow the computer's light/dark switch: redraw open charts in the new colours.
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () =>
+  Object.values(LWC).forEach((c) => c.redraw()));
 // Account value over a recorded backtest, re-run exactly by the API (read-only).
 let curveFor = null;
 async function curve(r) {
@@ -330,10 +468,10 @@ async function curve(r) {
   const c = await get(`/experiments/${r.id}/equity`);
   if (curveFor !== r.id) return;  // another backtest was opened meanwhile
   box.hidden = false;
-  if (!c.available) { note.textContent = "No chart: " + c.reason + "."; $("xchart").replaceChildren(); return; }
+  if (!c.available) { note.textContent = "No chart: " + c.reason + "."; lwClear("xchart"); $("xtip").style.display = "none"; return; }
   note.textContent = `Simulated account value, starting from ${Math.round(c.initial_capital).toLocaleString("en-GB")}. Hover to read any day.` +
     (c.matches_record ? "" : " (Differs from the recorded result: the code or data may have changed.)");
-  chart($("xchart"), c.ts, c.equity, $("xtip"));
+  lineChart("xchart", c.ts, c.equity, $("xtip"), "Account value");
 }
 function quote(d, ys) {
   const q = $("quote"); q.replaceChildren(); if (!ys.length) return;
@@ -368,6 +506,23 @@ async function glance(ds) {
     tile.appendChild(el("span", `last ${ys.length} bars · ${d.source}`, "tile-foot"));
     g.appendChild(tile);
   });
+}
+// Markets side panel: every stored market with its latest close and change on the bar before.
+async function watchlist(ds, onPick) {
+  const w = $("watch"); w.replaceChildren();
+  const rows = ds.map((d, i) => { const b = el("button", "", "wl"); b.type = "button"; b.dataset.i = i;
+    b.onclick = () => onPick(i);
+    const top = el("span", "", "wl-top"); top.append(el("b", d.symbol), el("span", d.timeframe, "muted"));
+    const last = el("span", "…", "wl-last"), chg = el("span", "", "chg");
+    const bot = el("span", "", "wl-bot"); bot.append(last, chg); b.append(top, bot); w.appendChild(b);
+    return [d, last, chg]; });
+  await Promise.all(rows.map(([d, last, chg]) => get(`/instruments/${encodeURIComponent(d.symbol)}/bars?timeframe=${d.timeframe}` +
+    `&source=${encodeURIComponent(d.source)}&limit=2`).then((b) => {
+    if (!b.length) { last.textContent = "–"; return; }
+    const c = b[b.length - 1].close, p = b.length > 1 ? b[0].close : c, ch = p ? c / p - 1 : 0;
+    last.textContent = c.toFixed(decimals(c));
+    chg.textContent = (ch >= 0 ? "+" : "−") + Math.abs(100 * ch).toFixed(2) + "%"; chg.className = "chg " + (ch >= 0 ? "up" : "down");
+  }).catch(() => { last.textContent = "–"; })));
 }
 let pendingDataset = null, pendingExp = null;
 const LOAD = {
@@ -414,20 +569,24 @@ const LOAD = {
     const ds = await get("/datasets"); const sel = $("dataset"); sel.replaceChildren();
     ds.forEach((d, i) => { const o = el("option", `${d.symbol} ${d.timeframe} · ${d.source} (${d.bars} bars)`);
       o.value = i; sel.appendChild(o); });
-    const draw = async () => { const d = ds[sel.value]; if (!d) return;
+    let seq = 0;
+    const draw = async () => { const d = ds[sel.value]; if (!d) return; const my = ++seq;
+      $("watch").querySelectorAll("button").forEach((b) => { const on = b.dataset.i === String(sel.value);
+        b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); });
       $("dsinfo").textContent = ` last bar ${d.last ? d.last.slice(0, 19).replace("T", " ") : "–"} UTC · showing the latest ${Math.min(d.bars, 2000)} bars`;
       const bars = await get(`/instruments/${encodeURIComponent(d.symbol)}/bars?timeframe=${d.timeframe}` +
         `&source=${encodeURIComponent(d.source)}&limit=2000`);
+      if (my !== seq) return;  // another market was picked meanwhile
       const ys = bars.map((b) => b.close); quote(d, ys);
       $("dsdl").href = `/export/bars.csv?symbol=${encodeURIComponent(d.symbol)}&timeframe=${d.timeframe}` +
         `&source=${encodeURIComponent(d.source)}`; $("dsdl").hidden = false;
-      chart($("chart"), bars.map((b) => b.ts), ys); };
+      priceChart("chart", bars, $("tip"), `${d.symbol} · ${d.timeframe}`); };
     sel.onchange = draw;
+    watchlist(ds, (i) => { sel.value = i; draw().catch(console.error); }).catch(console.error);
     if (!ds.length) { $("dsinfo").textContent = "No price data stored yet. Run apex ingest, then reload."; return; }
     const pick = () => { if (pendingDataset !== null && ds[pendingDataset]) { sel.value = pendingDataset; } pendingDataset = null; };
     pick(); window.addEventListener("hashchange", () => { if (pendingDataset !== null && location.hash === "#markets") { pick(); draw(); } });
     await draw();
-    let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 200); });
   },
   async strategies() {
     const st = await get("/strategies");
@@ -523,7 +682,32 @@ const LOAD = {
       $("pdl").href = "/export/fills.csv?name=" + encodeURIComponent(a.name); $("pdl").hidden = false;
       get("/paper/accounts/" + encodeURIComponent(name) + "/equity").then((c) => {
         if ($("pname").textContent.indexOf(name + ":") !== 0) return;  // another account opened
-        $("pcurve").hidden = c.equity.length < 2; chart($("pchart"), c.ts, c.equity, $("ptip"));
+        $("pcurve").hidden = c.equity.length < 2; if (c.equity.length < 2) return;
+        const syms = a.symbols && a.symbols.length ? a.symbols : [a.symbol], ps = $("psym");
+        ps.replaceChildren(...syms.map((x) => el("option", x))); ps.hidden = syms.length < 2;
+        const drawSym = async () => { const sym = ps.value || syms[0];
+          const bars = await get(`/instruments/${encodeURIComponent(sym)}/bars?timeframe=${a.timeframe}` +
+            `&source=${encodeURIComponent(a.source)}&limit=2000`);
+          if ($("pname").textContent.indexOf(name + ":") !== 0 || (ps.value || syms[0]) !== sym) return;
+          const t0 = toT(c.ts[0]), mine = bars.filter((b) => toT(b.ts) >= t0);
+          // Mark only where the position changes side (in, out or reversed), not every top-up.
+          // Positions are rebuilt backwards from today's holding through the fills listed.
+          const net = new Map(); a.fills.filter((f) => f.symbol === sym).forEach((f) => {
+            const t = toT(f.ts); net.set(t, (net.get(t) || 0) + f.qty); });
+          let pos = (a.units || {})[sym] || 0; const marks = [];
+          [...net].sort((x, y) => y[0] - x[0]).forEach(([t, q]) => { const before = pos - q, sd = Math.sign;
+            if (sd(before) !== sd(pos)) marks.push(pos > 0
+              ? { time: t, position: "belowBar", shape: "arrowUp", color: cssv("--good"), text: "Buy" }
+              : pos < 0 ? { time: t, position: "aboveBar", shape: "arrowDown", color: cssv("--bad"), text: "Short" }
+              : { time: t, position: before > 0 ? "aboveBar" : "belowBar", shape: "circle", color: cssv("--ink-2"), text: "Exit" });
+            pos = before; });
+          marks.reverse();
+          $("pcurvenote").textContent = `${sym} with this account's simulated trades: Buy, Short and Exit mark where its position changed side` +
+            (a.fills.length ? ` (from its latest ${a.fills.length} fills)` : "") + ". Simulated account value below.";
+          priceChart("pchart", mine.length > 1 ? mine : bars, $("ptip"), sym,
+            { markers: marks, equity: { xs: c.ts, ys: c.equity } }); };
+        ps.onchange = () => drawSym().catch(console.error);
+        return drawSym();
       }).catch((e) => { $("pcurve").hidden = true; console.error(e); });
       $("pcheck").textContent = "Checking against the backtest…";
       get("/paper/accounts/" + encodeURIComponent(name) + "/consistency").then((c) => {
@@ -599,6 +783,7 @@ $("scopy").onclick = () => {
 };
 const tick = () => { $("clock").textContent = new Date().toISOString().slice(11, 16) + " UTC"; };
 tick(); setInterval(tick, 15000);
+viewBar($("mview")); viewBar($("pview"));
 tabs();
 get("/health").then((h) => { const b = $("banner");
   $("live").className = "live on"; $("conn").textContent = "API online";

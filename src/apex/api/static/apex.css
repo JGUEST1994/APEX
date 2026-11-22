@@ -133,6 +133,9 @@ nav#tabs button:focus-visible { outline: 2px solid var(--brand); outline-offset:
 .rail-foot { margin-top: auto; padding: 12px 10px 0; font-size: 12px; color: var(--muted); line-height: 1.6;
              border-top: 1px solid var(--rule); }
 .rail-foot b { color: var(--ink-2); font-weight: 600; }
+.rail-foot .credit { margin: 8px 0 0; font-size: 11px; line-height: 1.45; }
+.rail-foot .credit a { color: var(--muted); text-underline-offset: 2px; }
+.rail-foot .credit a:hover { color: var(--brand); }
 .sys { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 500 11.5px/1.4 var(--num); }
 .sys .clock { margin-left: auto; color: var(--ink-2); }
 .live { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; position: relative; }
@@ -262,7 +265,7 @@ svg.spark path.draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: apex
 }
 .state.error { border-color: var(--bad); color: var(--ink); background: var(--bad-soft); font-family: var(--font); font-size: 14px; }
 .state.error b { color: var(--bad); }
-.state.error ~ .card { display: none; }
+.state.error ~ * { display: none; }
 @keyframes apex-spin { to { transform: rotate(360deg); } }
 @keyframes apex-scan { to { transform: translateX(100%); } }
 @keyframes apex-pulse { from { opacity: .25; } to { opacity: 1; } }
@@ -313,29 +316,56 @@ select { cursor: pointer; }
 .quote .chg.up { color: var(--good); background: var(--good-soft); }
 .quote .chg.down { color: var(--bad); background: var(--bad-soft); }
 .chart-wrap { position: relative; border-radius: var(--radius-sm); }
-svg#xchart, svg#pchart { height: 260px; }
-svg.pchart { width: 100%; height: 360px; display: block; cursor: crosshair; touch-action: pan-y; }
-svg.pchart .grid { stroke: var(--grid); stroke-width: 1; stroke-dasharray: 2 4; }
-svg.pchart .axis { fill: var(--muted); font: 11px var(--num); }
-svg.pchart .line { fill: none; stroke: var(--brand); stroke-width: 2; stroke-linejoin: round; }
-svg.pchart .line.draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: apex-draw 1100ms var(--ease) forwards; }
-svg.pchart .area { transition: opacity var(--med); }
-svg.pchart .area.draw { animation: apex-fade 900ms var(--ease) 250ms both; }
-svg.pchart .lastline { stroke: var(--brand); stroke-dasharray: 2 3; stroke-width: 1; }
-svg.pchart .lasttag { fill: var(--brand); }
-svg.pchart .lasttxt { fill: var(--brand-ink); font: 600 11px var(--num); }
-svg.pchart .xhair { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; }
-svg.pchart .dot { fill: var(--brand); stroke: var(--panel); stroke-width: 2; }
-svg.pchart .halo { fill: var(--brand); opacity: .18; }
+/* chart containers drawn by Lightweight Charts (canvas) */
+.lwc { width: 100%; height: 440px; position: relative; }
+.lwc.short { height: 280px; }
+.lwc.tall { height: 480px; }
+.lwc.fresh { animation: apex-fade 420ms var(--ease) both; }
 @keyframes apex-fade { from { opacity: 0; } to { opacity: 1; } }
-.tip {
-  position: absolute; pointer-events: none; background: var(--ink); color: var(--panel);
-  border-radius: var(--radius-sm); padding: 6px 10px; font: 12px/1.45 var(--num); white-space: nowrap;
-  transform: translate(-50%, -100%); margin-top: -14px; display: none; box-shadow: var(--shadow-2);
-}
-.tip::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px;
-              background: inherit; transform: translateX(-50%) rotate(45deg); }
-.tip b { font-weight: 600; }
+/* readout over the chart's top-left corner */
+.legend { position: absolute; left: 8px; top: 6px; z-index: 3; pointer-events: none; display: none;
+  flex-wrap: wrap; align-items: baseline; gap: 4px 12px; max-width: calc(100% - 90px);
+  font: 500 12px/1.4 var(--num); color: var(--ink-2); padding: 4px 8px; border-radius: 4px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); }
+.legend b { font-weight: 650; color: var(--ink); }
+.legend i { font-style: normal; color: var(--muted); margin-right: 4px; }
+.legend .when { color: var(--muted); }
+.hint { margin: 10px 0 0; font: 500 11.5px/1.4 var(--num); }
+
+/* ---- Chart view options: segmented button groups ---- */
+.viewbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 0 0 10px; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--rule); border-radius: var(--radius-sm);
+  background: var(--panel-2); }
+.seg button { all: unset; box-sizing: border-box; position: relative; cursor: pointer; padding: 5px 9px; min-height: 28px;
+  border-radius: 4px; font: 600 11.5px/18px var(--num); color: var(--muted); white-space: nowrap;
+  transition: color var(--fast), background-color var(--fast), box-shadow var(--fast), transform var(--fast) var(--ease); }
+.seg button:hover { color: var(--ink); background: var(--sunk); }
+.seg button:active { transform: scale(.95); }
+.seg button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.seg button[aria-pressed="true"] { color: var(--brand-ink); background: var(--brand); box-shadow: var(--shadow-1); }
+.seg button.tog[aria-pressed="true"] { color: var(--ink); background: var(--panel); box-shadow: var(--shadow-1), inset 0 -2px 0 var(--brand); }
+.seg button.tog.ma20[aria-pressed="true"] { box-shadow: var(--shadow-1), inset 0 -2px 0 var(--warn); }
+.seg button.tog.ma50[aria-pressed="true"] { box-shadow: var(--shadow-1), inset 0 -2px 0 var(--ink-2); }
+.viewhelp { flex-basis: 100%; margin: 0; font-size: 12.5px; }
+
+/* ---- Markets: watchlist beside the chart ---- */
+.mk { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 16px; align-items: start; }
+.mk > .card { margin-bottom: 0; }
+.watch { padding: 14px 10px; position: sticky; top: 50px; max-height: calc(100vh - 70px); overflow-y: auto; }
+.watch > h3 { padding: 0 6px; }
+.watch-list { display: flex; flex-direction: column; gap: 2px; }
+.wl { all: unset; box-sizing: border-box; position: relative; overflow: hidden; cursor: pointer; display: flex;
+  flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: var(--radius-sm);
+  transition: background-color var(--fast), transform var(--fast) var(--ease); }
+.wl:hover { background: var(--sunk); }
+.wl:active { transform: scale(.98); }
+.wl:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.wl.on { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
+.wl-top, .wl-bot { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.wl-top b { font: 600 13.5px/1.2 var(--font-display); }
+.wl-top .muted { font: 500 11px/1 var(--num); }
+.wl-last { font: 600 13px/1.2 var(--num); color: var(--ink-2); }
+.wl .chg { font: 600 11.5px/1 var(--num); }
 
 /* ---- Command block with a copy button ---- */
 .cmdwrap { position: relative; }
@@ -377,14 +407,20 @@ svg.pchart .halo { fill: var(--brand); opacity: .18; }
   .tile-last { font-size: 15px; }
   .tile-foot { display: none; }
   .card { padding: 14px; }
-  svg.pchart { height: 260px; }
-  svg#xchart, svg#pchart { height: 200px; }
+  .mk { grid-template-columns: minmax(0, 1fr); }
+  .viewbar { flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 10px; padding: 0 14px 4px; scrollbar-width: none; }
+  .viewbar::-webkit-scrollbar { display: none; }
+  .seg { flex: none; }
+  .viewhelp { display: none; }
+  .lwc { height: 320px; } .lwc.short { height: 220px; } .lwc.tall { height: 380px; }
+  .legend { max-width: calc(100% - 70px); font-size: 11px; gap: 2px 8px; }
   td.wrap { min-width: 12em; }
   #srules td:first-child { white-space: normal; }
 }
+@media (max-width: 1000px) { .mk { grid-template-columns: minmax(0, 1fr); } .watch { display: none; } }
 @media (max-width: 380px) { .glance { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
-  svg.spark path.draw, svg.pchart .line.draw { stroke-dashoffset: 0; }
+  svg.spark path.draw { stroke-dashoffset: 0; }
 }
