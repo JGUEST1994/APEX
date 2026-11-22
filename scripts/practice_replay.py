@@ -7,11 +7,12 @@ drawdown rule's high-water mark, so after a drawdown trip the account would trip
 the replay then restarts the mark at the equity left, as opening a new account would.
 Each month is also backtested from flat on the same bars, to compare returns and to measure how
 often practice and backtest hold the same direction (the practice record needs 95%).
-LIMITS "loose" lifts the correlated-group cap and the position count (a what-if, never a
-setting), to show what those two limits cost.
-Usage: python practice_replay.py SOURCE START SYMBOLS [STRATEGY] [CHUNK] [LIMITS]
+LIMITS (what-ifs, never settings): "loose" lifts the correlated-group cap and the position
+count, "positions" only the position count. PARAMS: strategy settings, e.g. gross=0.38.
+Usage: python practice_replay.py SOURCE START SYMBOLS [STRATEGY] [CHUNK] [LIMITS] [PARAMS]
 Needs APEX_DATABASE_URL (a database that already holds the bars) and APEX_TRADING_MODE=paper.
 """
+import json
 import statistics
 import sys
 import time
@@ -35,9 +36,11 @@ from apex.strategies.multi import align, all_multi_strategies
 source, start, symbols = sys.argv[1], sys.argv[2], sys.argv[3].split(",")
 strategy = sys.argv[4] if len(sys.argv) > 4 else "MR-IBS-BASKET-001"
 chunk = int(sys.argv[5]) if len(sys.argv) > 5 else 5
-loose = len(sys.argv) > 6 and sys.argv[6] == "loose"
-limits = (RiskLimits(max_cluster_exposure=1.0, max_positions=len(symbols)) if loose
-          else RiskLimits())
+what_if = sys.argv[6] if len(sys.argv) > 6 else "default"
+limits = {"default": RiskLimits(),
+          "loose": RiskLimits(max_cluster_exposure=1.0, max_positions=len(symbols)),
+          "positions": RiskLimits(max_positions=len(symbols))}[what_if]
+params = {k: json.loads(v) for k, v in (kv.split("=", 1) for kv in sys.argv[7:])} or None
 factory = make_session_factory(make_engine(get_settings().database_url))
 now = datetime.now(UTC)
 t0 = time.monotonic()
@@ -67,7 +70,7 @@ for m in pd.date_range(start, now.date(), freq="MS", tz="UTC"):
     name = f"replay-{m0:%Y-%m}"
     with session_scope(factory) as s:
         acc = create_account(s, name, strategy_key=strategy, symbol=symbols, timeframe="1d",
-                             source=source, limits=limits)
+                             source=source, limits=limits, params=params)
         acc.last_bar_ts = m0 - timedelta(seconds=1)  # the month's bars only, from the 1st
         capital = acc.initial_capital
     stops, days, equity = [], 0, capital
@@ -89,7 +92,7 @@ for m in pd.date_range(start, now.date(), freq="MS", tz="UTC"):
     ts = pd.DatetimeIndex(month[symbols[0]]["ts"])
     if days == 0 or len(ts) < 2:
         continue  # no prices for this month (yet)
-    bt = run_portfolio_backtest(month, basket, specs)  # from flat on the 1st, like the account
+    bt = run_portfolio_backtest(month, basket, specs, params)  # from flat, like the account
     with session_scope(factory) as s:
         acc_id = s.scalar(select(PaperAccount.id).where(PaperAccount.name == name))
         fills = s.execute(select(PaperFill.ts, PaperFill.symbol, PaperFill.qty)
@@ -109,8 +112,10 @@ stopped = [mo for mo in months if mo[3]]
 rets, bts, agree = ([mo[2] for mo in months], [mo[5] for mo in months],
                     sorted(mo[4] for mo in months))
 passed = [mo for mo in months if not mo[3] and mo[4] >= 0.95]
-label = ("LOOSE what-if: no correlated-group cap, a position for every fund" if loose
-         else "default safety limits")
+label = {"default": "default safety limits",
+         "loose": "WHAT-IF: no correlated-group cap, a position for every fund",
+         "positions": "WHAT-IF: default limits but a position for every fund"}[what_if]
+label += f"; settings {params}" if params else ""
 print(f"replayed {strategy} on {len(symbols)} markets as {n} fresh 30-day practice accounts, "
       f"{months[0][0]:%Y-%m} to {months[-1][0]:%Y-%m} ({label}; reset every {chunk} days "
       f"at most; {time.monotonic() - t0:.0f}s)")

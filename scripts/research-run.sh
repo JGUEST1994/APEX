@@ -112,13 +112,18 @@ tour() {  # name source timeframe start train test candidates...
 }
 
 case "$RESEARCH_GROUPS" in practice-replay*)  # throwaway branch: no research, just the replay
-  LIMITS=""; [ "$RESEARCH_GROUPS" = "practice-replay-loose" ] && LIMITS=loose
+  case "$RESEARCH_GROUPS" in  # what-if limits and strategy settings for the throwaway replay
+    practice-replay-loose) WHATIF="loose" ;;
+    practice-replay-small) WHATIF="default gross=0.38" ;;
+    practice-replay-small13) WHATIF="positions gross=0.38" ;;
+    *) WHATIF="" ;;
+  esac
   for s in SPY QQQ IWM DIA XLB XLE XLF XLI XLK XLP XLU XLV XLY; do
     ingest_patiently tiingo $s 1d 2000-01-03
   done
   echo "----- practice-replay.txt"
   APEX_TRADING_MODE=paper python scripts/practice_replay.py tiingo 2002-01-01 \
-    SPY,QQQ,IWM,DIA,XLB,XLE,XLF,XLI,XLK,XLP,XLU,XLV,XLY MR-IBS-BASKET-001 5 $LIMITS 2>&1 \
+    SPY,QQQ,IWM,DIA,XLB,XLE,XLF,XLI,XLK,XLP,XLU,XLV,XLY MR-IBS-BASKET-001 5 $WHATIF 2>&1 \
     | grep -v " INFO "
   echo "----- end"
   exit 0 ;;
