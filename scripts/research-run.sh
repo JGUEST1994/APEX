@@ -20,6 +20,12 @@
 # The earnings idea (VWAP-EARN-001) needs each company's earnings dates, which come from the
 # SEC's free EDGAR service; it asks for a contact, so it runs only when APEX_SEC_USER_AGENT
 # holds the operator's own name and email (one run per company, each with its own dates).
+# PRICE_CACHE (optional, a file path) keeps downloaded prices between runs: a SQLite copy of
+# the database with research results left out is restored before the run (when the database
+# file does not exist yet) and saved after it, and every download already stored with exactly
+# the same request is reused instead of fetched again. Requests end at END (the first of this
+# month), so a cache is reused for the rest of the month and prices are fetched fresh, with
+# any new split or dividend adjustments, once a month.
 # Used by .github/workflows/research.yml; also runs on a Mac or Linux machine.
 set -u
 OUT="${OUT:-research-out}"
@@ -34,6 +40,21 @@ mkdir -p "$OUT"
 log() { echo "== $*" | tee -a "$OUT/run.log"; }
 want() { case " $RESEARCH_GROUPS " in *" $1 "*) return 0 ;; esac; return 1; }
 
+PRICE_CACHE="${PRICE_CACHE:-}"
+REUSE=""
+DB_FILE=""
+case "${APEX_DATABASE_URL:-}" in sqlite:///*) DB_FILE=${APEX_DATABASE_URL#sqlite:///} ;; esac
+if [ -n "$PRICE_CACHE" ]; then
+  if [ -z "$DB_FILE" ]; then
+    log "price cache off: it needs APEX_DATABASE_URL to name a SQLite file"; PRICE_CACHE=""
+  else
+    REUSE=--reuse
+    if [ -f "$PRICE_CACHE" ] && [ ! -e "$DB_FILE" ]; then
+      cp "$PRICE_CACHE" "$DB_FILE" && log "prices restored from $PRICE_CACHE"
+    fi
+  fi
+fi
+
 GOT=""        # markets downloaded for the group being run
 LAST_ERROR=""  # why the latest download failed
 : >>"$OUT/ingest.log"
@@ -41,8 +62,13 @@ ingest() {  # provider symbol timeframe start
   local seen
   seen=$(wc -l <"$OUT/ingest.log")
   if apex ingest --provider "$1" --symbol "$2" --timeframe "$3" --start "$4" --end "$END" \
-      >>"$OUT/ingest.log" 2>&1; then
-    log "prices ok: $1 $2 $3 from $4"; GOT="$GOT $2"; return 0
+      $REUSE >>"$OUT/ingest.log" 2>&1; then
+    if tail -n +"$((seen + 1))" "$OUT/ingest.log" | grep -q ': reused '; then
+      log "prices ok (kept from an earlier run): $1 $2 $3 from $4"
+    else
+      log "prices ok: $1 $2 $3 from $4"
+    fi
+    GOT="$GOT $2"; return 0
   fi
   LAST_ERROR=$(tail -n +"$((seen + 1))" "$OUT/ingest.log" | grep -o 'error=.*' | tail -n 1 \
     | cut -c7-200)
@@ -189,6 +215,10 @@ if want fx-30m; then
   fi
 fi
 
+if [ -n "$PRICE_CACHE" ]; then
+  apex price-cache-save --out "$PRICE_CACHE" >>"$OUT/run.log" 2>&1 \
+    && log "prices kept in $PRICE_CACHE for the next run" || log "price cache save FAILED"
+fi
 apex export leaderboard --out "$OUT/leaderboard.csv" --force >>"$OUT/run.log" 2>&1
 apex leaderboard >"$OUT/leaderboard.txt" 2>&1
 apex shortlist --top 8 >"$OUT/shortlist.md" 2>&1

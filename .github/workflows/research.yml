@@ -34,9 +34,24 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e .
+      # Prices downloaded earlier this month are reused (research results are never kept), so
+      # a rerun skips the free plans' hourly limits. A new month starts a fresh cache.
+      - id: month
+        run: echo "m=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: price-cache
+          key: prices-${{ steps.month.outputs.m }}-${{ github.run_id }}
+          restore-keys: prices-${{ steps.month.outputs.m }}-
       - run: scripts/research-run.sh
         env:  # passed as data, never pasted into the command; blank means every group
           RESEARCH_GROUPS: ${{ inputs.groups }}
+          PRICE_CACHE: price-cache/prices.db
+      - if: always() && hashFiles('price-cache/prices.db') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: price-cache
+          key: prices-${{ steps.month.outputs.m }}-${{ github.run_id }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:
