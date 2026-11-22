@@ -26,6 +26,7 @@
     <div class="card kpis" id="kpis"></div>
     <div class="glance" id="glance" aria-label="Markets at a glance"></div>
     <div class="card"><h3>Check-up</h3><table id="checks"></table></div>
+    <div class="card"><h3>Automatic jobs</h3><p class="muted">What the scheduler (start-scheduler) last did. "Late" usually means its window was closed or the computer went to sleep.</p><table id="sched"></table></div>
     <div class="card"><h3>Recent data downloads</h3><table id="runs"></table></div>
     <div class="card" id="issuecard" hidden><h3 id="iname"></h3><table id="issues"></table></div>
   </section>
@@ -94,6 +95,7 @@ const DESC = {
 const EMPTY = {
   checks: "Check-up unavailable. Run apex doctor in PowerShell instead.",
   issues: "No problems recorded for this download.",
+  sched: "The scheduler hasn't run yet. Start it with start-scheduler to keep prices (and practice accounts) up to date.",
   runs: "No price data downloaded yet. Run apex ingest to fetch some.",
   strats: "No strategies registered.",
   shist: "Not tested yet. apex tournament moves a strategy forward when it passes the tests; only a named person can approve one.",
@@ -314,6 +316,7 @@ const LOAD = {
   async overview() {
     const [h, runs, ds, st, ck] = await Promise.all([get("/health"), get("/ingestion-runs?limit=20"),
       get("/datasets"), get("/strategies"), get("/system/checks")]);
+    const jobs = await get("/scheduler/jobs").catch(() => []);
     const kp = $("kpis"); kp.replaceChildren();
     [["Status", h.status], ["Mode", h.trading_mode.toUpperCase()], ["Live trading", "not available"],
      ["Datasets", ds.length], ["Strategies", st.length], ["External AI", h.external_ai_enabled ? "on" : "off"],
@@ -322,6 +325,13 @@ const LOAD = {
     const LV = { OK: "pass", WARN: "warn", FAIL: "fail" };
     table($("checks"), [["Check", (c) => c.name],
       ["Result", (c) => el("span", c.level, LV[c.level] || "")], ["Detail", (c) => c.detail, "wrap"]], ck);
+    const when = (t) => t ? t.slice(0, 16).replace("T", " ") : "–";
+    const every = (m) => !m ? "–" : m % 1440 === 0 ? `every ${m / 1440} day(s)` : m % 60 === 0 ? `every ${m / 60} hour(s)` : `every ${m} min`;
+    const RES = { ok: ["ok", "pass"], partial: ["some problems", "warn"], failed: ["failed", "fail"] };
+    table($("sched"), [["Job", (j) => j.job], ["Kind", (j) => ({ update: "price download", paper: "practice trading", backup: "backup" })[j.type] || j.type], ["How often", (j) => every(j.every_minutes)],
+      ["Last run (UTC)", (j) => when(j.last_run)],
+      ["Result", (j) => { const [t, c] = j.late ? ["late", "fail"] : (RES[j.status] || [j.status, ""]); return el("span", t, c); }],
+      ["Problems", (j) => j.errors.join("; ") || "none", "wrap"]], jobs);
     const showIssues = async (r) => {
       const iss = await get(`/ingestion-runs/${r.id}/issues`);
       $("issuecard").hidden = false;

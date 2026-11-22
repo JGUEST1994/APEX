@@ -161,6 +161,9 @@ with Bitcoin and Ether from Coinbase, hourly and daily). Run it again and leave 
 open: it tops the data up on each job's timer. Close the window to stop. To include a
 practice account, add a job like `{"name": "practice", "type": "paper", "accounts":
 ["sma-spy"], "every_minutes": 60}` and put `APEX_TRADING_MODE=paper` in `.env`.
+The **Automatic jobs** box on the dashboard's Overview shows when each job last ran and
+whether it had problems. A job marked **late** has not run for more than twice its interval:
+usually the scheduler window was closed or the computer went to sleep.
 
 ## 3. Test one idea (a backtest)
 
