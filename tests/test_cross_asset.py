@@ -119,5 +119,5 @@ def test_walk_forward_on_three_legs():
     grid = {"lookback": [60, 120], "rebalance": [10, 21]}
     wf = walk_forward(bars, CrossAssetTrend(), {s: SYMS[s] for s in LEGS}, grid,
                       train_bars=400, test_bars=200)
-    assert len(wf.folds) == 3 and wf.n_trials == 12 and len(wf.oos_returns) == 600
+    assert len(wf.folds) == 3 and wf.n_trials == 4 and len(wf.oos_returns) == 600
     assert wf.summary["mean_oos_sharpe"] > 0.2  # planted trends survive out of sample

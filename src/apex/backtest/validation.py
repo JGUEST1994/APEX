@@ -328,7 +328,9 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
     if not folds:
         raise ValueError("not enough bars for one train+test window")
     oos = pd.concat(oos_parts)
-    wf = WalkForwardResult(folds, oos, n_trials=len(combos) * len(folds),
+    # A try is one setting: the stitched unseen record is a single strategy whichever
+    # settings each stretch picked, so stretches are not separate tries.
+    wf = WalkForwardResult(folds, oos, n_trials=len(combos),
                            trial_sharpes=trial_sharpes,
                            buy_hold_returns=pd.concat(hold_parts) if hold_parts else None)
     wf.summary = summarise_walk_forward(wf)
@@ -342,15 +344,15 @@ def summarise_walk_forward(wf: WalkForwardResult) -> dict:
     is_scores = [f.is_score for f in wf.folds if math.isfinite(f.is_score)]
     oos_sharpes = [f.oos_metrics.get("sharpe") for f in wf.folds]
     oos_sharpes = [s for s in oos_sharpes if s is not None]
-    # Every setting tried on every stretch counts as a try (on the safe side), and each try
-    # is judged like this one: over the whole unseen history. (The training-stretch Sharpes
+    # Every setting tried counts as a try, and each try is judged like this one: over the
+    # whole unseen history. (The training-stretch Sharpes
     # in wf.trial_sharpes are far noisier, being over much less data, so they would set the
     # bar by the training length and make more history count against a real edge.)
     dsr = deflated_sharpe(oos, max(wf.n_trials, 1))
     hold = wf.buy_hold_returns
     held = (1 + hold).cumprod() if hold is not None and len(hold) else None
     return {
-        "folds": len(wf.folds), "n_trials": wf.n_trials,
+        "folds": len(wf.folds), "n_trials": wf.n_trials, "trials_per": "setting",
         "oos_total_return": float(eq.iloc[-1] - 1) if len(eq) else None,
         "oos_max_drawdown": float((eq / eq.cummax() - 1).min()) if len(eq) else None,
         "oos_buy_hold_return": float(held.iloc[-1] - 1) if held is not None else None,

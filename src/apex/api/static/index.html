@@ -148,7 +148,7 @@ const GLOSSARY = {
   deflated_sharpe: ["Luck-adjusted confidence", "pct", "Chance the edge is real after allowing for how many tries were made. It is judged on all the unseen history, so more history helps a real edge. The tournament wants 95%."],
   pbo: ["Overfitting risk", "pct", "Chance the best-looking settings are just the luckiest. The tournament wants 50% or less."],
   folds: ["Stretches tested", "int", "Number of tune-then-test rounds."],
-  n_trials: ["Tries counted", "int", "Settings tried times stretches tested. Each counts as a try, which makes the luck test stricter."],
+  n_trials: ["Tries counted", "int", "Settings tried on this market. Each counts as a try, and the luck test adds up the tries on every market, which makes it stricter."],
 };
 // What each data-quality finding means. "error" rows were not stored; warnings were.
 const ISSUE_TEXT = {
