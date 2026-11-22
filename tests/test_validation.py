@@ -90,7 +90,7 @@ def test_walk_forward(daily):
     # OOS returns only cover test windows
     assert wf.oos_returns.index.min() == wf.folds[0].test_start
     s = wf.summary
-    assert s["n_trials"] == 4 * len(wf.folds)
+    assert s["n_trials"] == 4  # one try per setting, not per stretch
     assert 0 <= s["deflated_sharpe"] <= 1 and 0 <= s["pct_profitable_folds"] <= 1
     again = walk_forward(daily, strat, SPY, {"fast": [10, 20], "slow": [50, 100]},
                          train_bars=750, test_bars=250)
@@ -135,7 +135,7 @@ def test_single_setting_skips_training_but_unseen_results_are_unchanged(daily, k
               "mean_oos_sharpe", "param_stability"):
         assert fast.summary[k] == slow.summary[k]
     assert fast.summary["mean_is_sharpe"] is None  # nothing was tuned, so nothing to report
-    assert fast.n_trials == len(fast.folds)  # try count unchanged
+    assert fast.n_trials == 1  # one setting, one try
 
 
 def test_walk_forward_reports_simply_holding_over_the_same_stretches(daily):
