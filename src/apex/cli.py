@@ -189,6 +189,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="skip strategies on markets or timeframes they are not meant for "
                     "(always on with --strategies all)")
     tn.add_argument("--strategies", default="all", help="comma-separated keys or 'all'")
+    tn.add_argument("--exclude", default="", help="comma-separated keys to leave out")
+    tn.add_argument("--param", action="append", default=[],
+                    help="key=value (JSON, or @file) for each chosen strategy that has that "
+                    "setting, e.g. anchors=@data/events/AAPL_earnings.json")
     tn.add_argument("--symbols", required=True,
                     help="comma-separated; pairs as A/B go to multi-instrument strategies")
     tn.add_argument("--timeframe", default="1d")
@@ -465,12 +469,28 @@ def main(argv: list[str] | None = None) -> int:
 
             reg = {**all_strategies(), **all_multi_strategies()}
             keys = sorted(reg) if args.strategies == "all" else args.strategies.split(",")
-            missing = [k for k in keys if k not in reg]
+            skip = [k for k in args.exclude.split(",") if k]
+            missing = [k for k in keys + skip if k not in reg]
             if missing:
                 print(f"unknown strategies: {missing}", file=sys.stderr)
                 return 2
+            strats = [reg[k]() for k in keys if k not in skip]
+            given = {}
+            for kv in args.param:
+                k, _, v = kv.partition("=")
+                given[k] = _param(v)
+            # a given setting replaces the default of each strategy that has it (still one
+            # set of settings per strategy, so nothing is tuned)
+            grids = {st.meta.key: {k: [given.get(k, v)] for k, v in
+                                   st.meta.default_params.items()}
+                     for st in strats if set(given) & set(st.meta.default_params)}
+            unused = [k for k in given if not any(k in st.meta.default_params for st in strats)]
+            if unused:
+                print(f"--param {', '.join(unused)}: none of the chosen strategies has that "
+                      "setting", file=sys.stderr)
+                return 2
             entries = run_tournament(
-                s, [reg[k]() for k in keys], symbols=args.symbols.split(","),
+                s, strats, symbols=args.symbols.split(","), grids=grids or None,
                 timeframe=Timeframe(args.timeframe), source=args.source, start=args.start,
                 end=args.end, train_bars=args.train_bars, test_bars=args.test_bars,
                 promote=not args.no_promote, regime_filter=args.regime_filter,

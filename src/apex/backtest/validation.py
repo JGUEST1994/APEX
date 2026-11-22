@@ -295,7 +295,10 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
     while start + test_bars <= n:
         tr_lo = 0 if anchored else start - train_bars
         scored = []
-        for c in combos:
+        # With a single setting there is nothing to choose, so the training stretch is not
+        # backtested at all (it used to be, only to report a tuning-data Sharpe, at several
+        # times the cost of the unseen windows). The unseen results are the same either way.
+        for c in combos if len(combos) > 1 else []:
             try:
                 res, _ = _segment(bars, strategy, spec, c, cfg, tr_lo, start, warmup)
                 s = _score(res, objective)
@@ -304,7 +307,7 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
             scored.append(s)
             if math.isfinite(s):
                 trial_sharpes.append(s)
-        best_i = int(np.argmax(scored))
+        best_i = int(np.argmax(scored)) if scored else 0
         best = combos[best_i]
         key = json.dumps(best, sort_keys=True, default=str)
         if key not in signals:
@@ -317,7 +320,8 @@ def walk_forward(bars: Bars, strategy: Strategy, spec: Spec,
             hold_parts.append(pd.Series(close.to_numpy(float), index=pd.DatetimeIndex(
                 ts.iloc[start:start + test_bars])).pct_change().fillna(0.0))
         folds.append(Fold(ts.iloc[tr_lo], ts.iloc[start],
-                          ts.iloc[start + test_bars - 1], best, scored[best_i],
+                          ts.iloc[start + test_bars - 1], best,
+                          scored[best_i] if scored else math.nan,
                           {k: res.metrics.get(k) for k in
                            ("total_return", "sharpe", "max_drawdown", "trades", "win_rate")}))
         start += test_bars

@@ -112,6 +112,32 @@ def test_unseen_windows_match_replaying_all_earlier_history(daily, key):
         assert f.oos_metrics["trades"] == res.metrics["trades"]
 
 
+@pytest.mark.parametrize("key", ["TF-SMA-001", "MR-IBS-001"])
+def test_single_setting_skips_training_but_unseen_results_are_unchanged(daily, key, monkeypatch):
+    """With one setting there is nothing to tune, so training stretches are not backtested.
+    The unseen results must equal those of the old path, where every stretch was scored
+    (forced here with the same setting listed twice, so the choice is still that setting)."""
+    from apex.backtest import validation as v
+
+    strat = all_strategies()[key]()
+    one = {k: [val] for k, val in strat.meta.default_params.items()}
+    twice = {**one, next(iter(one)): one[next(iter(one))] * 2}
+    calls = []
+    real = v._segment
+    monkeypatch.setattr(v, "_segment", lambda *a, **k: calls.append(1) or real(*a, **k))
+    fast = walk_forward(daily, strat, SPY, one, train_bars=504, test_bars=126)
+    assert not calls  # no training backtests at all
+    slow = walk_forward(daily, strat, SPY, twice, train_bars=504, test_bars=126)
+    assert calls
+    pd.testing.assert_series_equal(fast.oos_returns, slow.oos_returns)
+    assert [f.oos_metrics for f in fast.folds] == [f.oos_metrics for f in slow.folds]
+    for k in ("oos_total_return", "oos_max_drawdown", "pct_profitable_folds",
+              "mean_oos_sharpe", "param_stability"):
+        assert fast.summary[k] == slow.summary[k]
+    assert fast.summary["mean_is_sharpe"] is None  # nothing was tuned, so nothing to report
+    assert fast.n_trials == len(fast.folds)  # try count unchanged
+
+
 def test_walk_forward_reports_simply_holding_over_the_same_stretches(daily):
     wf = walk_forward(daily, all_strategies()["TF-SMA-001"](), SPY, {"fast": [10], "slow": [50]},
                       train_bars=750, test_bars=250)

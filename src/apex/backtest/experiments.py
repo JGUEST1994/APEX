@@ -142,6 +142,7 @@ def run_validation(session: Session, strategy: Strategy, *, symbol: str, timefra
     """Walk-forward + PBO + Monte Carlo, recorded as one reproducible experiment."""
     from apex.backtest.validation import (
         monte_carlo_trades,
+        param_grid,
         probability_of_backtest_overfitting,
         returns_matrix,
         walk_forward,
@@ -164,9 +165,12 @@ def run_validation(session: Session, strategy: Strategy, *, symbol: str, timefra
     wf = walk_forward(bars, strategy, spec, grid, train_bars=train_bars,
                       test_bars=test_bars, anchored=anchored, config=cfg)
     metrics: dict[str, Any] = dict(wf.summary)
-    matrix = returns_matrix(bars, strategy, spec, grid, cfg)
-    if matrix.shape[1] >= 2:
-        metrics["pbo"] = probability_of_backtest_overfitting(matrix)["pbo"]
+    # The overfitting check compares settings with each other, so a single setting skips
+    # it (and the full-history backtest it would need).
+    if len(param_grid(grid)) >= 2:
+        matrix = returns_matrix(bars, strategy, spec, grid, cfg)
+        if matrix.shape[1] >= 2:
+            metrics["pbo"] = probability_of_backtest_overfitting(matrix)["pbo"]
     oos_eq = cfg.initial_capital * (1 + wf.oos_returns).cumprod()
     pnl = oos_eq.diff().dropna()
     metrics["monte_carlo_bar_bootstrap"] = monte_carlo_trades(

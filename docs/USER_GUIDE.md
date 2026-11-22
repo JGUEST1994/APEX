@@ -161,6 +161,9 @@ with Bitcoin and Ether from Coinbase, hourly and daily). Run it again and leave 
 open: it tops the data up on each job's timer. Close the window to stop. To include a
 practice account, add a job like `{"name": "practice", "type": "paper", "accounts":
 ["sma-spy"], "every_minutes": 60}` and put `APEX_TRADING_MODE=paper` in `.env`.
+The **Automatic jobs** box on the dashboard's Overview shows when each job last ran and
+whether it had problems. A job marked **late** has not run for more than twice its interval:
+usually the scheduler window was closed or the computer went to sleep.
 
 ## 3. Test one idea (a backtest)
 
@@ -198,8 +201,9 @@ apex earnings-dates --symbol AAPL
 apex backtest --strategy VWAP-EARN-001 --symbol AAPL --timeframe 1d --source tiingo --start 2019-01-01 --end 2025-01-01 --param anchors=@data/events/AAPL_earnings.json
 ```
 
-EDGAR's recent-filings list goes back a few years for most companies, so dates are only
-found for that period; bars before the first date simply don't trade.
+APEX reads every page of the company's EDGAR filings, so the dates reach back to 2003,
+when results releases got their own filing item; bars before the first date simply don't
+trade.
 
 ## 4. Rank ideas fairly (the tournament)
 
@@ -227,8 +231,12 @@ downloads free crypto prices (plus US stocks and forex if your Alpaca and Tiingo
 set) and saves the leaderboard and shortlist in `research-out/`. Daily US stocks come from
 Tiingo back to 2000 when its key is set. To run only some market groups, list them in
 `RESEARCH_GROUPS` (or the workflow's *groups* box), for example `stocks-1d fx-1h`; the
-groups are `crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h`. A market
-whose download fails is left out and the rest of its group still runs.
+groups are `crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h fx-30m`. A
+market whose download fails is left out and the rest of its group still runs. Tiingo's free
+plan allows about 50 requests an hour, so a run of every group pauses for about an hour once.
+The earnings-day idea runs only when `APEX_SEC_USER_AGENT` is set (on GitHub: a repository
+secret with that name, holding your own name and email); it then fetches each company's
+earnings dates and tests the idea on Apple, Microsoft, Nvidia and Amazon.
 
 Each result also shows what simply holding the same market made over the same unseen
 stretches, so you can see whether a strategy did better than buying and waiting.

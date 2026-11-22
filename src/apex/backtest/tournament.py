@@ -145,6 +145,7 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
     ``suited_only`` a strategy is skipped on markets or timeframes it does not declare."""
     gates = gates or Gates()
     entries: list[Entry] = []
+    done: list[tuple[Strategy, str, str, Any]] = []
     if regime_filter:
         from apex.regime.filtered import RegimeFiltered
 
@@ -168,13 +169,22 @@ def run_tournament(session: Session, strategies: list[Strategy], *, symbols: lis
                 entries.append(Entry(strat.meta.key, strat.meta.version, strat.meta.category,
                                      sym, timeframe.value, -1, {}, 0, False, [str(exc)]))
                 continue
-            fam = family_trials(session, base_key) + family_trials(session, base_key + "+RF")
-            ok, reasons, m = evaluate(exp.metrics, gates, fam)
-            e = Entry(strat.meta.key, strat.meta.version, strat.meta.category, sym,
-                      timeframe.value, exp.id, m, fam, ok, reasons, score(m) if ok else 0.0)
-            entries.append(e)
-            if promote:
-                _promote(session, exp.strategy_version_id, e)
+            done.append((strat, base_key, sym, exp))
+    # Judge only once every run is recorded, so each result is measured against all of its
+    # family's tries; judging as we went let a family's first market face fewer tries than
+    # its last, and pass on running order alone.
+    fams: dict[str, int] = {}
+    for strat, base_key, sym, exp in done:
+        if base_key not in fams:
+            fams[base_key] = (family_trials(session, base_key)
+                              + family_trials(session, base_key + "+RF"))
+        fam = fams[base_key]
+        ok, reasons, m = evaluate(exp.metrics, gates, fam)
+        e = Entry(strat.meta.key, strat.meta.version, strat.meta.category, sym,
+                  timeframe.value, exp.id, m, fam, ok, reasons, score(m) if ok else 0.0)
+        entries.append(e)
+        if promote:
+            _promote(session, exp.strategy_version_id, e)
     entries.sort(key=lambda e: (e.passed, e.score), reverse=True)
     return entries
 

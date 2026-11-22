@@ -230,6 +230,41 @@ def test_cli_and_api(db_url, monkeypatch, capsys):
     engine.dispose()
 
 
+def test_cli_tournament_leaves_out_strategies_and_sets_their_settings(db_url, monkeypatch,
+                                                                     capsys, tmp_path):
+    import json
+
+    from apex.core.config import get_settings
+
+    monkeypatch.setenv("APEX_DATABASE_URL", db_url)
+    get_settings.cache_clear()
+    dates = tmp_path / "SPY_earnings.json"
+    dates.write_text(json.dumps([f"{y}-{m:02d}-05" for y in range(2018, 2025)
+                                 for m in (1, 4, 7, 10)]))
+    run = ["tournament", "--symbols", "SPY", "--source", "synthetic", "--start", "2018-01-01",
+           "--end", "2025-01-01", "--train-bars", "500", "--test-bars", "250"]
+    try:
+        assert cli(["ingest", "--provider", "synthetic", "--symbol", "SPY", "--timeframe", "1d",
+                    "--start", "2018-01-01", "--end", "2025-01-01"]) == 0
+        capsys.readouterr()
+        assert cli([*run, "--strategies", "TF-SMA-001,VWAP-EARN-001", "--exclude", "TF-SMA-001",
+                    "--param", f"anchors=@{dates}"]) == 0
+        out = capsys.readouterr().out
+        assert "VWAP-EARN-001" in out and "TF-SMA-001" not in out
+        # a setting no chosen strategy has is a typo, not something to ignore
+        assert cli([*run, "--strategies", "TF-SMA-001", "--param", "anchors=[]"]) == 2
+        assert "none of the chosen strategies has that setting" in capsys.readouterr().err
+        assert cli([*run, "--exclude", "NOPE"]) == 2
+    finally:
+        get_settings.cache_clear()
+    engine = make_engine(db_url)
+    with make_session_factory(engine)() as s:
+        lb = leaderboard(s, symbol="SPY")
+    engine.dispose()
+    assert list(lb["strategy"]) == ["VWAP-EARN-001"]
+    assert lb["oos_trades"].iloc[0] > 0  # the dates reached it: without them it never trades
+
+
 def test_regime_filtered_variants_share_trial_family(session):
     btc = by_symbol()["BTCUSDT"]
     ingest_bars(session, SyntheticProvider(), btc, Timeframe.D1, utc(2018, 1, 1),
@@ -270,3 +305,26 @@ def test_only_suited_skips_markets_and_timeframes_a_strategy_is_not_for():
     assert not suits(reg["OF-DELTA-001"](), "BTCUSDT", Timeframe.D1)  # intraday only
     pair = all_multi_strategies()["STAT-PAIR-001"]()
     assert not suits(pair, "QQQ/SPY/IWM", pair.meta.timeframes[0])  # exactly two legs
+
+
+def test_every_market_is_judged_against_all_of_the_familys_tries(session):
+    """Running order must not matter: the first market faces as many tries as the last,
+    so the tournament's verdicts match the leaderboard's."""
+    spy, qqq = by_symbol()["SPY"], by_symbol()["QQQ"]
+    for spec in (spy, qqq):
+        ingest_bars(session, SyntheticProvider(), spec, Timeframe.D1, utc(2016, 1, 1),
+                    utc(2024, 1, 1))
+    session.commit()
+    entries = run_tournament(session, [all_strategies()["MR-IBS-001"]()],
+                             symbols=["SPY", "QQQ"], timeframe=Timeframe.D1,
+                             source="synthetic", start=utc(2016, 1, 1), end=utc(2024, 1, 1),
+                             train_bars=504, test_bars=252, promote=False)
+    session.commit()
+    total = family_trials(session, "MR-IBS-001")
+    assert len(entries) == 2 and {e.family_trials for e in entries} == {total}
+    assert total == sum(e.metrics["n_trials"] for e in entries)
+    lb = leaderboard(session).set_index("symbol")
+    for e in entries:
+        assert lb.loc[e.symbol, "family_trials"] == e.family_trials
+        assert lb.loc[e.symbol, "deflated_sharpe"] == e.metrics["deflated_sharpe_family"]
+        assert bool(lb.loc[e.symbol, "passed_gates"]) == e.passed

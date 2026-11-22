@@ -2,13 +2,15 @@ name: research-run
 # Ranks every built strategy on real, free price data. Research only: nothing is traded,
 # no account is touched. Start it by hand (Actions tab -> research-run -> Run workflow).
 # Optional repository secrets: APEX_ALPACA_KEY_ID + APEX_ALPACA_SECRET_KEY (US stocks),
-# APEX_TIINGO_API_KEY (daily US stocks back to 2000, and forex). Without them only crypto is
-# ranked. Results print to the job log and are kept as the research-results artifact.
+# APEX_TIINGO_API_KEY (daily US stocks back to 2000, and forex), APEX_SEC_USER_AGENT (your own
+# name and email, e.g. "Jane Smith jane@example.com": the SEC asks for a contact before its
+# free service gives out earnings dates, which the earnings idea needs). Without them only
+# crypto is ranked. Results print to the job log and are kept as the research-results artifact.
 on:
   workflow_dispatch:
     inputs:
       groups:
-        description: "Market groups to run, space-separated (blank = all): crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h"
+        description: "Market groups to run, space-separated (blank = all): crypto-1d crypto-1h crypto-5m stocks-1d stocks-5m stocks-15m fx-1h fx-30m"
         required: false
         default: ""
 
@@ -25,6 +27,7 @@ jobs:
       APEX_ALPACA_KEY_ID: ${{ secrets.APEX_ALPACA_KEY_ID }}
       APEX_ALPACA_SECRET_KEY: ${{ secrets.APEX_ALPACA_SECRET_KEY }}
       APEX_TIINGO_API_KEY: ${{ secrets.APEX_TIINGO_API_KEY }}
+      APEX_SEC_USER_AGENT: ${{ secrets.APEX_SEC_USER_AGENT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

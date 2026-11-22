@@ -280,3 +280,41 @@ class EtfVsBasket(MultiStrategy):
         for s in syms[1:]:
             out[s] = wx / (len(syms) - 1)
         return pd.DataFrame(out, index=bars[syms[0]].index)
+
+
+@register_multi
+class IbsBasket(MultiStrategy):
+    """The internal-bar-strength bounce (MR-IBS-001) run on every fund of a basket at once,
+    each holding a fixed equal share, so no single market's crash dominates the book."""
+
+    legs = None
+    meta = StrategyMeta(
+        key="MR-IBS-BASKET-001", version="1.0.0", name="Internal bar strength, fund basket",
+        category="mean_reversion",
+        description="Applies MR-IBS-001's rules to each fund of a basket separately and "
+                    "holds each signalled fund at a fixed 1/N share of the gross weight "
+                    "(N = funds in the basket), the rest in cash. The single-market version "
+                    "made money on all 17 daily US markets in research run 5 but fell more "
+                    "than 25% on 16 of them; spreading it over many funds tests whether "
+                    "diversification cuts that drop. Hypothesis H54.",
+        entry_rules="per fund: (close - low) / (high - low) < `threshold`",
+        exit_rules="per fund: close above the prior bar's high, or after `max_bars` bars",
+        stop_loss="time stop (max_bars), as in MR-IBS-001",
+        take_profit="close above the prior bar's high",
+        position_sizing="each fund in a trade holds gross / N of equity, whatever the others "
+                        "do; never more than gross in total",
+        asset_classes=(AssetClass.EQUITY, AssetClass.FUTURES),
+        timeframes=(Timeframe.D1,),
+        default_params={"threshold": 0.2, "max_bars": 5, "gross": 1.0},
+    )
+
+    def target_weights(self, bars: dict[str, pd.DataFrame], params: dict[str, Any]
+                       ) -> pd.DataFrame:
+        from apex.strategies.builtin2 import InternalBarStrength
+
+        single = InternalBarStrength()
+        p = {"threshold": params["threshold"], "max_bars": params["max_bars"]}
+        share = params["gross"] / len(bars)
+        out = {s: single.target_position(b, p).to_numpy(float) * share
+               for s, b in bars.items()}
+        return pd.DataFrame(out, index=next(iter(bars.values())).index)
