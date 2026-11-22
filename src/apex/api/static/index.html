@@ -17,11 +17,13 @@
   <a class="brand" href="#overview" aria-label="APEX home">
     <svg viewBox="0 0 905.77 256" role="img" aria-hidden="true"><path fill="var(--brand)" d="M128 24 L171.88 100 L84.12 100 Z"/><path fill="currentColor" d="M74.88 116 L181.12 116 L245.78 228 L161.49 228 L128 170 L94.51 228 L10.22 228 Z"/><path fill="currentColor" d="M392.38 48 L484.75 208 L454.73 208 L392.38 100 L330.02 208 L300 208 Z M506.75 48 H566.75 A48 48 0 0 1 566.75 144 H532.75 V208 H506.75 Z M532.75 74 V118 H566.75 A22 22 0 0 0 566.75 74 Z M636.75 48 H740.75 V74 H662.75 V115 H730.75 V141 H662.75 V182 H740.75 V208 H636.75 Z M762.75 48 H796.56 L895.77 208 H861.96 Z M861.96 48 H895.77 L796.56 208 H762.75 Z "/></svg>
   </a>
-  <nav id="tabs" aria-label="Sections"></nav>
-  <div class="rail-foot"><b id="footmode">Research</b><br>Practice data only.<br>Real-money trading is switched off.</div>
+  <nav id="tabs" aria-label="Sections"><div class="nav-label" aria-hidden="true">Workspace</div><div class="ind" aria-hidden="true"></div></nav>
+  <div class="rail-foot"><div class="sys"><span class="live" id="live"></span><span id="conn">Connecting…</span>
+    <span class="clock" id="clock" title="Time now in UTC, the time zone every table uses"></span></div>
+    <b id="footmode">Research</b><br>Practice data only.<br>Real-money trading is switched off.</div>
 </aside>
 <main>
-  <header class="page-head"><h1 id="ptitle">Overview</h1><p id="pdesc"></p></header>
+  <header class="page-head" id="phead"><p class="crumb" aria-hidden="true">APEX / <b id="pnum">01</b></p><h1 id="ptitle">Overview</h1><p id="pdesc"></p></header>
   <section id="overview">
     <div class="card kpis" id="kpis"></div>
     <div class="glance" id="glance" aria-label="Markets at a glance"></div>
@@ -45,7 +47,8 @@
       <table id="srules"></table>
       <h3 class="mt">Progress so far</h3><table id="shist"></table>
       <p class="muted">Try it on stored prices:</p>
-      <pre id="scmd" class="cmd"></pre></div></section>
+      <div class="cmdwrap"><pre id="scmd" class="cmd"></pre>
+        <button class="copy" id="scopy" type="button">Copy</button></div></div></section>
   <section id="ideas"><div class="card"><p id="ideasum" class="muted"></p>
     <table id="ideatab"></table></div></section>
   <section id="leaderboard">
@@ -119,6 +122,21 @@ function el(tag, text, cls) {
   if (cls) e.className = cls;
   return e;
 }
+const calm = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Whole numbers tick up from zero when a page opens.
+function countUp(node, n) {
+  if (calm() || !Number.isInteger(n) || n < 2) return;
+  const t0 = performance.now(), dur = 650;
+  const step = (t) => { const k = Math.min(1, (t - t0) / dur);
+    node.lastChild.textContent = String(Math.round(n * (1 - Math.pow(1 - k, 3))));
+    if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+// Briefly ring the card that just changed, so the eye finds it.
+function flash(node) {
+  const c = node && node.closest(".card"); if (!c) return;
+  c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash");
+}
 // Plain-English meaning of each recorded figure: [label, format, meaning]. Same wording as
 // "What the numbers mean" in docs/USER_GUIDE.md.
 const GLOSSARY = {
@@ -176,13 +194,45 @@ function table(t, cols, rows) {
     cols.forEach(([, f, cls]) => { const c = r.insertCell(); const v = f(row); if (cls) c.className = cls;
       if (v instanceof Node) c.appendChild(v); else c.textContent = v; }); });
 }
+// One stroke icon per page (24x24 grid, drawn with the text colour).
+const ICONS = {
+  overview: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  markets: "M3 20h18M4 16l5-6 4 3 7-8",
+  strategies: "M9 3h6M10 3v6l-5.5 9.2A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.8L14 9V3M7.5 15h9",
+  ideas: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z",
+  leaderboard: "M5 20v-8M12 20V5M19 20v-5M3 20h18",
+  experiments: "M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7v5l3 2",
+  paper: "M3 7h18v13H3zM7 7V4h10v3M16 13.5h2",
+  research: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
+};
 function tabs() {
-  TABS.forEach(([id, label]) => { const b = el("button", label); b.onclick = () => show(id);
-    b.dataset.id = id; $("tabs").appendChild(b); });
+  TABS.forEach(([id, label], k) => { const b = el("button"); b.onclick = () => show(id);
+    b.dataset.id = id; b.title = `${label} (press ${k + 1})`;
+    const ic = svgEl("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" });
+    ic.appendChild(svgEl("path", { d: ICONS[id] }));
+    b.append(ic, el("span", label, "lbl"), el("kbd", k + 1));
+    b.lastChild.setAttribute("aria-hidden", "true");
+    $("tabs").appendChild(b); });
+  window.addEventListener("resize", slide);
+}
+// Move the highlight to the open page's button.
+function slide() {
+  const b = document.querySelector("nav#tabs button.on"), ind = document.querySelector("nav#tabs .ind");
+  if (!b || !ind) return;
+  ind.style.transform = `translate(${b.offsetLeft}px, ${b.offsetTop}px)`;
+  ind.style.width = b.offsetWidth + "px"; ind.style.height = b.offsetHeight + "px"; ind.style.opacity = 1;
+  if (!$("tabs").classList.contains("ready")) requestAnimationFrame(() => $("tabs").classList.add("ready"));
+  b.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 const loaded = {};
 function show(id) {
-  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.id === id));
+  const was = document.querySelector("nav#tabs button.on");
+  document.querySelectorAll("nav button").forEach((b) => { b.classList.toggle("on", b.dataset.id === id);
+    if (b.dataset.id === id) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  slide();
+  if (!was || was.dataset.id !== id) { const ph = $("phead"); ph.classList.remove("enter");
+    void ph.offsetWidth; ph.classList.add("enter"); }
+  $("pnum").textContent = String(TABS.findIndex(([k]) => k === id) + 1).padStart(2, "0") + " " + (TABS.find(([k]) => k === id) || [, id])[1];
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === id));
   const t = TABS.find(([k]) => k === id); $("ptitle").textContent = t ? t[1] : id;
   $("pdesc").textContent = DESC[id] || ""; document.title = (t ? t[1] + " · " : "") + "APEX";
@@ -229,9 +279,11 @@ function chart(svg, xs, ys, tip = $("tip")) {
   g.appendChild(svgEl("stop", { offset: "0", "stop-color": "var(--brand)", "stop-opacity": ".18" }));
   g.appendChild(svgEl("stop", { offset: "1", "stop-color": "var(--brand)", "stop-opacity": "0" }));
   defs.appendChild(g); svg.appendChild(defs);
+  const lastY = Y(ys[ys.length - 1]);
   niceTicks(lo, hi, 5).forEach((v) => {
     svg.appendChild(svgEl("line", { class: "grid", x1: L, x2: W - R, y1: Y(v), y2: Y(v) }));
-    svg.appendChild(svgEl("text", { class: "axis", x: W - R + 8, y: Y(v) + 4 }, priceFmt(v, span)));
+    // leave room for the last-price tag rather than printing a label under it
+    if (Math.abs(Y(v) - lastY) > 14) svg.appendChild(svgEl("text", { class: "axis", x: W - R + 8, y: Y(v) + 4 }, priceFmt(v, span)));
   });
   const nx = Math.max(2, Math.min(6, Math.floor((W - L - R) / 140)));
   for (let k = 0; k <= nx; k++) {
@@ -240,21 +292,26 @@ function chart(svg, xs, ys, tip = $("tip")) {
     svg.appendChild(svgEl("text", { class: "axis", x: X(i), y: H - 8, "text-anchor": anchor }, xs[i].slice(0, 10)));
   }
   const pts = ys.map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1));
-  svg.appendChild(svgEl("path", { class: "area", fill: `url(#${gid})`, d: "M" + pts.join("L") + `L${X(ys.length - 1)},${H - B}L${L},${H - B}Z` }));
-  svg.appendChild(svgEl("path", { class: "line", d: "M" + pts.join("L") }));
+  // Draw the line in only when the data changed, not when the window is resized.
+  const key = xs[0] + "|" + xs[xs.length - 1] + "|" + ys.length + "|" + ys[ys.length - 1];
+  const fresh = svg.dataset.drawn !== key; svg.dataset.drawn = key;
+  svg.appendChild(svgEl("path", { class: "area" + (fresh ? " draw" : ""), fill: `url(#${gid})`, d: "M" + pts.join("L") + `L${X(ys.length - 1)},${H - B}L${L},${H - B}Z` }));
+  svg.appendChild(svgEl("path", { class: "line" + (fresh ? " draw" : ""), pathLength: 1, d: "M" + pts.join("L") }));
   const last = ys[ys.length - 1], ly = Y(last);
   svg.appendChild(svgEl("line", { class: "lastline", x1: L, x2: W - R, y1: ly, y2: ly }));
   svg.appendChild(svgEl("rect", { class: "lasttag", x: W - R + 2, y: ly - 9, width: R - 4, height: 18, rx: 3 }));
   svg.appendChild(svgEl("text", { class: "lasttxt", x: W - R + 8, y: ly + 4 }, last.toPrecision(6)));
   const xh = svgEl("line", { class: "xhair", y1: T, y2: H - B, visibility: "hidden" });
   const dot = svgEl("circle", { class: "dot", r: 4.5, visibility: "hidden" });
-  svg.appendChild(xh); svg.appendChild(dot);
+  const halo = svgEl("circle", { class: "halo", r: 11, visibility: "hidden" });
+  svg.appendChild(xh); svg.appendChild(halo); svg.appendChild(dot);
   const move = (ev) => {
     const box = svg.getBoundingClientRect(); const px = (ev.clientX - box.left) * W / box.width;
     const i = Math.max(0, Math.min(ys.length - 1, Math.round((px - L) / (W - L - R) * (ys.length - 1))));
     const x = X(i), y = Y(ys[i]);
     xh.setAttribute("x1", x); xh.setAttribute("x2", x); dot.setAttribute("cx", x); dot.setAttribute("cy", y);
-    xh.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible");
+    halo.setAttribute("cx", x); halo.setAttribute("cy", y);
+    xh.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible"); halo.setAttribute("visibility", "visible");
     tip.replaceChildren(el("b", ys[i].toPrecision(6)), document.createElement("br"),
       el("span", xs[i].slice(0, 16).replace("T", " ") + " UTC"));
     tip.style.left = (x * box.width / W) + "px"; tip.style.top = (y * box.height / H) + "px";
@@ -262,6 +319,7 @@ function chart(svg, xs, ys, tip = $("tip")) {
   };
   svg.onpointermove = move; svg.onpointerdown = move;
   svg.onpointerleave = () => { xh.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
+    halo.setAttribute("visibility", "hidden");
     tip.style.display = "none"; };
 }
 // Account value over a recorded backtest, re-run exactly by the API (read-only).
@@ -303,8 +361,8 @@ async function glance(ds) {
       row.appendChild(el("span", (ch >= 0 ? "+" : "−") + Math.abs(100 * ch).toFixed(1) + "%", "chg " + (ch >= 0 ? "up" : "down")));
       tile.appendChild(row);
       const W = 160, H = 36, lo = Math.min(...ys), hi = Math.max(...ys), sp = hi - lo || 1;
-      const sv = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "spark", "aria-hidden": "true", preserveAspectRatio: "none" });
-      sv.appendChild(svgEl("path", { d: "M" + ys.map((v, i) => `${(W * i / (ys.length - 1)).toFixed(1)},${(2 + (H - 4) * (1 - (v - lo) / sp)).toFixed(1)}`).join("L") }));
+      const sv = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "spark " + (ch >= 0 ? "up" : "down"), "aria-hidden": "true", preserveAspectRatio: "none" });
+      sv.appendChild(svgEl("path", { class: "draw", pathLength: 1, d: "M" + ys.map((v, i) => `${(W * i / (ys.length - 1)).toFixed(1)},${(2 + (H - 4) * (1 - (v - lo) / sp)).toFixed(1)}`).join("L") }));
       tile.appendChild(sv);
     } else tile.appendChild(el("span", "not enough bars yet", "muted"));
     tile.appendChild(el("span", `last ${ys.length} bars · ${d.source}`, "tile-foot"));
@@ -321,7 +379,10 @@ const LOAD = {
     [["Status", h.status], ["Mode", h.trading_mode.toUpperCase()], ["Live trading", "not available"],
      ["Datasets", ds.length], ["Strategies", st.length], ["External AI", h.external_ai_enabled ? "on" : "off"],
      ["Version", h.version]].forEach(([k, v]) => { const d = el("div", k, "kpi muted");
-       d.appendChild(el("b", v)); kp.appendChild(d); });
+       const b = el("b", v); d.appendChild(b); kp.appendChild(d);
+       if (k === "Status") { b.className = h.status === "ok" ? "good" : "bad";
+         b.prepend(el("span", "", "live " + (h.status === "ok" ? "on" : "off"))); }
+       if (typeof v === "number") countUp(b, v); });
     const LV = { OK: "pass", WARN: "warn", FAIL: "fail" };
     table($("checks"), [["Check", (c) => c.name],
       ["Result", (c) => el("span", c.level, LV[c.level] || "")], ["Detail", (c) => c.detail, "wrap"]], ck);
@@ -401,7 +462,7 @@ const LOAD = {
       ["Markets", (r) => r.instruments === 1 ? "one" : r.instruments === "2+" ? "basket (2+)" : `${r.instruments} together`],
       ["Status", (r) => el("span", r.status, "tag")],
       ["Regimes", (r) => r.regimes.join(", ")], ["Timeframes", (r) => r.timeframes.join(", ")]], st);
-    if (st.length) open(st[0]);
+    if (st.length) { open(st[0]); $("strats").rows[1].classList.add("sel"); }
   },
   async ideas() {
     const hs = await get("/hypotheses");
@@ -453,7 +514,7 @@ const LOAD = {
       open(r); $("xname").scrollIntoView({ block: "start" }); };
     const pick = () => { const id = pendingExp; pendingExp = null; if (id !== null) openId(id).catch(console.error); return id !== null; };
     window.addEventListener("hashchange", () => { if (location.hash === "#experiments") pick(); });
-    if (!pick() && ex.length) open(ex[0]);
+    if (!pick() && ex.length) { open(ex[0]); $("exps").rows[1].classList.add("sel"); }
   },
   async paper() {
     const accts = await get("/paper/accounts");
@@ -495,7 +556,7 @@ const LOAD = {
       ["Holding", (r) => Object.entries(r.units).filter(([, u]) => u).map(([k, u]) => `${k} ${fmt(u, 4)}`).join(", ") || "flat"],
       ["Last bar", (r) => r.last_bar_ts ? r.last_bar_ts.slice(0, 10) : "–"],
       ["", () => el("span", "SIMULATED", "tag sim")]], accts);
-    if (accts.length) await open(accts[0].name);
+    if (accts.length) { $("paccts").rows[1].classList.add("sel"); await open(accts[0].name); }
   },
   async research() {
     const run = async () => { const q = $("q").value.trim(); if (!q) return;
@@ -505,12 +566,47 @@ const LOAD = {
     $("q").onkeydown = (e) => { if (e.key === "Enter") run().catch(console.error); };
   },
 };
+// Which detail card a row's link fills in.
+const DETAIL = { strats: "sname", exps: "xname", paccts: "pname", runs: "iname" };
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("td .linkbtn"); if (!b) return;
+  const tr = b.closest("tr"), t = b.closest("table");
+  t.querySelectorAll("tr.sel").forEach((r) => r.classList.remove("sel")); tr.classList.add("sel");
+  if (DETAIL[t.id]) setTimeout(() => flash($(DETAIL[t.id])), 60);
+});
+// Click feedback: a ripple spreads from the point you pressed.
+document.addEventListener("pointerdown", (e) => {
+  const host = e.target.closest("nav#tabs button, .tile, .dl, .copy");
+  if (!host || calm()) return;
+  const box = host.getBoundingClientRect(), d = Math.max(box.width, box.height) * 2.2;
+  const r = el("span", "", "ripple");
+  Object.assign(r.style, { width: d + "px", height: d + "px",
+    left: (e.clientX - box.left - d / 2) + "px", top: (e.clientY - box.top - d / 2) + "px" });
+  host.appendChild(r); r.addEventListener("animationend", () => r.remove());
+});
+// Keys 1-8 open a page; "/" jumps to the research search.
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, select, textarea")) return;
+  const n = Number(e.key);
+  if (n >= 1 && n <= TABS.length) { location.hash = "#" + TABS[n - 1][0]; e.preventDefault(); }
+  else if (e.key === "/") { location.hash = "#research"; setTimeout(() => $("q").focus(), 50); e.preventDefault(); }
+});
+$("scopy").onclick = () => {
+  const b = $("scopy"), done = (t) => { b.textContent = t; b.classList.toggle("done", t === "Copied");
+    clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = "Copy"; b.classList.remove("done"); }, 1600); };
+  if (!navigator.clipboard) { done("Select it"); return; }
+  navigator.clipboard.writeText($("scmd").textContent).then(() => done("Copied"), () => done("Select it"));
+};
+const tick = () => { $("clock").textContent = new Date().toISOString().slice(11, 16) + " UTC"; };
+tick(); setInterval(tick, 15000);
 tabs();
 get("/health").then((h) => { const b = $("banner");
+  $("live").className = "live on"; $("conn").textContent = "API online";
   b.className = h.trading_mode === "paper" ? "paper" : "research";
   b.textContent = (h.trading_mode === "paper" ? "PAPER MODE" : "RESEARCH MODE") +
     " · SIMULATED RESULTS ONLY · NO LIVE TRADING";
-  $("footmode").textContent = h.trading_mode === "paper" ? "Paper mode" : "Research mode"; }).catch(() => {});
+  $("footmode").textContent = h.trading_mode === "paper" ? "Paper mode" : "Research mode"; }).catch(() => {
+  $("live").className = "live off"; $("conn").textContent = "API offline"; });
 const fromHash = () => { const id = (location.hash || "#overview").slice(1);
   show(TABS.some(([t]) => t === id) ? id : "overview"); };
 window.addEventListener("hashchange", fromHash);
