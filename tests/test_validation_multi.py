@@ -107,6 +107,24 @@ def test_validation_tournament_and_leaderboard(session):
     assert row["symbol"] == "ETHUSDT/BTCUSDT" and row["asset_class"] == "crypto"
 
 
+def test_single_setting_skips_the_overfitting_check(session, monkeypatch):
+    """PBO compares settings with each other; with one setting its full-history backtest
+    is skipped and no PBO is recorded (as before)."""
+    from apex.backtest import validation as v
+
+    ingest_bars(session, SyntheticProvider(), SYMS["SPY"], Timeframe.D1, utc(2018, 1, 1),
+                utc(2024, 1, 1))
+    session.commit()
+    called = []
+    monkeypatch.setattr(v, "returns_matrix", lambda *a, **k: called.append(1))
+    exp = run_validation(session, all_strategies()["TF-SMA-001"](), symbol="SPY",
+                         timeframe=Timeframe.D1, source="synthetic", start=utc(2018, 1, 1),
+                         end=utc(2024, 1, 1), grid={"fast": [10], "slow": [50]},
+                         train_bars=500, test_bars=250, mc_runs=50)
+    assert not called and "pbo" not in exp.metrics
+    assert all(f["is_score"] is None for f in exp.metrics["folds_detail"])
+
+
 def test_cli_validate_pair(db_url, monkeypatch, capsys):
     from apex.core.config import get_settings
 
