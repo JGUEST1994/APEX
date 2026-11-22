@@ -19,7 +19,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | H09 | 52-week high proximity | equity | 1d | close within 2% of 52w high | close 10% below entry high | 10% trail | multi | MOM-52WH-001 |
 | H10 | Crypto weekend momentum | crypto | 1h | Friday 20:00 UTC 24h return sign | Monday 00:00 UTC | 2 ATR | ohlcv | MOM-WKND-001 |
 
-## Mean Reversion (5)
+## Mean Reversion (6)
 
 | ID | Name | Markets | TF | Entry | Exit | Stop | Data | Code |
 |---|---|---|---|---|---|---|---|---|
@@ -28,6 +28,7 @@ Generated from `src/apex/strategies/hypotheses.py` (`apex hypotheses`). Every en
 | H13 | Internal bar strength | equity | 1d | (close-low)/(high-low) < 0.2 | next close > prior high | 5 days | ohlcv | MR-IBS-001 |
 | H14 | Consecutive down days | equity,futures | 1d | 3 lower closes and close > SMA200 | first up close | 5 bars | ohlcv | MR-DOWN-001 |
 | H15 | FX overnight reversion | forex | 1h | Asia range break > 1.5x average | London 10:00 | 2x Asia range | ohlcv | MR-ASIA-001 |
+| H54 | Internal bar strength, fund basket | equity | 1d | per fund: (close-low)/(high-low) < 0.2 | per fund: close > prior high | 5 days | multi | MR-IBS-BASKET-001 |
 
 ## Trend Following (5)
 

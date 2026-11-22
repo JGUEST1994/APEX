@@ -143,3 +143,18 @@ def test_nothing_downloaded_skips_the_tournament_and_missing_keys_skip_groups(tm
     assert "tournament crypto-5m skipped: no prices" in out and "TOURNAMENT" not in out
     assert "fx-1h skipped: no Tiingo key" in out and "stocks-15m skipped: no Alpaca keys" in out
     assert "slept" not in out  # an ordinary failure is not retried
+
+
+def test_basket_ideas_run_on_all_us_funds_and_a_fresh_overseas_basket(tmp_path):
+    out = _run(tmp_path, "stocks-1d", APEX_TIINGO_API_KEY="k")
+    world = ["EFA", "EEM", "EWJ", "EWG", "EWU", "EWC", "EWA", "EWZ"]
+    for f in world:
+        assert f"prices ok: tiingo {f} 1d from 2000-01-03" in out
+    syms = _symbols(out, "stocks-1d")
+    assert "SPY/QQQ/IWM/DIA/XLB/XLE/XLF/XLI/XLK/XLP/XLU/XLV/XLY" in syms
+    assert "/".join(world) in syms
+    assert not set(world) & set(syms)  # overseas funds only as a basket, never one by one
+    universe = by_symbol()
+    assert all(universe[f].asset_class is AssetClass.EQUITY for f in world)
+    out = _run(tmp_path, "stocks-1d", APEX_TIINGO_API_KEY="k", FAIL="EWZ")
+    assert "/".join(world) not in _symbols(out, "stocks-1d")

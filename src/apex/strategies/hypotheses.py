@@ -265,6 +265,11 @@ HYPOTHESES: list[Hypothesis] = [
       "walk-forward P(up) > 0.55 (long) / < 0.45 (short)", "probability back inside band",
       "triple-barrier width", "triple-barrier width", "any", implemented="ML-LOGIT-001"),
     # --- scalping
+    H("H54", "Internal bar strength, fund basket", "mean_reversion", "equity", "1d",
+      "H13 on many index and sector funds at once, each at a fixed 1/N share: the bounce "
+      "made money on every US fund tried but each alone fell too far.",
+      "per fund: (close-low)/(high-low) < 0.2", "per fund: close > prior high", "5 days",
+      "time", "range", data="multi", implemented="MR-IBS-BASKET-001"),
     H("H51", "Micro pullback scalp", "scalping", "futures,crypto", "1m",
       "In strong 1m trends, the first 2-3 bar pullback continues.",
       "3+ trend bars then 1-2 bar pullback holding 9 EMA", "next swing", "below pullback low",

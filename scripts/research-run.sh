@@ -118,7 +118,11 @@ STOCKS="SPY QQQ IWM AAPL MSFT NVDA AMZN"
 # Daily only: the Dow and the nine original sector funds, markets the daily ideas were not
 # first tried on (one Tiingo request each).
 FUNDS="DIA XLB XLE XLF XLI XLK XLP XLU XLV XLY"
-STOCK_SETS="$STOCKS $FUNDS QQQ/SPY MSFT/AAPL SPY/QQQ/IWM/AAPL/MSFT/NVDA/AMZN"
+# Overseas stock-market funds, run only as one basket (for the basket ideas such as
+# MR-IBS-BASKET-001): markets no idea was shaped on, so a fresh check of the basket idea.
+WORLD="EFA EEM EWJ EWG EWU EWC EWA EWZ"
+US_FUNDS="SPY/QQQ/IWM/DIA/XLB/XLE/XLF/XLI/XLK/XLP/XLU/XLV/XLY"
+STOCK_SETS="$STOCKS $FUNDS QQQ/SPY MSFT/AAPL SPY/QQQ/IWM/AAPL/MSFT/NVDA/AMZN $US_FUNDS ${WORLD// //}"
 
 # --- crypto (Coinbase: long history; Binance: buy volume for the order-flow strategies)
 if want crypto-1d; then
@@ -139,10 +143,10 @@ if want stocks-1d; then
   GOT="" SRC=""
   if [ -n "${APEX_TIINGO_API_KEY:-}" ]; then
     SRC=tiingo START=2000-01-03
-    for s in $STOCKS $FUNDS; do ingest_patiently tiingo $s 1d $START; done
+    for s in $STOCKS $FUNDS $WORLD; do ingest_patiently tiingo $s 1d $START; done
   elif [ -n "${APEX_ALPACA_KEY_ID:-}" ]; then
     SRC=alpaca START=2016-06-01
-    for s in $STOCKS $FUNDS; do ingest alpaca $s 1d $START; done
+    for s in $STOCKS $FUNDS $WORLD; do ingest alpaca $s 1d $START; done
   else
     log "stocks-1d skipped: no Tiingo or Alpaca key"
   fi
