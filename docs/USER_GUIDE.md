@@ -312,6 +312,64 @@ apex paper-reset-kill --name sma-spy --actor "Jake"
 To run updates and paper accounts automatically on a timer, use `start-scheduler.bat`
 (section 2), or see "Built-in scheduler" in [DEPLOYMENT.md](DEPLOYMENT.md).
 
+### Start the fund basket's 30-day practice run
+
+This starts the practice run of the US fund basket (MR-IBS-BASKET-001 on 13 US index and
+sector funds) at about 40% of the money, allowed to hold all 13 funds at once. It trades
+simulated money only. On a Mac, follow section 9 of [MAC_SETUP.md](MAC_SETUP.md) instead.
+You need APEX from a ZIP downloaded on 22 November 2026 or later, set up as in the README's
+quick start, and a free Tiingo key (on tiingo.com, sign in, then Account, then API, then
+Token).
+
+1. **Settings.** In the APEX folder, run `notepad .env` (if there is no `.env` yet, run
+   `copy .env.example .env` first). Make these two lines read as below, with your own Tiingo
+   key and no `#` in front, then save:
+
+   ```
+   APEX_TRADING_MODE=paper
+   APEX_TIINGO_API_KEY=your-tiingo-key
+   ```
+
+2. **Download the 13 funds' prices (once).** With the APEX environment switched on (see the
+   top of this guide):
+
+   ```powershell
+   apex db-upgrade
+   apex update --provider tiingo --symbols SPY,QQQ,IWM,DIA,XLB,XLE,XLF,XLI,XLK,XLP,XLU,XLV,XLY --timeframe 1d --backfill-start 2000-01-03
+   ```
+
+   It takes a minute or two and prints a line for each fund. These older prices only warm
+   the strategy up. Nothing is traded on them.
+
+3. **Create the practice account (once),** with your own name after `--by`:
+
+   ```powershell
+   apex paper-create --name fund-basket --strategy MR-IBS-BASKET-001 --symbol SPY,QQQ,IWM,DIA,XLB,XLE,XLF,XLI,XLK,XLP,XLU,XLV,XLY --source tiingo --start-now --param gross=0.38 --limit max_positions=13 --by "Your Name"
+   ```
+
+   It should say `created paper account fund-basket (SIMULATED), trading prices after ...`
+   and list `max_positions 13 (standard 10)` as the account's only changed safety limit.
+
+4. **Keep it running.** Run `copy jobs.practice.example.json jobs.json` (this replaces any
+   `jobs.json` you have, and keeps the nightly backup). Then double-click
+   `start-scheduler.bat` and `start-apex.bat`, and leave both windows open. Every 4 hours
+   the scheduler downloads any new daily prices for the 13 funds and runs the practice
+   account on them. The PC doesn't have to stay on all the time: when you start the windows
+   again, the account catches up on the days it missed, with the same results. Start them
+   at least every 3 days, though, because the practice record needs prices no more than 4
+   days old.
+
+5. **Check on it** on the dashboard's Practice trading tab: click **fund-basket**. The first
+   trades show a day or two after the next US trading day. After 30 days,
+   `apex paper-record --name fund-basket` (or the same page) says whether the record is
+   READY.
+
+6. **If the kill switch trips** (6 losing trades in a row, a 10% fall, or a 2% fall in one
+   day), the account sells everything and stops. The record can't be READY after that, so
+   look at what happened before resetting anything. The usual next step is a fresh 30 days
+   under a new account name. Replaying this basket over 2002 to 2026 stopped it in about 1
+   month in 5.
+
 ## 6. Research library
 
 Import notes, papers or transcripts you have the right to use (the licence note is

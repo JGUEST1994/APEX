@@ -1,0 +1,9 @@
+{"jobs": [
+  {"name": "us-funds-1d", "type": "update", "provider": "tiingo",
+   "symbols": ["SPY", "QQQ", "IWM", "DIA", "XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU",
+               "XLV", "XLY"],
+   "timeframe": "1d", "backfill_start": "2000-01-03", "every_minutes": 240},
+  {"name": "practice", "type": "paper", "accounts": ["fund-basket"], "every_minutes": 240},
+  {"name": "nightly-backup", "type": "backup", "folder": "backups", "keep": 14,
+   "every_minutes": 1440}
+]}
