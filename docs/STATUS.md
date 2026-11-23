@@ -78,6 +78,7 @@ Tests last run: 2026-11-22, `ruff check` clean, **771 passed**, with database te
 - Docker: the image builds and `docker compose up` (PostgreSQL 16 + pgvector, API) runs migrations and serves `/health` (database reachable, research mode, no live trading) and `/ui/`. A `docker` CI job checks this on every PR; the API container has a healthcheck so `docker compose up --wait` waits for it. Verified locally 2026-11-20 too.
 - `apex quickstart` (first run: migrations, default markets, ~3 years of free daily prices via `update_bars` so re-runs only fetch what is missing, one TF-SMA-001 backtest, plain-English next steps; `--provider`, `--symbol`).
 - `apex backup` (SQLite online backup + integrity check into `backups/`, optional `--keep N`) and a `backup` scheduler job (in `jobs.example.json`, daily, keep 14); PostgreSQL still needs `pg_dump`. Restore steps in USER_GUIDE section 9. `apex doctor` warns (SQLite only) when `backups/` has no APEX backup from the last 7 days. It also warns when a dataset from a source `apex update` can top up (alpaca, polygon, coinbase, binance, kraken) is more than 7 days behind.
+- Future-pandas guard (NightShift, 2026-11-23): `tests/conftest.py` turns pandas `Pandas4Warning` (code pandas 4 will remove) into a test failure, so it is fixed before a fresh install picks up pandas 4. MOM-WKND-001 now uses `day_of_week` instead of the deprecated `weekday`.
 
 ## Written but not verified
 
