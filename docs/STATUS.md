@@ -123,3 +123,5 @@ Tests last run: 2026-11-22, `ruff check` clean, **771 passed**, with database te
 - 22 Nov: added `docs/intelligence/` (approved free news/fundamentals sources, new-feed and
   point-in-time checklists, evidence-report template) backing the `apex-market-intelligence`
   skill. Docs only; no code yet. Next step if the owner agrees: stage 1, the news store.
+
+- 23 Nov: `docs/intelligence/sources.md` expanded to the full list of free feeds for stocks (SEC filings, FINRA short data, CFTC positioning, FRED/ALFRED, Treasury, BLS/BEA/Census/EIA calendars, central-bank RSS, Alpaca news, GDELT, Fama-French), ranked for APEX. Docs only.
