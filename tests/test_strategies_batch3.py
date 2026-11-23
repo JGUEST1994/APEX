@@ -52,11 +52,11 @@ def test_crypto_weekend_momentum_is_only_held_over_the_weekend():
     ts = pd.date_range("2025-03-03", periods=24 * 21, freq="1h", tz="UTC")  # Mon, 3 weeks
     rng = np.random.default_rng(0)
     r = rng.normal(0, 0.002, len(ts))
-    fri = (ts.weekday == 4) & (ts.hour < 20)
+    fri = (ts.day_of_week == 4) & (ts.hour < 20)
     r[fri] = 0.003  # strong Friday rally -> long into the weekend
     bars = _frame(ts, 100 * np.exp(np.cumsum(r)))
     pos = _run("MOM-WKND-001", bars, atr_mult=50.0)  # wide stop: test the time rules
-    wk = pd.Series((ts.weekday == 4) & (ts.hour >= 20) | (ts.weekday >= 5), index=bars.index)
+    wk = pd.Series((ts.day_of_week == 4) & (ts.hour >= 20) | (ts.day_of_week >= 5), index=bars.index)
     assert (pos[~wk.to_numpy()] == 0).all()
     entries = bars["ts"][(pos != 0) & (pos.shift(1, fill_value=0) == 0)]
     assert list(entries.dt.strftime("%a %H")) == ["Fri 20"] * 3

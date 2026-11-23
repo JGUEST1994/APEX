@@ -83,7 +83,7 @@ class CryptoWeekendMomentum(Strategy):
 
     def target_position(self, bars, p):
         ts = pd.DatetimeIndex(bars["ts"]).tz_convert("UTC")
-        wd, hr = ts.weekday, ts.hour
+        wd, hr = ts.day_of_week, ts.hour
         window = pd.Series(((wd == 4) & (hr >= p["entry_hour"])) | (wd == 5) | (wd == 6),
                            index=bars.index)
         start = window & ~window.shift(1, fill_value=False)

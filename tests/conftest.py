@@ -14,6 +14,15 @@ PG_URL = os.environ.get("APEX_TEST_POSTGRES_URL")  # e.g. postgresql+psycopg://a
 BACKENDS = ["sqlite"] + (["postgres"] if PG_URL else [])
 
 
+def pytest_configure(config):
+    # Code that pandas has announced it will remove fails the tests now, not on the day a new
+    # pandas comes out (APEX does not cap the pandas version, so a fresh install gets the latest).
+    import pandas.errors
+
+    if hasattr(pandas.errors, "Pandas4Warning"):  # pandas 3.x
+        config.addinivalue_line("filterwarnings", "error::pandas.errors.Pandas4Warning")
+
+
 @pytest.fixture(params=BACKENDS)
 def db_url(request, tmp_path):
     if request.param == "sqlite":
