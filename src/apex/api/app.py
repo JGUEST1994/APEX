@@ -377,6 +377,13 @@ def create_app(settings: Settings | None = None,
 
         return latest_values(s)
 
+    @app.get("/positioning")
+    def positioning(s: Session = Depends(db)) -> dict:
+        """Latest FINRA short-sale share per market and CFTC futures positioning."""
+        from apex.news.positioning import latest_positioning
+
+        return latest_positioning(s)
+
     @app.get("/hypotheses")
     def hypotheses() -> list[dict]:
         """The strategy hypothesis bank (spec section 8) and which strategy codes each."""

@@ -26,6 +26,9 @@ SEC_BROWSE = ("https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type={
               "&owner=include&count=100&output=atom")
 SEC_TICKERS = "https://www.sec.gov/files/company_tickers.json"
 ALPACA_NEWS = "https://data.alpaca.markets/v1beta1/news"
+GDELT_DOC = "https://api.gdeltproject.org/api/v2/doc/doc"
+GDELT_QUERY = ('("stock market" OR "federal reserve" OR "interest rates" OR inflation OR '
+               'recession OR tariffs OR "wall street") sourcelang:english')
 MAX_RETRY_WAIT = 120.0
 _CIK = re.compile(r"\((\d{10})\)")
 
@@ -38,7 +41,7 @@ class Feed:
     url: str
     licence: str
     every_minutes: int = 15
-    fmt: str = "feed"  # feed (RSS/Atom), sec (EDGAR Atom + ticker links), alpaca (JSON API)
+    fmt: str = "feed"  # feed (RSS/Atom), sec (EDGAR + ticker links), alpaca, gdelt (JSON APIs)
 
 
 SEC_TERMS = "SEC EDGAR public data; fair-access rules (10 req/s, contact User-Agent)"
@@ -62,6 +65,8 @@ FEEDS: dict[str, Feed] = {f.name: f for f in [
          "US government public domain", 60),
     Feed("alpaca-news", "Alpaca news (Benzinga)", "news", ALPACA_NEWS,
          "Alpaca market data terms: personal research use, no redistribution", 15, "alpaca"),
+    Feed("gdelt-markets", "GDELT: world news about markets and the economy", "news", GDELT_DOC,
+         "GDELT open data, free with attribution", 30, "gdelt"),
 ]}
 
 
@@ -106,6 +111,8 @@ class Fetcher:
             return self._alpaca(feed)
         if feed.fmt == "sec":
             return self._sec(feed)
+        if feed.fmt == "gdelt":
+            return self._gdelt(feed)
         try:
             return parse_feed(self._get(feed.url).content)
         except FeedError as exc:
@@ -156,6 +163,34 @@ class Fetcher:
                              {"updated_at": n.get("updated_at"), "publisher": n.get("source"),
                               "author": n.get("author")}))
         return out
+
+
+    def _gdelt(self, feed: Feed) -> list[Entry]:
+        """GDELT DOC API: English articles from the last day matching the market query.
+        ``seendate`` is when GDELT's crawler first saw the article."""
+        r = self._get(feed.url, params={"query": GDELT_QUERY, "mode": "ArtList",
+                                        "format": "json", "maxrecords": 75, "timespan": "1d",
+                                        "sort": "DateDesc"}, gap=6.0)
+        try:
+            arts = r.json().get("articles", [])
+        except ValueError:  # GDELT answers plain text when it rejects a query
+            raise ProviderError(f"{feed.name}: {r.text[:120]}") from None
+        out = []
+        for a in arts:
+            url = safe_url(a.get("url"))
+            when = parse_time(_gdelt_time(a.get("seendate")))
+            title = clean_text(a.get("title"), 500)
+            if url and when and title:
+                out.append(Entry(url[:255], title, when, url, None, [],
+                                 {"domain": a.get("domain"), "country": a.get("sourcecountry")}))
+        return out
+
+
+def _gdelt_time(s: str | None) -> str | None:
+    """20251210T190000Z -> 2025-12-10T19:00:00Z"""
+    if not s or len(s) < 15:
+        return None
+    return f"{s[0:4]}-{s[4:6]}-{s[6:8]}T{s[9:11]}:{s[11:13]}:{s[13:15]}Z"
 
 
 def _retry_after(value: str | None) -> float:

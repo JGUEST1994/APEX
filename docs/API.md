@@ -24,6 +24,7 @@ Run `apex serve` and open `http://127.0.0.1:8000/docs` for the live OpenAPI refe
 | GET | `/news/feeds` | | every feed APEX can read: name, label, kind, polling interval, terms, items stored, last new item |
 | GET | `/calendar` | `start` (YYYY-MM-DD, default today), `days` (≤366) | scheduled economic releases: date, name, category (fed, jobs, inflation, growth, sentiment) |
 | GET | `/macro` | | latest value of each FRED series (fear index, yields, spreads, stress, oil, dollar...) with the value before and a `source_url` |
+| GET | `/positioning` | | `short`: latest FINRA short-sale share per market with its 20-day average; `futures`: CFTC net positions (hedge funds, asset managers) as a share of open interest, with the week before |
 | GET | `/datasets` | | stored bar datasets (symbol, timeframe, source) with counts and first/last bar |
 | GET | `/paper/accounts` | | simulated paper accounts: status, kill switch, cash, realised P&L, holdings |
 | GET | `/paper/accounts/{name}` | `limit` | one paper account plus its most recent orders and fills (newest first) |

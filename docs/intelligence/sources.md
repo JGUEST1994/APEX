@@ -107,6 +107,16 @@ Poll each every 5 to 15 minutes at most. All public.
 | Kenneth French data library | Daily and monthly factor returns (market, size, value, momentum, quality) | Free for research; updated monthly with revisions, so store each download as a dated version |
 | Loughran-McDonald word lists | Finance-specific positive/negative/uncertain words for tone scores | Free for academic and personal research; commercial use needs a licence; store the list version with each score |
 
+## Built so far (23 Nov 2026)
+
+News feeds (`apex news-feeds`): SEC 8-K, Form 4, 13D; Fed press releases and speeches; ECB;
+Bank of England; FDA; Alpaca news; GDELT. FRED/ALFRED (`apex macro-fetch`): release
+calendar and 13 series including VIX, Treasury yields and the curve, credit spread, stress
+and financial-conditions indexes. FINRA daily short-sale volume and CFTC futures
+positioning (`apex positioning-fetch`). Still to build: FINRA short interest, SEC XBRL
+fundamentals, fails-to-deliver, BLS/BEA/Census/EIA direct APIs (their calendars already
+come via FRED), central-bank feeds beyond the Fed/ECB/BoE, Fama-French factors.
+
 ## Already in APEX
 
 Price feeds are covered: Alpaca (IEX daily bars ~2020+), Tiingo (decades of daily stocks,

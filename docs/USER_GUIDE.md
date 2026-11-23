@@ -416,6 +416,13 @@ gauges, oil, the dollar). Add `{"name": "macro", "type": "macro", "every_minutes
 to `jobs.json` to refresh it daily. APEX keeps every published version of each figure
 (ALFRED), so a backtest uses the number that was public at the time, not a later revision.
 
+**Who's short and who's positioned (free, no key):** `apex positioning-fetch` downloads
+FINRA's daily short-selling share for every US stock and fund in APEX (the last 30 days;
+`--days 365` for more) and the CFTC's weekly futures positions of hedge funds and asset
+managers in S&P 500 and Nasdaq futures. Add
+`{"name": "positioning", "type": "positioning", "every_minutes": 1440}` to `jobs.json` to keep
+it fresh. World news about markets from GDELT is one of the news feeds (`gdelt-markets`).
+
 News is information only: it never places, sizes or changes a trade. Before any strategy
 uses it, it is tested like everything else, and a backtest can only use an item from the
 first bar that opens after APEX knew about it.
