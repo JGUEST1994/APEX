@@ -252,6 +252,13 @@ def main(argv: list[str] | None = None) -> int:
                         "VWAP-EARN-001")
     ed.add_argument("--symbol", required=True)
     ed.add_argument("--out", default="data/events")
+    nf = sub.add_parser("news-fetch", help="read the free news and official-release feeds "
+                        "once and store what's new (see apex news-feeds)")
+    nf.add_argument("--feeds", nargs="*", help="feed names (default: all)")
+    nl = sub.add_parser("news", help="show the latest stored news, newest first")
+    nl.add_argument("--symbol")
+    nl.add_argument("--limit", type=int, default=20)
+    sub.add_parser("news-feeds", help="list the news feeds APEX can read")
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
@@ -349,6 +356,12 @@ def main(argv: list[str] | None = None) -> int:
               f"({days[0] if days else '-'} to {days[-1] if days else '-'}) saved to {out}")
         print(f"use them with: --strategy VWAP-EARN-001 --param anchors=@{out.as_posix()}")
         return 0
+    if args.cmd == "news-feeds":
+        from apex.news.sources import FEEDS
+
+        for f in FEEDS.values():
+            print(f"{f.name:13} every {f.every_minutes:>3} min  {f.label}")
+        return 0
     if args.cmd == "hypotheses":
         from apex.strategies.hypotheses import to_markdown
 
@@ -370,6 +383,23 @@ def main(argv: list[str] | None = None) -> int:
     with session_scope(factory) as s:
         if args.cmd == "export":
             return _export(s, args)
+        if args.cmd == "news-fetch":
+            from apex.news.fetch import fetch_feeds, fetcher_for
+
+            r = fetch_feeds(s, fetcher_for(settings), args.feeds or None)
+            for name, c in r["stored"].items():
+                print(f"{name}: {c['new']} new, {c['changed']} changed, {c['unchanged']} unchanged")
+            for e in r["errors"]:
+                print(f"skipped {e}", file=sys.stderr)
+            return 1 if r["errors"] and not r["stored"] else 0
+        if args.cmd == "news":
+            from apex.news.store import label, latest
+
+            for it in latest(s, limit=args.limit, symbol=args.symbol):
+                syms = ",".join(x.symbol for x in it.symbols)
+                print(f"{it.published_at:%Y-%m-%d %H:%M} UTC  {it.source:12} {label(it):10} "
+                      f"{syms + '  ' if syms else ''}{it.title}")
+            return 0
         if args.cmd == "seed-instruments":
             from apex.domain.instruments import DEFAULT_UNIVERSE
             from apex.marketdata.repository import upsert_instrument

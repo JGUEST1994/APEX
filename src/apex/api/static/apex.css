@@ -424,3 +424,4 @@ select { cursor: pointer; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
   svg.spark path.draw { stroke-dashoffset: 0; }
 }
+td a, .card p a { color: var(--brand); text-underline-offset: 2px; }

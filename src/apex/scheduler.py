@@ -6,6 +6,7 @@ A small, dependency-free loop driven by a JSON file::
       {"name": "crypto-1h", "type": "update", "provider": "kraken",
        "symbols": ["BTCUSDT"], "timeframe": "1h", "backfill_start": "2024-01-01",
        "every_minutes": 60},
+      {"name": "news", "type": "news", "feeds": ["sec-8k", "fed-press"], "every_minutes": 15},
       {"name": "paper", "type": "paper", "accounts": ["mix"], "every_minutes": 60},
       {"name": "nightly-backup", "type": "backup", "folder": "backups", "keep": 14,
        "every_minutes": 1440}
@@ -35,7 +36,7 @@ from apex.core.config import Settings, TradingMode
 from apex.db.models import AuditEvent
 
 log = logging.getLogger(__name__)
-KINDS = ("update", "paper", "backup")
+KINDS = ("update", "news", "paper", "backup")
 
 
 @dataclass
@@ -53,6 +54,7 @@ class Scheduler:
     settings: Settings
     factory: sessionmaker[Session]
     provider_factory: Callable[[str], object] | None = None
+    news_fetcher: object | None = None
     history: list[dict] = field(default_factory=list)
 
     @classmethod
@@ -106,6 +108,8 @@ class Scheduler:
             return self._update(job, now)
         if job.type == "backup":
             return self._backup(job, now)
+        if job.type == "news":
+            return self._news(job, now)
         return self._paper(job, now)
 
     def _backup(self, job: Job, now: datetime) -> dict:
@@ -115,6 +119,14 @@ class Scheduler:
         dest = backup(self.settings.database_url, Path(job.spec.get("folder", "backups")),
                       keep=None if keep is None else int(keep), now=now)
         return {"file": str(dest)}
+
+    def _news(self, job: Job, now: datetime) -> dict:
+        """Read news and official feeds (all of them unless ``feeds`` lists some)."""
+        from apex.news.fetch import fetch_feeds, fetcher_for
+
+        fetcher = self.news_fetcher or fetcher_for(self.settings)
+        with self.factory() as s:
+            return fetch_feeds(s, fetcher, job.spec.get("feeds"), now=now)
 
     def _update(self, job: Job, now: datetime) -> dict:
         from apex.domain.instruments import by_symbol
@@ -178,7 +190,7 @@ def parse_jobs(cfg: dict) -> list[Job]:
         if every < 1:
             raise ValueError(f"{name}: every_minutes must be >= 1")
         need = {"update": ("provider", "symbols", "backfill_start"), "paper": ("accounts",),
-                "backup": ()}
+                "backup": (), "news": ()}
         missing = [k for k in need[kind] if not j.get(k)]
         if missing:
             raise ValueError(f"{name}: missing {', '.join(missing)}")
