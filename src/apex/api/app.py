@@ -355,6 +355,35 @@ def create_app(settings: Settings | None = None,
                         "last_seen": last.isoformat() if last else None})
         return out
 
+    @app.get("/calendar")
+    def calendar(days: int = Query(14, ge=1, le=366), start: str | None = None,
+                 s: Session = Depends(db)) -> list[dict]:
+        """Scheduled economic releases from ``start`` (default today, UTC) for ``days``."""
+        from datetime import UTC, date
+
+        from apex.news.macro import upcoming
+
+        try:
+            day0 = date.fromisoformat(start) if start else datetime.now(UTC).date()
+        except ValueError:
+            raise HTTPException(422, "start must be YYYY-MM-DD") from None
+        return [{"date": e.event_date.isoformat(), "name": e.name, "category": e.category,
+                 "source": e.source} for e in upcoming(s, day0, days)]
+
+    @app.get("/macro")
+    def macro(s: Session = Depends(db)) -> list[dict]:
+        """Latest value of each macro and market series (FRED), with the one before it."""
+        from apex.news.macro import latest_values
+
+        return latest_values(s)
+
+    @app.get("/positioning")
+    def positioning(s: Session = Depends(db)) -> dict:
+        """Latest FINRA short-sale share per market and CFTC futures positioning."""
+        from apex.news.positioning import latest_positioning
+
+        return latest_positioning(s)
+
     @app.get("/hypotheses")
     def hypotheses() -> list[dict]:
         """The strategy hypothesis bank (spec section 8) and which strategy codes each."""

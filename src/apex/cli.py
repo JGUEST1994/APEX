@@ -259,6 +259,17 @@ def main(argv: list[str] | None = None) -> int:
     nl.add_argument("--symbol")
     nl.add_argument("--limit", type=int, default=20)
     sub.add_parser("news-feeds", help="list the news feeds APEX can read")
+    mf = sub.add_parser("macro-fetch", help="download the economic calendar and macro series "
+                        "(fear index, rates, stress) from FRED/ALFRED (free key)")
+    mf.add_argument("--series", nargs="*", help="series ids (default: all; see apex macro)")
+    mf.add_argument("--no-calendar", action="store_true")
+    po = sub.add_parser("positioning-fetch", help="download FINRA short-sale volume for US "
+                        "stocks and funds and CFTC futures positioning (free, no key)")
+    po.add_argument("--symbols", nargs="*", help="default: every US stock and fund in APEX")
+    po.add_argument("--days", type=int, default=30, help="calendar days of FINRA files")
+    po.add_argument("--cot-since", default="2010-01-01")
+    mc = sub.add_parser("macro", help="show coming economic releases and the latest macro values")
+    mc.add_argument("--days", type=int, default=14)
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
@@ -392,6 +403,56 @@ def main(argv: list[str] | None = None) -> int:
             for e in r["errors"]:
                 print(f"skipped {e}", file=sys.stderr)
             return 1 if r["errors"] and not r["stored"] else 0
+        if args.cmd == "macro-fetch":
+            from apex.core.errors import ProviderError
+            from apex.news.fred import FredClient
+            from apex.news.macro import fetch_macro
+
+            key = settings.fred_api_key
+            try:
+                fred = FredClient(key.get_secret_value() if key else "")
+            except ProviderError as exc:
+                print(exc, file=sys.stderr)
+                return 1
+            r = fetch_macro(s, fred, series=args.series or None, releases=not args.no_calendar)
+            for name, n in r["events"].items():
+                print(f"calendar  {name}: {n} new dates")
+            for sid, n in r["series"].items():
+                print(f"series    {sid}: {n} new values")
+            for e in r["errors"]:
+                print(f"skipped {e}", file=sys.stderr)
+            return 1 if r["errors"] and not (r["events"] or r["series"]) else 0
+        if args.cmd == "positioning-fetch":
+            from datetime import date
+
+            import httpx
+
+            from apex.domain.instruments import by_symbol
+            from apex.domain.market import AssetClass
+            from apex.news.positioning import fetch_cot, fetch_finra
+
+            client = httpx.Client(timeout=60.0)
+            syms = args.symbols or [k for k, v in by_symbol().items()
+                                    if v.asset_class is AssetClass.EQUITY]
+            fin = fetch_finra(s, client, syms, days=args.days)
+            cot = fetch_cot(s, client, since=date.fromisoformat(args.cot_since))
+            print(f"short-sale volume: {sum(fin['stored'].values())} new values for "
+                  f"{len(syms)} markets")
+            for k, n in cot["stored"].items():
+                print(f"futures positioning {k}: {n} new weeks")
+            for e in fin["errors"] + cot["errors"]:
+                print(f"skipped {e}", file=sys.stderr)
+            return 0
+        if args.cmd == "macro":
+            from datetime import UTC, datetime
+
+            from apex.news.macro import latest_values, upcoming
+
+            for ev in upcoming(s, datetime.now(UTC).date(), args.days):
+                print(f"{ev.event_date}  {ev.category:9} {ev.name}")
+            for v in latest_values(s):
+                print(f"{v['date']}  {v['label']}: {v['value']:g} {v['unit']}")
+            return 0
         if args.cmd == "news":
             from apex.news.store import label, latest
 

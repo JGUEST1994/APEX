@@ -7,6 +7,8 @@ A small, dependency-free loop driven by a JSON file::
        "symbols": ["BTCUSDT"], "timeframe": "1h", "backfill_start": "2024-01-01",
        "every_minutes": 60},
       {"name": "news", "type": "news", "feeds": ["sec-8k", "fed-press"], "every_minutes": 15},
+      {"name": "macro", "type": "macro", "every_minutes": 1440},
+      {"name": "positioning", "type": "positioning", "every_minutes": 1440},
       {"name": "paper", "type": "paper", "accounts": ["mix"], "every_minutes": 60},
       {"name": "nightly-backup", "type": "backup", "folder": "backups", "keep": 14,
        "every_minutes": 1440}
@@ -36,7 +38,7 @@ from apex.core.config import Settings, TradingMode
 from apex.db.models import AuditEvent
 
 log = logging.getLogger(__name__)
-KINDS = ("update", "news", "paper", "backup")
+KINDS = ("update", "news", "macro", "positioning", "paper", "backup")
 
 
 @dataclass
@@ -55,6 +57,9 @@ class Scheduler:
     factory: sessionmaker[Session]
     provider_factory: Callable[[str], object] | None = None
     news_fetcher: object | None = None
+    fred_client: object | None = None
+    http_client: object | None = None
+    http_sleep: Callable[[float], None] = time.sleep
     history: list[dict] = field(default_factory=list)
 
     @classmethod
@@ -110,6 +115,10 @@ class Scheduler:
             return self._backup(job, now)
         if job.type == "news":
             return self._news(job, now)
+        if job.type == "macro":
+            return self._macro(job, now)
+        if job.type == "positioning":
+            return self._positioning(job, now)
         return self._paper(job, now)
 
     def _backup(self, job: Job, now: datetime) -> dict:
@@ -127,6 +136,38 @@ class Scheduler:
         fetcher = self.news_fetcher or fetcher_for(self.settings)
         with self.factory() as s:
             return fetch_feeds(s, fetcher, job.spec.get("feeds"), now=now)
+
+    def _macro(self, job: Job, now: datetime) -> dict:
+        """Economic calendar and macro series from FRED/ALFRED (``series`` limits which)."""
+        from apex.news.fred import FredClient
+        from apex.news.macro import fetch_macro
+
+        fred = self.fred_client
+        if fred is None:
+            key = self.settings.fred_api_key
+            fred = FredClient(key.get_secret_value() if key else "")
+        with self.factory() as s:
+            return fetch_macro(s, fred, series=job.spec.get("series"),
+                               releases=job.spec.get("calendar", True), now=now)
+
+    def _positioning(self, job: Job, now: datetime) -> dict:
+        """FINRA short-sale volume for US stocks and funds, and CFTC futures positioning."""
+        import httpx
+
+        from apex.domain.instruments import by_symbol
+        from apex.domain.market import AssetClass
+        from apex.news.positioning import fetch_cot, fetch_finra
+
+        client = self.http_client or httpx.Client(timeout=60.0)
+        syms = job.spec.get("symbols") or [k for k, v in by_symbol().items()
+                                           if v.asset_class is AssetClass.EQUITY]
+        with self.factory() as s:
+            fin = fetch_finra(s, client, syms, days=int(job.spec.get("days", 10)), now=now,
+                              sleep=self.http_sleep)
+            cot = fetch_cot(s, client, now=now,
+                            since=now.date() - timedelta(days=int(job.spec.get("cot_days", 120))))
+        return {"short_volume": sum(fin["stored"].values()), "futures": cot["stored"],
+                "errors": fin["errors"] + cot["errors"]}
 
     def _update(self, job: Job, now: datetime) -> dict:
         from apex.domain.instruments import by_symbol
@@ -190,7 +231,7 @@ def parse_jobs(cfg: dict) -> list[Job]:
         if every < 1:
             raise ValueError(f"{name}: every_minutes must be >= 1")
         need = {"update": ("provider", "symbols", "backfill_start"), "paper": ("accounts",),
-                "backup": (), "news": ()}
+                "backup": (), "news": (), "macro": (), "positioning": ()}
         missing = [k for k in need[kind] if not j.get(k)]
         if missing:
             raise ValueError(f"{name}: missing {', '.join(missing)}")

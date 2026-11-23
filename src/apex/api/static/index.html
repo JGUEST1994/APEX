@@ -89,6 +89,10 @@
     <div class="card"><div class="toolbar"><select id="nfeed" aria-label="Feed"><option value="">All feeds</option></select>
       <input id="nsym" class="search" type="search" placeholder="Market, e.g. AAPL (Enter)" aria-label="Market symbol"></div>
       <table id="newstab"></table></div>
+    <div class="card"><h3>Coming up</h3><p class="muted">Scheduled economic releases for the next two weeks (from FRED). Markets often move sharply on these days.</p><table id="ncal"></table></div>
+    <div class="card"><h3>Market backdrop</h3><p class="muted">Latest values of the fear index, interest rates and stress gauges, with the reading before. Click a name for its source.</p><table id="nmacro"></table></div>
+    <div class="card"><h3>Who's short, who's positioned</h3><p class="muted">Share of each day's trading that was short selling (FINRA; around 40-50% is normal, a jump means crowding), and the net position of hedge funds and asset managers in index futures as a share of all contracts (CFTC, weekly).</p>
+      <table id="nshort"></table><table id="ncot" class="mt"></table></div>
     <div class="card"><h3>Feeds</h3><p class="muted">Free official and licensed sources only. "Live" means APEX saw an item within 15 minutes of publication, "delayed" later the same day, "historical" a day or more later. Fetch with apex news-fetch or a "news" job in the scheduler.</p>
       <table id="nfeeds"></table></div>
   </section>
@@ -131,6 +135,10 @@ const EMPTY = {
   onews: "No news stored yet. Run apex news-fetch, or add a news job to the scheduler.",
   newstab: "No news stored for this choice yet. Run apex news-fetch.",
   nfeeds: "No feeds configured.",
+  nshort: "No short-selling data yet. Run apex positioning-fetch (free, no key).",
+  ncot: "No futures positioning yet. Run apex positioning-fetch.",
+  ncal: "No calendar stored yet. Set APEX_FRED_API_KEY (free) and run apex macro-fetch.",
+  nmacro: "No macro data stored yet. Set APEX_FRED_API_KEY (free) and run apex macro-fetch.",
   hits: "No matches. Try a broader term, or import files with apex research-import.",
 };
 const $ = (id) => document.getElementById(id);
@@ -767,7 +775,21 @@ const LOAD = {
     if (accts.length) { $("paccts").rows[1].classList.add("sel"); await open(accts[0].name); }
   },
   async news() {
-    const feeds = await get("/news/feeds");
+    const [feeds, cal, mac, pos] = await Promise.all([get("/news/feeds"), get("/calendar?days=14"),
+      get("/macro"), get("/positioning")]);
+    table($("nshort"), [["Market", (r) => r.symbol], ["Short share", (r) => pct(r.short_share), "num"],
+      ["20-day average", (r) => pct(r.avg_20d), "num"], ["Day", (r) => r.date]], pos.short);
+    table($("ncot"), [["Futures", (r) => r.market], ["Who", (r) => r.who],
+      ["Net position", (r) => pct(r.net_share), "num"],
+      ["Week before", (r) => r.previous === null ? "–" : pct(r.previous), "num"], ["As of", (r) => r.date]], pos.futures);
+    const wd = (d) => new Date(d + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
+    table($("ncal"), [["Date", (r) => `${wd(r.date)} ${r.date}`], ["Release", (r) => r.name],
+      ["Type", (r) => r.category]], cal);
+    table($("nmacro"), [["Measure", (r) => { const a = el("a", r.label); a.href = r.source_url;
+        a.target = "_blank"; a.rel = "noopener noreferrer"; return a; }],
+      ["Latest", (r) => `${fmt(r.value, Math.abs(r.value) >= 1000 ? 0 : 2)} ${r.unit}`, "num"],
+      ["Before", (r) => r.previous === null ? "–" : fmt(r.previous, Math.abs(r.previous) >= 1000 ? 0 : 2), "num"],
+      ["As of", (r) => r.date]], mac);
     feeds.forEach((f) => { const o = el("option", f.label); o.value = f.name; $("nfeed").appendChild(o); });
     table($("nfeeds"), [["Feed", (r) => r.label], ["Type", (r) => r.kind.replace("_", " ")],
       ["Checked every", (r) => r.every_minutes + " min", "num"], ["Stored", (r) => r.stored, "num"],
