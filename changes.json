@@ -17,8 +17,8 @@
       "ruff clean",
       "build: not run (no Docker in sandbox; change touches no config/imports)"
     ],
-    "status": "verified",
+    "status": "merged",
     "pr": "https://github.com/jguest1994/apex/pull/104",
-    "notes": "Not merged: owner's call."
+    "notes": "Merged (squash 48fd6cd) 2026-11-23 09:00 UTC on Jake's own 'merge'."
   }
 ]

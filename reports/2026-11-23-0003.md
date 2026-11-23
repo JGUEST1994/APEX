@@ -30,7 +30,7 @@ None.
   the fix (287 passed); full suite on SQLite + PostgreSQL 771 passed; lint clean.
 
 ## Improvements made
-- PR #104: https://github.com/jguest1994/apex/pull/104 (not merged).
+- PR #104: https://github.com/jguest1994/apex/pull/104 (merged by Jake's go-ahead, 23 Nov 09:00 UTC).
 
 ## Before and after
 | Measure | Before | After |
