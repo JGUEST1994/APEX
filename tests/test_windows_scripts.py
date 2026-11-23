@@ -30,7 +30,11 @@ def test_example_jobs_parse_and_use_known_markets_and_free_sources():
     cfg = json.loads((ROOT / "jobs.example.json").read_text())
     jobs = parse_jobs(cfg)
     universe = by_symbol()
-    assert {j.type for j in jobs} == {"update", "backup"}  # never paper trading by default
+    assert {j.type for j in jobs} == {"update", "news", "backup"}  # never paper trading by default
+    from apex.news.sources import FEEDS
+
+    for j in (j for j in jobs if j.type == "news"):  # only feeds that need no key or contact
+        assert j.spec["feeds"] and all(FEEDS[f].fmt == "feed" for f in j.spec["feeds"])
     for j in (j for j in jobs if j.type == "update"):
         assert j.spec["provider"] in {"coinbase", "binance", "kraken"}  # no key needed
         assert set(j.spec["symbols"]) <= set(universe)

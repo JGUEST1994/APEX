@@ -321,6 +321,40 @@ def create_app(settings: Settings | None = None,
                         "late": late, "errors": [str(e) for e in errors][:5]})
         return sorted(out, key=lambda r: r["job"])
 
+    @app.get("/news")
+    def news(limit: int = Query(50, ge=1, le=500), symbol: str | None = None,
+             source: str | None = None, kind: str | None = None,
+             s: Session = Depends(db)) -> list[dict]:
+        """Latest stored news and official releases, newest first. Each row carries its
+        source link, both timestamps and whether APEX saw it live, delayed or historically."""
+        from apex.news.sources import FEEDS
+        from apex.news.store import label, latest
+
+        return [{"id": it.id, "source": it.source,
+                 "source_label": FEEDS[it.source].label if it.source in FEEDS else it.source,
+                 "kind": it.kind, "title": it.title, "summary": it.summary, "url": it.url,
+                 "published_at": it.published_at.isoformat(),
+                 "first_seen_at": it.first_seen_at.isoformat(), "version": it.version,
+                 "label": label(it), "symbols": [x.symbol for x in it.symbols]}
+                for it in latest(s, limit=limit, symbol=symbol, source=source, kind=kind)]
+
+    @app.get("/news/feeds")
+    def news_feeds(s: Session = Depends(db)) -> list[dict]:
+        """Every feed APEX can read, with how many items are stored and the newest one."""
+        from apex.db.models import NewsItem
+        from apex.news.sources import FEEDS
+
+        counts = {src: (n, last) for src, n, last in s.execute(
+            select(NewsItem.source, func.count(), func.max(NewsItem.first_seen_at))
+            .group_by(NewsItem.source)).all()}
+        out = []
+        for f in FEEDS.values():
+            n, last = counts.get(f.name, (0, None))
+            out.append({"name": f.name, "label": f.label, "kind": f.kind,
+                        "every_minutes": f.every_minutes, "licence": f.licence, "stored": n,
+                        "last_seen": last.isoformat() if last else None})
+        return out
+
     @app.get("/hypotheses")
     def hypotheses() -> list[dict]:
         """The strategy hypothesis bank (spec section 8) and which strategy codes each."""

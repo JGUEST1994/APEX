@@ -380,6 +380,32 @@ apex research-import C:\notes\my-notes.md --licence-note "my own notes"
 apex research-search "opening range breakout"
 ```
 
+### News and official releases
+
+APEX can read free, official news feeds: SEC company filings (company announcements,
+insider trades, activist stakes), Federal Reserve press releases and speeches, the ECB, the
+Bank of England, FDA press releases, and Alpaca's stock news (it uses the Alpaca keys you
+already have). See them under **News** on the dashboard, with the newest few on
+**Overview**. Every headline links to its source and shows when APEX first saw it:
+"live" (within 15 minutes), "delayed" (later that day) or "historical" (a day or more).
+
+```powershell
+apex news-feeds                        # what APEX can read
+apex news-fetch                        # read every feed once
+apex news-fetch --feeds fed-press ecb-press
+apex news --symbol AAPL                # latest stored news about one market
+```
+
+SEC feeds need `APEX_SEC_USER_AGENT` set to your name and email (the SEC asks for it);
+without it they are skipped and the others still work. To keep news coming in, add a news
+job to `jobs.json`. `jobs.example.json` has one with the feeds that need no keys;
+`{"name": "news", "type": "news", "every_minutes": 15}` reads every feed, including the SEC
+and Alpaca ones.
+
+News is information only: it never places, sizes or changes a trade. Before any strategy
+uses it, it is tested like everything else, and a backtest can only use an item from the
+first bar that opens after APEX knew about it.
+
 ## 7. What the numbers mean
 
 Click a backtest's number on the Backtests tab to see all its figures with a one-line

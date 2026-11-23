@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 SRC = Path(__file__).resolve().parent.parent / "src" / "apex"
-CORE = ["core", "domain", "db", "marketdata", "strategies", "backtest", "risk", "execution", "ml", "regime"]
+CORE = ["core", "domain", "db", "marketdata", "strategies", "backtest", "risk", "execution", "ml", "regime", "news"]
 
 
 def _imports(path: Path) -> set[str]:

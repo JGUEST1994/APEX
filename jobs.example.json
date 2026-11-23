@@ -5,6 +5,9 @@
   {"name": "crypto-1d", "type": "update", "provider": "coinbase",
    "symbols": ["BTCUSDT", "ETHUSDT"], "timeframe": "1d",
    "backfill_start": "2021-01-01", "every_minutes": 1440},
+  {"name": "news", "type": "news",
+   "feeds": ["fed-press", "fed-speeches", "ecb-press", "boe-news", "fda-press"],
+   "every_minutes": 15},
   {"name": "nightly-backup", "type": "backup", "folder": "backups", "keep": 14,
    "every_minutes": 1440}
 ]}

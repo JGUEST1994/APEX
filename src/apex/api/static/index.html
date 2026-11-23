@@ -29,6 +29,7 @@
   <section id="overview">
     <div class="card kpis" id="kpis"></div>
     <div class="glance" id="glance" aria-label="Markets at a glance"></div>
+    <div class="card"><h3>Latest news</h3><p class="muted">Newest official releases and headlines. <a href="#news">See all news</a></p><table id="onews"></table></div>
     <div class="card"><h3>Check-up</h3><table id="checks"></table></div>
     <div class="card"><h3>Automatic jobs</h3><p class="muted">What the scheduler (start-scheduler) last did. "Late" usually means its window was closed or the computer went to sleep.</p><table id="sched"></table></div>
     <div class="card"><h3>Recent data downloads</h3><table id="runs"></table></div>
@@ -84,6 +85,13 @@
           <div class="legend" id="ptip"></div></div></div>
       <table id="pfills"></table></div>
   </section>
+  <section id="news">
+    <div class="card"><div class="toolbar"><select id="nfeed" aria-label="Feed"><option value="">All feeds</option></select>
+      <input id="nsym" class="search" type="search" placeholder="Market, e.g. AAPL (Enter)" aria-label="Market symbol"></div>
+      <table id="newstab"></table></div>
+    <div class="card"><h3>Feeds</h3><p class="muted">Free official and licensed sources only. "Live" means APEX saw an item within 15 minutes of publication, "delayed" later the same day, "historical" a day or more later. Fetch with apex news-fetch or a "news" job in the scheduler.</p>
+      <table id="nfeeds"></table></div>
+  </section>
   <section id="research">
     <div class="card"><div class="toolbar"><input id="q" class="search" type="search"
       placeholder="Search the research library and press Enter"></div>
@@ -94,7 +102,7 @@
 <script>
 "use strict";
 const TABS = [["overview","Overview"],["markets","Markets"],["strategies","Strategy lab"],
-  ["ideas","Trading ideas"],["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["research","Research"]];
+  ["ideas","Trading ideas"],["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["research","Research"],["news","News"]];
 const DESC = {
   overview: "Is everything running, and what has APEX collected so far.",
   markets: "Price history for each stored market. Hover the chart to read any bar.",
@@ -104,6 +112,7 @@ const DESC = {
   experiments: "Every historical test APEX has run, recorded so it can be repeated exactly. All figures are simulated.",
   paper: "Practice (paper) accounts trade on simulated fills only. The kill switch can only be reset from the command line by a named person.",
   research: "Search the notes, papers and transcripts you have imported.",
+  news: "Official releases and headlines from free feeds, newest first, each with its source link and when APEX first saw it. Information only: news never places a trade.",
 };
 // what an empty table should tell the operator to do next
 const EMPTY = {
@@ -119,6 +128,9 @@ const EMPTY = {
   xmetrics: "No figures recorded for this run.",
   paccts: "No practice accounts yet. Create one with apex paper-create (paper mode only).",
   pfills: "No simulated fills for this account yet.",
+  onews: "No news stored yet. Run apex news-fetch, or add a news job to the scheduler.",
+  newstab: "No news stored for this choice yet. Run apex news-fetch.",
+  nfeeds: "No feeds configured.",
   hits: "No matches. Try a broader term, or import files with apex research-import.",
 };
 const $ = (id) => document.getElementById(id);
@@ -215,6 +227,7 @@ const ICONS = {
   experiments: "M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7v5l3 2",
   paper: "M3 7h18v13H3zM7 7V4h10v3M16 13.5h2",
   research: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
+  news: "M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5",
 };
 function tabs() {
   TABS.forEach(([id, label], k) => { const b = el("button"); b.onclick = () => show(id);
@@ -525,11 +538,22 @@ async function watchlist(ds, onPick) {
   }).catch(() => { last.textContent = "–"; })));
 }
 let pendingDataset = null, pendingExp = null;
+// One news row: headline links to the source (http(s) only, checked by the server too).
+const newsTime = (r) => r.published_at.slice(0, 16).replace("T", " ");
+function newsLink(r) {
+  if (!r.url || !/^https?:\/\//i.test(r.url)) return r.title;
+  const a = el("a", r.title); a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+  a.title = "Seen by APEX " + r.first_seen_at.slice(0, 16).replace("T", " ") + " UTC"; return a;
+}
+const newsSeen = (r) => el("span", r.label, "tag" + (r.label === "live" ? "" : " sim"));
 const LOAD = {
   async overview() {
     const [h, runs, ds, st, ck] = await Promise.all([get("/health"), get("/ingestion-runs?limit=20"),
       get("/datasets"), get("/strategies"), get("/system/checks")]);
     const jobs = await get("/scheduler/jobs").catch(() => []);
+    get("/news?limit=8").then((rows) => table($("onews"), [["Published (UTC)", newsTime],
+      ["Source", (r) => r.source_label], ["Headline", newsLink], ["Markets", (r) => r.symbols.join(", ")],
+      ["Seen", newsSeen]], rows)).catch((e) => { table($("onews"), [["", () => ""]], []); console.error(e); });
     const kp = $("kpis"); kp.replaceChildren();
     [["Status", h.status], ["Mode", h.trading_mode.toUpperCase()], ["Live trading", "not available"],
      ["Datasets", ds.length], ["Strategies", st.length], ["External AI", h.external_ai_enabled ? "on" : "off"],
@@ -742,6 +766,23 @@ const LOAD = {
       ["", () => el("span", "SIMULATED", "tag sim")]], accts);
     if (accts.length) { $("paccts").rows[1].classList.add("sel"); await open(accts[0].name); }
   },
+  async news() {
+    const feeds = await get("/news/feeds");
+    feeds.forEach((f) => { const o = el("option", f.label); o.value = f.name; $("nfeed").appendChild(o); });
+    table($("nfeeds"), [["Feed", (r) => r.label], ["Type", (r) => r.kind.replace("_", " ")],
+      ["Checked every", (r) => r.every_minutes + " min", "num"], ["Stored", (r) => r.stored, "num"],
+      ["Last new item (UTC)", (r) => r.last_seen ? r.last_seen.slice(0, 16).replace("T", " ") : "–"],
+      ["Terms", (r) => r.licence]], feeds);
+    const run = async () => { const q = new URLSearchParams({ limit: "200" });
+      if ($("nfeed").value) q.set("source", $("nfeed").value);
+      if ($("nsym").value.trim()) q.set("symbol", $("nsym").value.trim().toUpperCase());
+      table($("newstab"), [["Published (UTC)", newsTime], ["Source", (r) => r.source_label],
+        ["Headline", newsLink], ["Markets", (r) => r.symbols.join(", ")], ["Seen", newsSeen]],
+        await get("/news?" + q)); };
+    $("nfeed").onchange = () => run().catch(console.error);
+    $("nsym").onkeydown = (e) => { if (e.key === "Enter") run().catch(console.error); };
+    await run();
+  },
   async research() {
     const run = async () => { const q = $("q").value.trim(); if (!q) return;
       const hits = await get("/research/search?q=" + encodeURIComponent(q));
@@ -768,7 +809,7 @@ document.addEventListener("pointerdown", (e) => {
     left: (e.clientX - box.left - d / 2) + "px", top: (e.clientY - box.top - d / 2) + "px" });
   host.appendChild(r); r.addEventListener("animationend", () => r.remove());
 });
-// Keys 1-8 open a page; "/" jumps to the research search.
+// Keys 1-9 open a page; "/" jumps to the research search.
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, select, textarea")) return;
   const n = Number(e.key);

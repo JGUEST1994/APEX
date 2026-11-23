@@ -125,3 +125,14 @@ Tests last run: 2026-11-22, `ruff check` clean, **771 passed**, with database te
   skill. Docs only; no code yet. Next step if the owner agrees: stage 1, the news store.
 
 - 23 Nov: `docs/intelligence/sources.md` expanded to the full list of free feeds for stocks (SEC filings, FINRA short data, CFTC positioning, FRED/ALFRED, Treasury, BLS/BEA/Census/EIA calendars, central-bank RSS, Alpaca news, GDELT, Fama-French), ranked for APEX. Docs only.
+
+- 23 Nov: **news stage 1**: `apex.news` package (RSS/Atom parser, polite fetcher, point-in-time
+  store), Alembic 0009 (`news_items` with published_at/first_seen_at/known_at and versions,
+  `news_symbols`), feeds SEC 8-K/Form 4/13D (CIK->ticker links), Fed press and speeches,
+  ECB, BoE, FDA, Alpaca news; scheduler job type `news`; CLI `news-fetch`, `news`,
+  `news-feeds`; API `/news`, `/news/feeds`; dashboard News page and Overview "Latest news"
+  card. `store.known_before_bar` is the only door for backtests (known_at < bar open).
+  Feed URLs could not be reached from the build sandbox, so the first real fetch is the
+  live check. Next (stage 2): economic calendar (FOMC/BLS/BEA/Census/EIA dates), FRED and
+  ALFRED, FINRA short data, CFTC COT, GDELT, Treasury; then a "stand aside on big days"
+  test for the fund basket, counted as tries.

@@ -309,3 +309,49 @@ class PaperPosition(Base):
     symbol: Mapped[str] = mapped_column(String(32), primary_key=True)
     units: Mapped[float] = mapped_column(Float)
     avg_cost: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+# --------------------------------------------------------------------------- news and events
+class NewsItem(Base):
+    """One version of one news item or official release, stored point in time.
+
+    ``published_at`` is the time the source claims; ``first_seen_at`` is when APEX first saw
+    this version. Anything judged on history uses the later of the two (``known_at``) and may
+    act only on a bar that opens after it. A source that changes an item gets a new row with
+    the next ``version``; stored rows are never edited.
+    """
+
+    __tablename__ = "news_items"
+    __table_args__ = (UniqueConstraint("source", "source_id", "version", name="uq_news_version"),
+                      Index("ix_news_known", "known_at"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(32), index=True)
+    source_id: Mapped[str] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    kind: Mapped[str] = mapped_column(String(16))  # filing, central_bank, regulator, news
+    title: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    known_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    licence: Mapped[str] = mapped_column(String(255))
+    extra: Mapped[dict] = mapped_column(JSON, default=dict)
+    symbols: Mapped[list[NewsSymbol]] = relationship(back_populates="item",
+                                                     cascade="all, delete-orphan")
+
+
+class NewsSymbol(Base):
+    """Which market an item is about, and how APEX knows (``source`` tag or ``cik`` match)."""
+
+    __tablename__ = "news_symbols"
+    __table_args__ = (UniqueConstraint("item_id", "symbol", name="uq_news_symbol"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("news_items.id", ondelete="CASCADE"),
+                                         index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    linked_by: Mapped[str] = mapped_column(String(16))
+    item: Mapped[NewsItem] = relationship(back_populates="symbols")
