@@ -7,11 +7,12 @@ migrations so the core never depends on them.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     Float,
     ForeignKey,
     Index,
@@ -355,3 +356,43 @@ class NewsSymbol(Base):
     symbol: Mapped[str] = mapped_column(String(32), index=True)
     linked_by: Mapped[str] = mapped_column(String(16))
     item: Mapped[NewsItem] = relationship(back_populates="symbols")
+
+
+class EconEvent(Base):
+    """A scheduled economic release (jobs report, CPI, FOMC decision...) on a date.
+
+    Release calendars are published well ahead, so a past date was knowable before the day
+    (a calendar source, see docs/intelligence/sources.md). ``fetched_at`` is when APEX
+    downloaded it."""
+
+    __tablename__ = "econ_events"
+    __table_args__ = (UniqueConstraint("source", "release_id", "event_date",
+                                       name="uq_econ_event"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(32))
+    release_id: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(255))
+    category: Mapped[str] = mapped_column(String(32), index=True)  # e.g. jobs, inflation, fed
+    event_date: Mapped[date] = mapped_column(Date, index=True)
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class MacroObservation(Base):
+    """One value of one economic or market series as it was known from ``known_at`` on.
+
+    Revised figures are separate rows (each ALFRED vintage), so a backtest can read the
+    value that was actually public on a given day instead of today's revised one."""
+
+    __tablename__ = "macro_observations"
+    __table_args__ = (UniqueConstraint("series_id", "obs_date", "vintage",
+                                       name="uq_macro_vintage"),
+                      Index("ix_macro_series_known", "series_id", "known_at"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    series_id: Mapped[str] = mapped_column(String(32))
+    obs_date: Mapped[date] = mapped_column(Date)
+    vintage: Mapped[date] = mapped_column(Date)  # ALFRED realtime_start: first day published
+    value: Mapped[float] = mapped_column(Float)
+    known_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime)

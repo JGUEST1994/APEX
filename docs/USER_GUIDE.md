@@ -402,6 +402,20 @@ job to `jobs.json`. `jobs.example.json` has one with the feeds that need no keys
 `{"name": "news", "type": "news", "every_minutes": 15}` reads every feed, including the SEC
 and Alpaca ones.
 
+**Economic calendar and market backdrop (FRED, free key):** get a key at
+fred.stlouisfed.org (Account, API keys) and add `APEX_FRED_API_KEY=your-key` to `.env`. Then:
+
+```powershell
+apex macro-fetch          # calendar of big release days, plus the fear index, rates, stress
+apex macro                # what's coming in the next two weeks and the latest readings
+```
+
+The News page then shows **Coming up** (jobs report, inflation, GDP, Fed decisions...) and
+**Market backdrop** (fear index, Treasury yields, yield curve, borrowing spreads, stress
+gauges, oil, the dollar). Add `{"name": "macro", "type": "macro", "every_minutes": 1440}`
+to `jobs.json` to refresh it daily. APEX keeps every published version of each figure
+(ALFRED), so a backtest uses the number that was public at the time, not a later revision.
+
 News is information only: it never places, sizes or changes a trade. Before any strategy
 uses it, it is tested like everything else, and a backtest can only use an item from the
 first bar that opens after APEX knew about it.

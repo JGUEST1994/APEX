@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     alpaca_feed: str = "iex"
     polygon_api_key: SecretStr | None = None
     tiingo_api_key: SecretStr | None = None
+    fred_api_key: SecretStr | None = None  # free key from fred.stlouisfed.org (FRED/ALFRED)
     sec_user_agent: str = ""  # "Your Name you@example.com", required by the SEC for EDGAR
 
     # Optional access token for the API and dashboard. Unset = no token (keep it on localhost).

@@ -136,3 +136,13 @@ Tests last run: 2026-11-22, `ruff check` clean, **771 passed**, with database te
   live check. Next (stage 2): economic calendar (FOMC/BLS/BEA/Census/EIA dates), FRED and
   ALFRED, FINRA short data, CFTC COT, GDELT, Treasury; then a "stand aside on big days"
   test for the fund basket, counted as tries.
+
+- 23 Nov: **news stage 2a**: FRED/ALFRED (`apex.news.fred`, `apex.news.macro`), Alembic 0010
+  (`econ_events`, `macro_observations` with one row per ALFRED vintage; known_at = end of
+  the publication day UTC). Calendar of 11 releases matched by FRED name (unmatched names
+  are reported), 13 series (VIX, 10y/2y, curve, fed funds, Baa spread, STLFSI4, NFCI,
+  claims, unemployment, CPI, WTI, dollar). Scheduler type `macro`, CLI `macro-fetch` /
+  `macro`, API `/calendar` `/macro`, News page "Coming up" and "Market backdrop".
+  `value_known_before()` and `event_dates()` are the doors for strategies. Needs
+  APEX_FRED_API_KEY (free). Next (2b): FINRA short volume/interest, CFTC COT, Treasury
+  yield curve, GDELT.

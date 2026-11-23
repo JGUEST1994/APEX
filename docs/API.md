@@ -22,6 +22,8 @@ Run `apex serve` and open `http://127.0.0.1:8000/docs` for the live OpenAPI refe
 | GET | `/hypotheses` | | the strategy hypothesis bank (spec section 8): id, name, category, markets, timeframes, idea, entry/exit/stop/target, regime, `data` needed and `implemented` (strategy key or null) |
 | GET | `/news` | `limit` (≤500), `symbol`, `source`, `kind` | latest stored news and official releases, newest first (latest version of each): title, summary, `url`, `published_at`, `first_seen_at`, `label` (live/delayed/historical), `symbols` |
 | GET | `/news/feeds` | | every feed APEX can read: name, label, kind, polling interval, terms, items stored, last new item |
+| GET | `/calendar` | `start` (YYYY-MM-DD, default today), `days` (≤366) | scheduled economic releases: date, name, category (fed, jobs, inflation, growth, sentiment) |
+| GET | `/macro` | | latest value of each FRED series (fear index, yields, spreads, stress, oil, dollar...) with the value before and a `source_url` |
 | GET | `/datasets` | | stored bar datasets (symbol, timeframe, source) with counts and first/last bar |
 | GET | `/paper/accounts` | | simulated paper accounts: status, kill switch, cash, realised P&L, holdings |
 | GET | `/paper/accounts/{name}` | `limit` | one paper account plus its most recent orders and fills (newest first) |

@@ -259,6 +259,12 @@ def main(argv: list[str] | None = None) -> int:
     nl.add_argument("--symbol")
     nl.add_argument("--limit", type=int, default=20)
     sub.add_parser("news-feeds", help="list the news feeds APEX can read")
+    mf = sub.add_parser("macro-fetch", help="download the economic calendar and macro series "
+                        "(fear index, rates, stress) from FRED/ALFRED (free key)")
+    mf.add_argument("--series", nargs="*", help="series ids (default: all; see apex macro)")
+    mf.add_argument("--no-calendar", action="store_true")
+    mc = sub.add_parser("macro", help="show coming economic releases and the latest macro values")
+    mc.add_argument("--days", type=int, default=14)
     pq = sub.add_parser("paper-compare", help="compare a paper account with a backtest of "
                         "the same strategy over the same bars (read-only)")
     pq.add_argument("--name", required=True)
@@ -392,6 +398,35 @@ def main(argv: list[str] | None = None) -> int:
             for e in r["errors"]:
                 print(f"skipped {e}", file=sys.stderr)
             return 1 if r["errors"] and not r["stored"] else 0
+        if args.cmd == "macro-fetch":
+            from apex.core.errors import ProviderError
+            from apex.news.fred import FredClient
+            from apex.news.macro import fetch_macro
+
+            key = settings.fred_api_key
+            try:
+                fred = FredClient(key.get_secret_value() if key else "")
+            except ProviderError as exc:
+                print(exc, file=sys.stderr)
+                return 1
+            r = fetch_macro(s, fred, series=args.series or None, releases=not args.no_calendar)
+            for name, n in r["events"].items():
+                print(f"calendar  {name}: {n} new dates")
+            for sid, n in r["series"].items():
+                print(f"series    {sid}: {n} new values")
+            for e in r["errors"]:
+                print(f"skipped {e}", file=sys.stderr)
+            return 1 if r["errors"] and not (r["events"] or r["series"]) else 0
+        if args.cmd == "macro":
+            from datetime import UTC, datetime
+
+            from apex.news.macro import latest_values, upcoming
+
+            for ev in upcoming(s, datetime.now(UTC).date(), args.days):
+                print(f"{ev.event_date}  {ev.category:9} {ev.name}")
+            for v in latest_values(s):
+                print(f"{v['date']}  {v['label']}: {v['value']:g} {v['unit']}")
+            return 0
         if args.cmd == "news":
             from apex.news.store import label, latest
 
