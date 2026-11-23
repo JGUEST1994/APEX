@@ -1,0 +1,38 @@
+{
+  "repo": "jguest1994/apex",
+  "defaultBranch": "main",
+  "stack": "Python 3.11+ (setuptools, pyproject.toml), FastAPI, SQLAlchemy/Alembic, pandas; static HTML/JS dashboard",
+  "packageManager": "pip (no lockfile)",
+  "testFramework": "pytest",
+  "commands": {
+    "install": "python3 -m venv VENV && VENV/bin/pip install -e '.[dev,postgres,server]' pip-audit",
+    "typecheck": null,
+    "lint": "ruff check src tests",
+    "tests": "APEX_TEST_POSTGRES_URL=postgresql+psycopg://apex:apex@localhost:5432/apex_test pytest -p no:cacheprovider --durations=15",
+    "build": "docker compose up --build (CI docker job; not run in sandbox, no Docker)",
+    "depsAudit": "pip-audit --progress-spinner off .",
+    "depsOutdated": "pip list --outdated --format=json",
+    "dashboardJs": "extract inline <script> from src/apex/api/static/index.html, node --check"
+  },
+  "dbSetup": "service postgresql start; create role apex/password apex createdb; createdb -O apex apex_test",
+  "notes": [
+    "No type checker configured (no mypy/pyright) - typecheck probe is 'unavailable', deduct nothing.",
+    "pyproject addopts already has -q; do not add another -q or the pass/fail summary line disappears.",
+    "test-map: strategy modules (builtin*.py, reference.py, ml/strategy.py) are covered via the registry-parametrised tests in tests/test_strategies_research_api.py, and db/types.py via db/models.py. Treat them as covered (NS-004 closed as false positive)."
+  ],
+  "protectedPaths": [
+    "src/apex/risk/",
+    "src/apex/execution/",
+    
+    "src/apex/core/config.py (trading mode)",
+    "src/apex/migrations/",
+    "pyproject.toml",
+    ".github/",
+    "Dockerfile",
+    "docker-compose.yml",
+    "*.bat",
+    "*.command",
+    "jobs*.json"
+  ],
+  "protectedReason": "CLAUDE.md + owner rule: ask Jake before anything touching risk controls, order execution, paper fees/sizing or trading-mode safety; dependency manifest and CI per NightShift change control."
+}

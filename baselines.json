@@ -1,0 +1,58 @@
+{
+  "tests.passed": {
+    "first": 771,
+    "latest": 771,
+    "last30": [
+      771
+    ]
+  },
+  "tests.failed": {
+    "first": 0,
+    "latest": 0,
+    "last30": [
+      0
+    ]
+  },
+  "tests.seconds": {
+    "first": 345,
+    "latest": 345,
+    "last30": [
+      345
+    ]
+  },
+  "lint.errors": {
+    "first": 0,
+    "latest": 0,
+    "last30": [
+      0
+    ]
+  },
+  "vulns.critical": {
+    "first": 0,
+    "latest": 0,
+    "last30": [
+      0
+    ]
+  },
+  "vulns.high": {
+    "first": 0,
+    "latest": 0,
+    "last30": [
+      0
+    ]
+  },
+  "health": {
+    "first": 100,
+    "latest": 100,
+    "last30": [
+      100
+    ]
+  },
+  "pandas4Warnings": {
+    "first": 19,
+    "latest": 19,
+    "last30": [
+      19
+    ]
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "runId": "2026-11-23-0003",
+  "trigger": "scheduled one-off at Jake's request",
+  "startedAt": "2026-11-22T23:37:37Z",
+  "mainCommit": "4bcf033",
+  "probes": {
+    "lint": {
+      "status": "passed",
+      "errors": 0,
+      "warnings": 0,
+      "seconds": 0.02
+    },
+    "typecheck": {
+      "status": "unavailable",
+      "reason": "no mypy/pyright configured"
+    },
+    "unit-tests": {
+      "status": "passed",
+      "passed": 771,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 345,
+      "backends": [
+        "sqlite",
+        "postgresql16"
+      ],
+      "warnings": {
+        "Pandas4Warning": 19,
+        "StarletteDeprecationWarning": 1
+      }
+    },
+    "build": {
+      "status": "skipped",
+      "reason": "quick run; Docker not available in sandbox (CI docker job covers it)"
+    },
+    "deps-audit": {
+      "status": "passed",
+      "critical": 0,
+      "high": 0,
+      "moderate": 0,
+      "low": 0,
+      "tool": "pip-audit"
+    },
+    "deps-outdated": {
+      "status": "passed",
+      "directBehind": 0,
+      "note": "fresh install; no lockfile so installs always take latest versions"
+    },
+    "static-scan": {
+      "status": "passed",
+      "todo": 0,
+      "noqaOrTypeIgnore": 31,
+      "debugPrintsOutsideCli": 0,
+      "filesOver600Lines": [
+        "src/apex/api/static/index.html (801)",
+        "src/apex/cli.py (791)"
+      ],
+      "secretsLike": 0,
+      "innerHTML": 0,
+      "dashboardJsSyntax": "ok"
+    },
+    "test-map": {
+      "status": "passed",
+      "modules": 83,
+      "notImportedByTests": 6,
+      "testFiles": 55,
+      "migrations": 8
+    },
+    "git-flow": {
+      "status": "passed",
+      "commits14d": 105,
+      "activeDays14d": 3,
+      "fixCommitShare": 0.04,
+      "reverts": 0
+    },
+    "open-prs": {
+      "count": 0
+    }
+  },
+  "findings": [
+    "NS-001",
+    "NS-002",
+    "NS-003",
+    "NS-004"
+  ],
+  "changes": [
+    "CH-001"
+  ],
+  "health": 100,
+  "sigma": 6.0
+}

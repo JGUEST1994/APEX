@@ -1,0 +1,7 @@
+{
+  "maxChangesPerRun": 3,
+  "maxFiles": 15,
+  "maxLines": 400,
+  "autoMerge": false,
+  "branchPrefix": "nightshift/"
+}

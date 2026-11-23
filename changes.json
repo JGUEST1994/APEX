@@ -1,0 +1,24 @@
+[
+  {
+    "id": "CH-001",
+    "title": "Use day_of_week in MOM-WKND-001 and fail tests on Pandas4Warning",
+    "findingsFixed": [
+      "NS-001"
+    ],
+    "relatedFindings": [],
+    "risk": "low (4 files, 13 added / 3 removed lines; strategy + tests + STATUS)",
+    "branch": "nightshift/2026-11-23-pandas4-weekday",
+    "before": "7 failed / 280 passed with pandas-4 warnings as errors; full suite 771 passed, 4 warnings",
+    "after": "287 passed; full suite 771 passed, 1 warning (Starlette)",
+    "verification": [
+      "guard red on old code (7 failed), green with fix",
+      "module tests 287 passed",
+      "full suite SQLite+PostgreSQL 771 passed",
+      "ruff clean",
+      "build: not run (no Docker in sandbox; change touches no config/imports)"
+    ],
+    "status": "verified",
+    "pr": "https://github.com/jguest1994/apex/pull/104",
+    "notes": "Not merged: owner's call."
+  }
+]
