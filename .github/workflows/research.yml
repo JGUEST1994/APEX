@@ -54,7 +54,7 @@ jobs:
           path: price-cache
           key: prices-${{ steps.month.outputs.m }}-${{ github.run_id }}
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: research-results
           # results only: the database holds data-vendor prices, which their terms say not to share
