@@ -3,6 +3,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:  # run by hand (Actions tab) to get the Windows tests on a branch
+
+# A newer push to the same pull request cancels the older, unfinished run (saves minutes: the
+# repository is private, so GitHub Actions minutes are limited).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The jobs only read the code; the GitHub token gets no write access.
 permissions:
@@ -34,7 +41,10 @@ jobs:
 
   test-windows:
     # Jake runs APEX on Windows; GitHub's Windows runners have no PostgreSQL service,
-    # so this job runs the suite on SQLite only (the PostgreSQL tests skip themselves)
+    # so this job runs the suite on SQLite only (the PostgreSQL tests skip themselves).
+    # Windows minutes count double on a private repository, so it runs after a merge to main
+    # (or by hand), not on every pull request.
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

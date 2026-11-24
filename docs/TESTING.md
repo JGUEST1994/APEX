@@ -42,4 +42,4 @@ The PostgreSQL test database is **wiped** (schema dropped) by each DB test, so p
 | AI | disabled by default and fails safely |
 | API | health, instruments, bars, 404, ingestion runs |
 
-CI (`.github/workflows/ci.yml`) runs lint and the full suite against PostgreSQL 16 on every push and pull request, plus `pip-audit` over the runtime dependencies (run it locally with `pip-audit .`).
+CI (`.github/workflows/ci.yml`) runs lint and the full suite against PostgreSQL 16 on every push and pull request, plus `pip-audit` over the runtime dependencies (run it locally with `pip-audit .`). The Windows suite (SQLite) runs after each merge to `main` or by hand (Actions, ci, Run workflow), not on pull requests, because the repository is private and Windows minutes count double; a newer push to a pull request cancels its older unfinished run.
