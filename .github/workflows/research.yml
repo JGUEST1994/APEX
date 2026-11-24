@@ -39,7 +39,7 @@ jobs:
       # a rerun skips the free plans' hourly limits. A new month starts a fresh cache.
       - id: month
         run: echo "m=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: price-cache
           key: prices-${{ steps.month.outputs.m }}-${{ github.run_id }}
@@ -49,7 +49,7 @@ jobs:
           RESEARCH_GROUPS: ${{ inputs.groups }}
           PRICE_CACHE: price-cache/prices.db
       - if: always() && hashFiles('price-cache/prices.db') != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: price-cache
           key: prices-${{ steps.month.outputs.m }}-${{ github.run_id }}
