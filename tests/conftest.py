@@ -9,6 +9,9 @@ from sqlalchemy import text
 from apex.db.migrate import upgrade
 from apex.db.session import make_engine, make_session_factory
 
+# FastAPI's TestClient sends "Host: testserver"; the API refuses unknown host names.
+os.environ.setdefault("APEX_ALLOWED_HOSTS", '["127.0.0.1", "localhost", "testserver"]')
+
 PG_URL = os.environ.get("APEX_TEST_POSTGRES_URL")  # e.g. postgresql+psycopg://apex:apex@localhost/apex_test
 
 BACKENDS = ["sqlite"] + (["postgres"] if PG_URL else [])

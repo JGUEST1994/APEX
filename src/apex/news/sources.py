@@ -84,7 +84,7 @@ class Fetcher:
         self._tickers: dict[int, str] | None = None
 
     def _get(self, url: str, *, headers: dict | None = None, params: dict | None = None,
-             gap: float = 1.0) -> httpx.Response:
+             gap: float = 1.0, follow_redirects: bool = True) -> httpx.Response:
         host = urlparse(url).netloc
         for attempt in (1, 2):
             last = self._last.get(host)
@@ -92,7 +92,7 @@ class Fetcher:
                 self.sleep(wait)
             try:
                 r = self.client.get(url, headers={"User-Agent": USER_AGENT, **(headers or {})},
-                                    params=params)
+                                    params=params, follow_redirects=follow_redirects)
             except httpx.HTTPError as exc:
                 raise ProviderError(f"{host}: {type(exc).__name__}") from None
             finally:
@@ -100,7 +100,7 @@ class Fetcher:
             if r.status_code in (429, 503) and attempt == 1:
                 self.sleep(_retry_after(r.headers.get("Retry-After")))
                 continue
-            if r.status_code >= 400:
+            if r.status_code >= 400 or r.is_redirect:  # is_redirect only when not followed
                 raise ProviderError(f"{host}: HTTP {r.status_code}")
             return r
         raise ProviderError(f"{host}: still busy after one retry")  # pragma: no cover
@@ -150,7 +150,7 @@ class Fetcher:
         key, secret = self.alpaca_keys
         data = self._get(feed.url, headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret},
                          params={"limit": 50, "sort": "desc", "include_content": "false"},
-                         gap=0.5).json()
+                         gap=0.5, follow_redirects=False).json()  # keys never follow a redirect
         out = []
         for n in data.get("news", []):
             when = parse_time(n.get("created_at"))

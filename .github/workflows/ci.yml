@@ -4,6 +4,10 @@ on:
     branches: [main]
   pull_request:
 
+# The jobs only read the code; the GitHub token gets no write access.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -1,6 +1,6 @@
 # API
 
-Run `apex serve` and open `http://127.0.0.1:8000/docs` for the live OpenAPI reference. The API is read-only in Phase 1. If `APEX_API_TOKEN` is set, every endpoint except `/health` needs `Authorization: Bearer <token>` (or the browser cookie set by opening `/ui/?token=<token>`); otherwise it answers 401.
+Run `apex serve` and open `http://127.0.0.1:8000/openapi.json` for the OpenAPI reference, or set `APEX_API_DOCS=true` to get the `/docs` page (off by default: it loads scripts from a public CDN). The API answers only to the host names in `APEX_ALLOWED_HOSTS` (default `127.0.0.1` and `localhost`); any other name gets 400. The API is read-only in Phase 1. If `APEX_API_TOKEN` is set, every endpoint except `/health` needs `Authorization: Bearer <token>` (or the browser cookie set by opening `/ui/?token=<token>`); otherwise it answers 401.
 
 | Method | Path | Query | Returns |
 |---|---|---|---|

@@ -48,6 +48,12 @@ class Settings(BaseSettings):
 
     # Optional access token for the API and dashboard. Unset = no token (keep it on localhost).
     api_token: SecretStr | None = None
+    # Host names the API answers to. Anything else gets 400, so a web page that points its own
+    # name at 127.0.0.1 ("DNS rebinding") cannot read the dashboard. Add your server's name here
+    # (APEX_ALLOWED_HOSTS='["127.0.0.1","localhost","apex.example.com"]') only if you host APEX.
+    allowed_hosts: list[str] = Field(default_factory=lambda: ["127.0.0.1", "localhost"])
+    # FastAPI's /docs and /redoc pages load scripts from a public CDN; off unless asked for.
+    api_docs: bool = False
 
     # Optional external AI; "none" means fully disabled. Core never depends on it.
     ai_provider: str = "none"

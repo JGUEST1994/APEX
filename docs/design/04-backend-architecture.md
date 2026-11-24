@@ -27,7 +27,7 @@ All processes share the package and database. Workers coordinate through databas
 | GET | `/ingestion-runs` | Recent data versions |
 | GET | `/research/search?q=` | Keyword search |
 
-OpenAPI docs are served at `/docs` when the API runs. See `docs/API.md`.
+The OpenAPI schema is served at `/openapi.json` (and the `/docs` page when `APEX_API_DOCS=true`). See `docs/API.md`.
 
 ## Conventions
 
