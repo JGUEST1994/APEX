@@ -191,6 +191,16 @@ section.on > :nth-child(n+5) { animation-delay: 160ms; }
          color: var(--ink); letter-spacing: -.01em; text-transform: none; font-variant-numeric: tabular-nums; }
 .kpi b.good { color: var(--good); } .kpi b.bad { color: var(--bad); }
 .kpi b .live { width: 9px; height: 9px; }
+.kpi small { display: block; margin-top: 4px; font: 500 11px/1.3 var(--num); letter-spacing: 0; text-transform: none; }
+/* The same strip inside a card (practice trades summary). */
+.kpis.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); overflow: hidden;
+  border: 1px solid var(--rule); border-radius: var(--radius-sm); margin: 0 0 12px; }
+.kpis.strip .kpi { padding: 10px 14px 12px; }
+.kpis.strip .kpi b { font-size: 18px; }
+.kpis.strip:empty { display: none; }
+.card h3.sub { margin-top: 22px; }
+td .chg { font: 600 12.5px/1 var(--num); padding: 3px 6px; border-radius: 4px; }
+td .chg.up { background: var(--good-soft); } td .chg.down { background: var(--bad-soft); }
 
 /* ---- Tables: ruled ledger ---- */
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }

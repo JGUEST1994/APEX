@@ -83,6 +83,14 @@
         <div class="chart-wrap"><div id="pchart" class="lwc tall" role="img"
           aria-label="Price with this practice account's simulated buys and sells, and its simulated account value below"></div>
           <div class="legend" id="ptip"></div></div></div>
+      <h3 class="sub">Open trades</h3>
+      <p class="muted">Positions this account holds now, with the simulated profit or loss so far at the latest price it has processed (costs included).</p>
+      <table id="popen"></table>
+      <h3 class="sub">Recent trades</h3>
+      <p class="muted" id="ptradesnote">Each finished round trip, from first buy (or short) to back out, with its simulated profit or loss after costs.</p>
+      <div class="kpis strip" id="pstats" aria-label="Win and loss summary"></div>
+      <table id="ptrades"></table>
+      <h3 class="sub">Recent fills</h3>
       <table id="pfills"></table></div>
   </section>
   <section id="news">
@@ -132,6 +140,8 @@ const EMPTY = {
   xmetrics: "No figures recorded for this run.",
   paccts: "No practice accounts yet. Create one with apex paper-create (paper mode only).",
   pfills: "No simulated fills for this account yet.",
+  popen: "No open trades: this account is out of the market.",
+  ptrades: "No finished trades yet. A trade shows here once the account has bought (or shorted) and then got out.",
   onews: "No news stored yet. Run apex news-fetch, or add a news job to the scheduler.",
   newstab: "No news stored for this choice yet. Run apex news-fetch.",
   nfeeds: "No feeds configured.",
@@ -708,9 +718,48 @@ const LOAD = {
     if (!pick() && ex.length) { open(ex[0]); $("exps").rows[1].classList.add("sel"); }
   },
   async paper() {
+    // Finished and open round trips with their profit or loss, and a win/loss summary.
+    const money = (v) => v === null || v === undefined ? "–" : (v < 0 ? "−" : v > 0 ? "+" : "") + Math.abs(v).toFixed(2);
+    const pl = (v) => el("span", money(v), "chg " + (v > 0 ? "up" : v < 0 ? "down" : ""));
+    const days = (v) => v === null || v === undefined ? "–" : v < 1 ? "<1" : String(Math.round(v));
+    const trades = async (name) => {
+      const t = await get("/paper/accounts/" + encodeURIComponent(name) + "/trades?limit=100");
+      if ($("pname").textContent.indexOf(name + ":") !== 0) return;  // another account opened
+      const s = t.summary, st = $("pstats"); st.replaceChildren();
+      const streak = s.streak.kind && s.streak.kind !== "even"
+        ? `${s.streak.count} ${s.streak.kind}${s.streak.count === 1 ? "" : s.streak.kind === "win" ? "s" : "es"}` : "–";
+      [["Trades", String(s.trades)], ["Win rate", s.win_rate === null ? "–" : pct(s.win_rate), null,
+        `${s.wins} won, ${s.losses} lost`],
+       ["Total P&L", money(s.total_pnl), s.total_pnl],
+       ["Average win", money(s.average_win), s.average_win],
+       ["Average loss", money(s.average_loss), s.average_loss],
+       ["Profit factor", s.profit_factor === null ? "–" : s.profit_factor.toFixed(2), null,
+        "money won for each 1 lost"],
+       ["Current run", streak, s.streak.kind === "win" ? 1 : s.streak.kind === "loss" ? -1 : null],
+       ["Open P&L", t.open.length ? money(t.open_pnl) : "–", t.open.length ? t.open_pnl : null]
+      ].forEach(([k, v, sign, hint]) => { const d = el("div", k, "kpi muted"); const b = el("b", v);
+        if (sign) b.className = sign > 0 ? "good" : "bad";
+        d.appendChild(b); if (hint) d.appendChild(el("small", hint)); st.appendChild(d); });
+      $("ptradesnote").textContent = "Each finished round trip, from first buy (or short) to back out, with its simulated profit or loss after costs." +
+        (t.closed_total > t.closed.length ? ` Showing the latest ${t.closed.length} of ${t.closed_total}; the summary covers all of them.` : "");
+      const when = (iso) => iso.slice(0, 16).replace("T", " ").replace(" 00:00", "");
+      table($("popen"), [["Market", (r) => r.symbol], ["Side", (r) => r.side], ["Opened", (r) => when(r.opened)],
+        ["Days", (r) => days(r.days_held), "num"], ["Units", (r) => fmt(r.units, 4), "num"],
+        ["Avg entry", (r) => fmt(r.entry_price, 4), "num"], ["Latest price", (r) => fmt(r.last_price, 4), "num"],
+        ["P&L so far", (r) => pl(r.pnl), "num"], ["Return", (r) => pct(r.return), "num"],
+        ["", () => el("span", "SIMULATED", "tag sim")]], t.open);
+      table($("ptrades"), [["Result", (r) => el("span", r.result === "win" ? "win" : r.result === "loss" ? "loss" : "even",
+          r.result === "win" ? "pass" : r.result === "loss" ? "fail" : "warn")],
+        ["Market", (r) => r.symbol], ["Side", (r) => r.side], ["Opened", (r) => when(r.opened)],
+        ["Closed", (r) => when(r.closed)], ["Days", (r) => days(r.days_held), "num"],
+        ["Units", (r) => fmt(r.units, 4), "num"], ["Avg entry", (r) => fmt(r.entry_price, 4), "num"],
+        ["Avg exit", (r) => fmt(r.exit_price, 4), "num"], ["P&L", (r) => pl(r.pnl), "num"],
+        ["Return", (r) => pct(r.return), "num"]], t.closed);
+    };
     const accts = await get("/paper/accounts");
     const open = async (name) => { const a = await get("/paper/accounts/" + encodeURIComponent(name));
-      $("pname").textContent = `${a.name}: recent simulated fills`;
+      $("pname").textContent = `${a.name}: simulated trades`;
+      trades(name).catch((e) => { $("ptradesnote").textContent = "Trades unavailable."; console.error(e); });
       $("pdl").href = "/export/fills.csv?name=" + encodeURIComponent(a.name); $("pdl").hidden = false;
       get("/paper/accounts/" + encodeURIComponent(name) + "/equity").then((c) => {
         if ($("pname").textContent.indexOf(name + ":") !== 0) return;  // another account opened
