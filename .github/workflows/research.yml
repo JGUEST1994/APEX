@@ -5,7 +5,8 @@ name: research-run
 # APEX_TIINGO_API_KEY (daily US stocks back to 2000, and forex), APEX_SEC_USER_AGENT (your own
 # name and email, e.g. "Jane Smith jane@example.com": the SEC asks for a contact before its
 # free service gives out earnings dates, which the earnings idea needs). Without them only
-# crypto is ranked. Results print to the job log and are kept as the research-results artifact.
+# crypto is ranked. Results print to the job log and are kept as the research-results artifact
+# (the result files only; the price database is never uploaded).
 on:
   workflow_dispatch:
     inputs:
@@ -56,7 +57,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: research-results
-          path: |
-            research-out/
-            research.db
+          # results only: the database holds data-vendor prices, which their terms say not to share
+          path: research-out/
           retention-days: 30

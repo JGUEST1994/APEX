@@ -75,7 +75,7 @@ def parse_feed(data: bytes) -> list[Entry]:
     because an item that can't be placed in time can't be used fairly."""
     if len(data) > MAX_BYTES:
         raise FeedError(f"feed is larger than {MAX_BYTES} bytes")
-    if b"<!ENTITY" in data[:4096]:
+    if b"<!ENTITY" in data:  # anywhere, not just near the top
         raise FeedError("feed declares XML entities; refused")
     try:
         root = ET.fromstring(data)

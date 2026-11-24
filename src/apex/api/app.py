@@ -12,6 +12,7 @@ from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from apex import __version__
 from apex.core.config import Settings, get_settings
@@ -40,6 +41,17 @@ from apex.research.library import search
 TOKEN_COOKIE = "apex_token"
 OPEN_PATHS = ("/health",)  # container healthchecks need no token
 FORMULA_START = ("=", "+", "-", "@", "\t", "\r")  # Excel would run these as formulas
+# Browser safety settings sent with every response. The dashboard's script is inline, hence
+# 'unsafe-inline'; everything else (charts library, styles, icons) is served by APEX itself.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "
+        "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"),
+}
 
 
 def _require_token(app: FastAPI, settings: Settings) -> None:
@@ -88,8 +100,24 @@ def create_app(settings: Settings | None = None,
                session_factory: sessionmaker[Session] | None = None) -> FastAPI:
     settings = settings or get_settings()
     factory = session_factory or make_session_factory(make_engine(settings.database_url))
-    app = FastAPI(title="APEX API", version=__version__)
+    docs = settings.api_docs
+    app = FastAPI(title="APEX API", version=__version__,
+                  docs_url="/docs" if docs else None, redoc_url="/redoc" if docs else None)
     _require_token(app, settings)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):  # noqa: ANN202
+        resp = await call_next(request)
+        for k, v in SECURITY_HEADERS.items():
+            if k == "Content-Security-Policy" and docs and request.url.path in ("/docs",
+                                                                                 "/redoc"):
+                continue  # the optional docs pages load their scripts from a CDN
+            resp.headers.setdefault(k, v)
+        return resp
+
+    # Added last, so it runs first: a request for any other host name is refused (400)
+    # before the token check or any route.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 
     def db() -> Iterator[Session]:
         with factory() as s:
