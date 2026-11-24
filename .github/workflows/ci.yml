@@ -24,7 +24,7 @@ jobs:
     env:
       APEX_TEST_POSTGRES_URL: postgresql+psycopg://apex:apex@localhost:5432/apex_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -37,7 +37,7 @@ jobs:
     # so this job runs the suite on SQLite only (the PostgreSQL tests skip themselves)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -47,7 +47,7 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -63,7 +63,7 @@ jobs:
     env:
       APEX_DB_PASSWORD: ci-only-not-a-secret
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker compose up -d --build --wait --wait-timeout 180
       - run: |
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/health && break; sleep 2; done

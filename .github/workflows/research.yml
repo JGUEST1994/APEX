@@ -30,7 +30,7 @@ jobs:
       APEX_TIINGO_API_KEY: ${{ secrets.APEX_TIINGO_API_KEY }}
       APEX_SEC_USER_AGENT: ${{ secrets.APEX_SEC_USER_AGENT }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
