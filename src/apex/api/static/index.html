@@ -93,6 +93,31 @@
       <h3 class="sub">Recent fills</h3>
       <table id="pfills"></table></div>
   </section>
+  <section id="review">
+    <div class="card"><div class="toolbar"><select id="racct" aria-label="Practice account"><option value="">All practice accounts</option></select>
+        <div class="seg" role="group" aria-label="Period" id="rper"></div>
+        <span class="tag sim">SIMULATED</span><span class="muted" id="rnote"></span></div>
+      <div class="kpis strip" id="rkpis" aria-label="Headline numbers"></div></div>
+    <div class="rgrid">
+      <div class="card"><h3>Accounts right now</h3><p class="muted">Value, today's change, drop from its best, cash against money in the market, and how close each account is to the safety limits that can stop it.</p><div id="rhealth"></div></div>
+      <div class="card"><h3>Profit over time</h3><p class="muted">Running total of finished trades' profit or loss, after costs.</p>
+        <div class="chart-wrap"><div id="rchart" class="lwc short" role="img" aria-label="Running total of profit or loss from finished practice trades"></div>
+          <div class="legend" id="rtip"></div></div><p class="muted" id="rchartnote" hidden>The chart appears after two finished trades.</p>
+        <h3 class="sub">Average win against average loss</h3><div id="ravg" class="hbars"></div></div>
+      <div class="card"><h3>Best markets</h3><table id="rbest"></table></div>
+      <div class="card"><h3>Worst markets</h3><table id="rworst"></table></div>
+      <div class="card"><h3>Profit by market</h3><div id="rmarket" class="hbars"></div></div>
+      <div class="card"><h3>Why trades ended</h3><p class="muted">Worked out from the records: strategies say which side to be on, not why.</p><div id="rexit" class="hbars"></div></div>
+      <div class="card"><h3>Profit by strategy</h3><div id="rstrat" class="hbars"></div>
+        <h3 class="sub">By type of market</h3><div id="rclass" class="hbars"></div></div>
+      <div class="card"><h3>Long against short</h3><div id="rside" class="hbars"></div>
+        <h3 class="sub">Trades won, by how long they were held</h3><div id="rhold" class="hbars"></div></div>
+      <div class="card"><h3>Month by month</h3><div id="rmonth" class="hbars"></div></div>
+      <div class="card"><h3>Trades won, by day entered</h3><div id="rday" class="hbars"></div></div>
+    </div>
+    <div class="card"><h3>Open trades</h3><table id="ropen"></table></div>
+    <div class="card"><h3>All finished trades</h3><p class="muted" id="rtradesnote"></p><table id="rtrades"></table></div>
+  </section>
   <section id="news">
     <div class="card"><div class="toolbar"><select id="nfeed" aria-label="Feed"><option value="">All feeds</option></select>
       <input id="nsym" class="search" type="search" placeholder="Market, e.g. AAPL (Enter)" aria-label="Market symbol"></div>
@@ -114,7 +139,7 @@
 <script>
 "use strict";
 const TABS = [["overview","Overview"],["markets","Markets"],["strategies","Strategy lab"],
-  ["ideas","Trading ideas"],["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["research","Research"],["news","News"]];
+  ["ideas","Trading ideas"],["leaderboard","Tournament"],["experiments","Backtests"],["paper","Practice trading"],["review","Trade review"],["research","Research"],["news","News"]];
 const DESC = {
   overview: "Is everything running, and what has APEX collected so far.",
   markets: "Price history for each stored market. Hover the chart to read any bar.",
@@ -123,6 +148,7 @@ const DESC = {
   leaderboard: "Latest walk-forward result per strategy and market, ranked by robustness, not raw return. Click a strategy to see every figure from that run. All figures are simulated.",
   experiments: "Every historical test APEX has run, recorded so it can be repeated exactly. All figures are simulated.",
   paper: "Practice (paper) accounts trade on simulated fills only. The kill switch can only be reset from the command line by a named person.",
+  review: "Every practice trade at a glance: what's working, what isn't, why trades ended, and the best and worst markets. Simulated money only.",
   research: "Search the notes, papers and transcripts you have imported.",
   news: "Official releases and headlines from free feeds, newest first, each with its source link and when APEX first saw it. Information only: news never places a trade.",
 };
@@ -141,6 +167,10 @@ const EMPTY = {
   paccts: "No practice accounts yet. Create one with apex paper-create (paper mode only).",
   pfills: "No simulated fills for this account yet.",
   popen: "No open trades: this account is out of the market.",
+  rtrades: "No finished practice trades in this period.",
+  ropen: "No open trades.",
+  rbest: "No market has made money in this period yet.",
+  rworst: "No market has lost money in this period.",
   ptrades: "No finished trades yet. A trade shows here once the account has bought (or shorted) and then got out.",
   onews: "No news stored yet. Run apex news-fetch, or add a news job to the scheduler.",
   newstab: "No news stored for this choice yet. Run apex news-fetch.",
@@ -225,6 +255,11 @@ const ISSUE_TEXT = {
 const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? "–"
   : (typeof v === "number" ? v.toFixed(d) : String(v));
 const pct = (v) => (v === null || v === undefined) ? "–" : (100 * v).toFixed(1) + "%";
+// Signed money (profit or loss), a coloured chip for it, and whole days held.
+const money = (v) => v === null || v === undefined ? "–" : (v < 0 ? "−" : v > 0 ? "+" : "") + Math.abs(v).toFixed(2);
+const pl = (v) => el("span", money(v), "chg " + (v > 0 ? "up" : v < 0 ? "down" : ""));
+const days = (v) => v === null || v === undefined ? "–" : v < 1 ? "<1" : String(Math.round(v));
+const when = (iso) => iso.slice(0, 16).replace("T", " ").replace(" 00:00", "");
 function table(t, cols, rows) {
   t.replaceChildren();
   const h = t.insertRow();
@@ -244,6 +279,7 @@ const ICONS = {
   leaderboard: "M5 20v-8M12 20V5M19 20v-5M3 20h18",
   experiments: "M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7v5l3 2",
   paper: "M3 7h18v13H3zM7 7V4h10v3M16 13.5h2",
+  review: "M12 3a9 9 0 1 0 9 9h-9zM15 3.5A9 9 0 0 1 20.5 9H15z",
   research: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
   news: "M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5",
 };
@@ -488,6 +524,120 @@ function lineChart(id, xs, ys, legend, title) {
   chart.timeScale().fitContent();
   legendFor(chart, s, legend, title, (d) => [["", Math.round(d.value).toLocaleString("en-GB")], ["", day(d.time) + " UTC", "when"]]);
 }
+// ---- Trade review: every practice trade at a glance (read-only) ----
+// Horizontal bars. "pl" rows: profit or loss diverging from a centre line (green right, red
+// left). "won" rows: all trades as a pale bar with the ones won filled in.
+function hbars(box, rows, mode, label = (r) => r.key) {
+  box.replaceChildren();
+  if (!rows.length) { box.appendChild(el("p", "Nothing in this period.", "muted")); return; }
+  const top = Math.max(...rows.map((r) => mode === "pl" ? Math.abs(r.pnl) : r.trades), 1e-9);
+  rows.forEach((r) => {
+    const row = el("div", "", "hb"), name = el("span", label(r), "hb-k"), track = el("span", "", "hb-t " + mode);
+    const tip = `${label(r)}: ${r.trades} trade${r.trades === 1 ? "" : "s"}, ${r.wins} won (${pct(r.win_rate)}), ` +
+      `profit or loss ${money(r.pnl)}, average ${money(r.average)}`;
+    row.title = tip; row.setAttribute("aria-label", tip); row.tabIndex = 0;
+    if (mode === "pl") {
+      const f = el("span", "", "hb-f " + (r.pnl >= 0 ? "up" : "down"));
+      f.style.width = (50 * Math.abs(r.pnl) / top) + "%"; track.appendChild(f);
+      row.append(name, track, el("span", money(r.pnl), "hb-v " + (r.pnl > 0 ? "up" : r.pnl < 0 ? "down" : "")),
+        el("span", `${r.trades} · ${pct(r.win_rate)} won`, "hb-n"));
+    } else {
+      const all = el("span", "", "hb-f all"), won = el("span", "", "hb-f won");
+      all.style.width = (100 * r.trades / top) + "%"; won.style.width = (100 * r.wins / top) + "%";
+      track.append(all, won);
+      row.append(name, track, el("span", `${r.wins} of ${r.trades}`, "hb-v"),
+        el("span", pct(r.win_rate) + " won", "hb-n"));
+    }
+    box.appendChild(row); });
+}
+function gauge(g) {
+  const v = g.kind === "pct" ? pct(g.now) : String(g.now), lim = g.kind === "pct" ? pct(g.limit) : String(g.limit);
+  const used = Math.min(g.used || 0, 1), lvl = used >= 0.8 ? "down" : used >= 0.5 ? "warn" : "up";
+  const row = el("div", "", "gauge"), bar = el("span", "", "g-t"), fill = el("span", "", "g-f " + lvl);
+  fill.style.width = (100 * used) + "%"; bar.appendChild(fill);
+  row.title = `${g.label}: ${v} of ${lim}. ${g.note}.`;
+  row.append(el("span", g.label, "g-k"), bar, el("span", `${v} of ${lim}`, "g-v"));
+  return row;
+}
+async function review() {
+  const k = ($("rper").querySelector('[aria-pressed="true"]') || {}).dataset?.k || "all";
+  const acct = $("racct").value, q = new URLSearchParams({ limit: "500" });
+  if (acct) q.set("account", acct);
+  const back = { "30d": 30, "90d": 90, "1y": 365 }[k];
+  if (back) q.set("start", new Date(Date.now() - back * 864e5).toISOString().slice(0, 10) + "T00:00:00Z");
+  const r = await get("/review?" + q);
+  const sel = $("racct");
+  if (sel.options.length !== r.accounts.length + 1) {
+    sel.replaceChildren(el("option", "All practice accounts"), ...r.accounts.map((a) => el("option", a)));
+    sel.options[0].value = ""; sel.value = acct; }
+  const s = r.summary;
+  $("rnote").textContent = r.health.length ? `${s.trades} finished trade${s.trades === 1 ? "" : "s"}` +
+    (back ? ` in the last ${({ "30d": "30 days", "90d": "90 days", "1y": "year" })[k]}` : "") + ", profit or loss after costs."
+    : "No practice accounts yet. Create one with apex paper-create.";
+  const kp = $("rkpis"); kp.replaceChildren();
+  [["Win rate", s.win_rate === null ? "–" : pct(s.win_rate), null, `${s.wins} won, ${s.losses} lost`],
+   ["Total profit", money(s.total_pnl), s.total_pnl],
+   ["Trades", String(s.trades)],
+   ["Profit per trade", money(s.profit_per_trade), s.profit_per_trade],
+   ["Biggest win", money(s.best), s.best], ["Biggest loss", money(s.worst), s.worst],
+   ["Profit factor", s.profit_factor === null ? "–" : s.profit_factor.toFixed(2), null, "won for each 1 lost"],
+   ["Average hold", s.average_days_held === null ? "–" : days(s.average_days_held) + " days"],
+  ].forEach(([name, v, sign, hint]) => { const d = el("div", name, "kpi muted"), b = el("b", v);
+    if (sign) b.className = sign > 0 ? "good" : "bad";
+    d.appendChild(b); if (hint) d.appendChild(el("small", hint)); kp.appendChild(d); });
+  // Accounts right now
+  const hb = $("rhealth"); hb.replaceChildren();
+  if (!r.health.length) hb.appendChild(el("p", "No practice accounts yet.", "muted"));
+  r.health.forEach((h) => {
+    const box = el("div", "", "acct"), head = el("div", "", "acct-h");
+    head.append(el("b", h.account), el("span", h.strategy, "muted"),
+      h.kill_switch ? el("span", "stopped: " + h.kill_reason, "fail") : el("span", "running", "pass"));
+    const nums = el("div", "", "kpis strip");
+    [["Value", Math.round(h.value).toLocaleString("en-GB"), null, `started at ${Math.round(h.initial).toLocaleString("en-GB")} (${h.total_return === null ? "–" : (h.total_return >= 0 ? "+" : "") + pct(h.total_return)})`],
+     ["Today", money(h.day_change), h.day_change, h.day_change_pct === null ? "" : (h.day_change_pct >= 0 ? "+" : "") + pct(h.day_change_pct) + (h.last_bar ? " · prices to " + h.last_bar.slice(0, 10) : "")],
+     ["Below its best", h.drop_from_peak ? "−" + pct(h.drop_from_peak) : "at its best", h.drop_from_peak ? -1 : null, `best ${Math.round(h.peak).toLocaleString("en-GB")}`],
+     ["In the market", h.invested_share === null ? "–" : pct(h.invested_share), null, `${Math.round(h.invested).toLocaleString("en-GB")} invested, ${Math.round(h.cash).toLocaleString("en-GB")} cash`],
+    ].forEach(([name, v, sign, hint]) => { const d = el("div", name, "kpi muted"), b = el("b", v);
+      if (sign) b.className = sign > 0 ? "good" : "bad";
+      d.appendChild(b); if (hint) d.appendChild(el("small", hint)); nums.appendChild(d); });
+    const g = el("div", "", "gauges"); h.limits.forEach((x) => g.appendChild(gauge(x)));
+    box.append(head, nums, el("p", "Safety limits (the bar fills up as the account gets closer):", "muted g-cap"), g);
+    hb.appendChild(box); });
+  lineChart("rchart", r.curve.map((c) => c.ts), r.curve.map((c) => c.cumulative), $("rtip"), "Total profit");
+  $("rchartnote").hidden = r.curve.length >= 2;
+  const avg = []; if (s.average_win !== null) avg.push({ key: "Average win", pnl: s.average_win, trades: s.wins, wins: s.wins, win_rate: 1, average: s.average_win });
+  if (s.average_loss !== null) avg.push({ key: "Average loss", pnl: s.average_loss, trades: s.losses, wins: 0, win_rate: 0, average: s.average_loss });
+  hbars($("ravg"), avg, "pl");
+  const mk = [["#", (x) => String(x.i)], ["Market", (x) => x.key], ["Trades", (x) => x.trades, "num"],
+    ["Won", (x) => pct(x.win_rate), "num"], ["Profit or loss", (x) => pl(x.pnl), "num"]];
+  table($("rbest"), mk, r.top_wins.map((x, i) => ({ ...x, i: i + 1 })));
+  table($("rworst"), mk, r.top_losses.map((x, i) => ({ ...x, i: i + 1 })));
+  hbars($("rmarket"), r.by_market, "pl");
+  hbars($("rexit"), r.by_exit_reason, "pl");
+  hbars($("rstrat"), r.by_strategy, "pl");
+  hbars($("rclass"), r.by_asset_class, "pl");
+  hbars($("rside"), r.by_side, "pl", (x) => x.key === "long" ? "Long (bought)" : "Short (sold first)");
+  hbars($("rhold"), r.by_hold, "won");
+  hbars($("rmonth"), r.by_month.slice(-24), "pl", (x) => new Date(x.key + "-01T00:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }));
+  hbars($("rday"), r.by_weekday, "won");
+  table($("ropen"), [["Account", (x) => x.account], ["Market", (x) => x.symbol], ["Side", (x) => x.side],
+    ["Opened", (x) => when(x.opened)], ["Days", (x) => days(x.days_held), "num"], ["Avg entry", (x) => fmt(x.entry_price, 4), "num"],
+    ["Latest price", (x) => fmt(x.last_price, 4), "num"], ["P&L so far", (x) => pl(x.pnl), "num"],
+    ["Return", (x) => pct(x.return), "num"]], r.open);
+  const cols = [["Result", (x) => el("span", x.result, x.result === "win" ? "pass" : x.result === "loss" ? "fail" : "warn")],
+    ["Account", (x) => x.account], ["Market", (x) => x.symbol], ["Side", (x) => x.side],
+    ["Opened", (x) => when(x.opened)], ["Closed", (x) => when(x.closed)], ["Days", (x) => days(x.days_held), "num"],
+    ["Avg entry", (x) => fmt(x.entry_price, 4), "num"], ["Avg exit", (x) => fmt(x.exit_price, 4), "num"],
+    ["P&L", (x) => pl(x.pnl), "num"], ["Return", (x) => pct(x.return), "num"], ["Why it ended", (x) => x.exit_reason_label]];
+  // Show 25 at a time so the page stays readable; "Show more" adds the next 25.
+  let shown = 0; const more = el("button", "Show more", "linkbtn");
+  const page = () => { shown = Math.min(shown + 25, r.trades.length);
+    table($("rtrades"), cols, r.trades.slice(0, shown));
+    $("rtradesnote").textContent = `Newest first: ${shown} of ${r.trades_total}` +
+      (r.trades_total > r.trades.length ? ` (the latest ${r.trades.length} can be listed here)` : "") + ". ";
+    if (shown < r.trades.length) $("rtradesnote").appendChild(more); };
+  more.onclick = page; page();
+}
 // Follow the computer's light/dark switch: redraw open charts in the new colours.
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () =>
   Object.values(LWC).forEach((c) => c.redraw()));
@@ -719,9 +869,6 @@ const LOAD = {
   },
   async paper() {
     // Finished and open round trips with their profit or loss, and a win/loss summary.
-    const money = (v) => v === null || v === undefined ? "–" : (v < 0 ? "−" : v > 0 ? "+" : "") + Math.abs(v).toFixed(2);
-    const pl = (v) => el("span", money(v), "chg " + (v > 0 ? "up" : v < 0 ? "down" : ""));
-    const days = (v) => v === null || v === undefined ? "–" : v < 1 ? "<1" : String(Math.round(v));
     const trades = async (name) => {
       const t = await get("/paper/accounts/" + encodeURIComponent(name) + "/trades?limit=100");
       if ($("pname").textContent.indexOf(name + ":") !== 0) return;  // another account opened
@@ -742,7 +889,6 @@ const LOAD = {
         d.appendChild(b); if (hint) d.appendChild(el("small", hint)); st.appendChild(d); });
       $("ptradesnote").textContent = "Each finished round trip, from first buy (or short) to back out, with its simulated profit or loss after costs." +
         (t.closed_total > t.closed.length ? ` Showing the latest ${t.closed.length} of ${t.closed_total}; the summary covers all of them.` : "");
-      const when = (iso) => iso.slice(0, 16).replace("T", " ").replace(" 00:00", "");
       table($("popen"), [["Market", (r) => r.symbol], ["Side", (r) => r.side], ["Opened", (r) => when(r.opened)],
         ["Days", (r) => days(r.days_held), "num"], ["Units", (r) => fmt(r.units, 4), "num"],
         ["Avg entry", (r) => fmt(r.entry_price, 4), "num"], ["Latest price", (r) => fmt(r.last_price, 4), "num"],
@@ -822,6 +968,19 @@ const LOAD = {
       ["Last bar", (r) => r.last_bar_ts ? r.last_bar_ts.slice(0, 10) : "–"],
       ["", () => el("span", "SIMULATED", "tag sim")]], accts);
     if (accts.length) { $("paccts").rows[1].classList.add("sel"); await open(accts[0].name); }
+  },
+  async review() {
+    const per = $("rper");
+    if (!per.childElementCount) {
+      [["30d", "30 days"], ["90d", "90 days"], ["1y", "1 year"], ["all", "All"]].forEach(([k, label]) => {
+        const b = el("button", label); b.type = "button"; b.dataset.k = k;
+        b.setAttribute("aria-pressed", String(k === "all"));
+        b.onclick = () => { per.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+          review().catch(console.error); };
+        per.appendChild(b); });
+      $("racct").onchange = () => review().catch(console.error);
+    }
+    await review();
   },
   async news() {
     const [feeds, cal, mac, pos] = await Promise.all([get("/news/feeds"), get("/calendar?days=14"),

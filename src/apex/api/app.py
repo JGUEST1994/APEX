@@ -517,6 +517,21 @@ def create_app(settings: Settings | None = None,
         except KeyError as exc:
             raise HTTPException(404, "paper account not found") from exc
 
+    @app.get("/review")
+    def trade_review(account: str | None = None, start: datetime | None = None,
+                     end: datetime | None = None, limit: int = Query(500, ge=1, le=5000),
+                     s: Session = Depends(db)) -> dict:
+        """Every practice trade at a glance: what's working and what isn't (read-only)."""
+        from apex.trade_review import review
+
+        for v in (start, end):
+            if v is not None and v.tzinfo is None:
+                raise HTTPException(422, "start/end must include a timezone, e.g. Z")
+        try:
+            return review(s, account, start, end, limit)
+        except KeyError as exc:
+            raise HTTPException(404, "paper account not found") from exc
+
     # "Download for Excel": the same tables as `apex export`, as CSV attachments.
     def _csv(df, filename: str) -> Response:  # noqa: ANN001
         def cell(v):  # noqa: ANN001, ANN202 - stop Excel treating text as a formula

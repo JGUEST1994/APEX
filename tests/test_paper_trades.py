@@ -113,3 +113,23 @@ def test_api(db_url, session):
     assert c.post("/paper/accounts/api/trades").status_code == 405
     assert c.get("/paper/accounts/api/trades?limit=0").status_code == 422
     engine.dispose()
+
+
+def test_exit_reasons(session):
+    acc = _account(session, "why")
+    _fill(session, acc, 4, 10, 100)
+    session.add(PaperFill(account_id=acc.id, client_order_id="o1-x", symbol="SPY", qty=-10,
+                          price=101, cost=1.0, ts=utc(2021, 1, 5)))  # flip: exit then short
+    _fill(session, acc, 5, -10, 101)
+    session.add(PaperFill(account_id=acc.id, client_order_id="o2-x", symbol="SPY", qty=10,
+                          price=99, cost=1.0, ts=utc(2021, 1, 6)))   # strategy exit
+    _fill(session, acc, 7, 5, 100)
+    _fill(session, acc, 8, -5, 100)                                   # resized to nothing
+    _fill(session, acc, 11, 5, 100)
+    session.add(PaperFill(account_id=acc.id, client_order_id="o3-x", symbol="SPY", qty=-5,
+                          price=98, cost=1.0, ts=utc(2021, 1, 13)))  # after the kill switch
+    acc.kill_engaged, acc.kill_at, acc.kill_reason = True, utc(2021, 1, 12), "test"
+    acc.last_bar_ts = utc(2021, 1, 13)
+    session.commit()
+    got = [t["exit_reason"] for t in trades(session, "why")["closed"]]
+    assert got == ["safety", "resize", "signal", "flip"]

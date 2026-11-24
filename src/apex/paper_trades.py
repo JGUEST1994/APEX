@@ -119,6 +119,7 @@ def trades(session: Session, name: str, limit: int = 50) -> dict:
                 row["closed"] = f.ts.isoformat()
                 row["days_held"] = (f.ts - t.opened).total_seconds() / 86400
                 row["result"] = "win" if t.pnl > 0 else "loss" if t.pnl < 0 else "even"
+                row["exit_order"] = f.client_order_id
                 closed.append(row)
                 del live[f.symbol]
                 if new != 0:  # reversed: the rest starts a new trade, costs already charged
@@ -151,12 +152,45 @@ def trades(session: Session, name: str, limit: int = 50) -> dict:
                             if acc.last_bar_ts else None)
         open_rows.append(row)
 
+    _exit_reasons(acc, closed)
+    for row in closed:
+        del row["exit_order"]
     closed.reverse()  # newest first
     return {"account": name, "simulated": True,
             "summary": _summary(closed),
             "open": sorted(open_rows, key=lambda r: r["opened"], reverse=True),
             "open_pnl": sum(r["pnl"] for r in open_rows),
             "closed": closed[:limit], "closed_total": len(closed)}
+
+
+EXIT_REASONS = {
+    "safety": "Safety stop",
+    "flip": "Flipped side",
+    "signal": "Strategy got out",
+    "resize": "Sized down to zero",
+}
+
+
+def _exit_reasons(acc: PaperAccount, closed: list[dict]) -> None:
+    """Why each finished trade ended, worked out from the records (strategies give target
+    positions, not reasons): an exit filled after the kill switch engaged is a safety stop;
+    a trade followed at once by one on the other side of the same market is a flip; an exit
+    order (the trader's always-allowed ``-x`` closing order) is the strategy getting out;
+    anything else reached flat through a resize. Only the current kill-switch engagement is
+    stored, so exits under an earlier one (since reset) count as strategy exits."""
+    opened = {(r["symbol"], r["opened"], r["side"]) for r in closed}
+    for r in closed:
+        other = "short" if r["side"] == "long" else "long"
+        if acc.kill_engaged and acc.kill_at and r["closed"] > acc.kill_at.isoformat():
+            key = "safety"
+        elif (r["symbol"], r["closed"], other) in opened:
+            key = "flip"
+        elif r["exit_order"].endswith("-x"):
+            key = "signal"
+        else:
+            key = "resize"
+        r["exit_reason"] = key
+        r["exit_reason_label"] = EXIT_REASONS[key]
 
 
 def _last_close(session: Session, acc: PaperAccount, sym: str) -> float | None:
