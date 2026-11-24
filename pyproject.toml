@@ -9,7 +9,7 @@ description = "Project APEX: standalone quantitative research and trading platfo
 requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.6",
-  "pydantic-settings>=2.2",
+  "pydantic-settings>=2.16.3",
   "sqlalchemy>=2.0",
   "alembic>=1.13",
   "pandas>=2.1",
